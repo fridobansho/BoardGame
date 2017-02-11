@@ -1,22 +1,21 @@
 ﻿namespace BoardGame.Library.Implementations
 {
-    using System;
     using Interfaces;
 
     public class Board : IBoard
     {
-        public const uint DEFAULT_LENGTH = 3;
+        public const int DEFAULT_LENGTH = 3;
         private IPiece[,] pieces;
 
-        public uint Height { get; private set; }
+        public int Height { get; }
 
-        public uint Width { get; private set; }
+        public int Width { get; }
 
         public Board() : this(DEFAULT_LENGTH, DEFAULT_LENGTH)
         {
         }
 
-        public Board(uint width, uint height)
+        public Board(int width, int height)
         {
             Width = width;
             Height = height;
@@ -31,22 +30,28 @@
             }
         }
 
-        public IPiece PieceAt(uint x, uint y)
+        public IPiece PieceAt(ILocation location)
         {
-            CheckBounds(x, y);
-            return pieces[x, y];
+            if (CheckBounds(location))
+            {
+                return pieces[location.X, location.Y];
+            }
+            return new Piece();
         }
 
-        private void CheckBounds(uint x, uint y)
+        public bool CheckBounds(ILocation location)
         {
-            if (x > Width) throw new ArgumentOutOfRangeException("x");
-            if (y > Height) throw new ArgumentOutOfRangeException("y");
+            if ((location.X > (Width - 1)) || (location.X < 0)) return false;
+            if ((location.Y > (Height - 1)) || (location.Y < 0)) return false;
+            return true;
         }
 
-        public void PieceAt(uint x, uint y, IPiece piece)
+        public void PieceAt(ILocation location, IPiece piece)
         {
-            CheckBounds(x, y);
-            pieces[x, y] = piece;
+            if (CheckBounds(location))
+            {
+                pieces[location.X, location.Y] = piece;
+            }
         }
     }
 }

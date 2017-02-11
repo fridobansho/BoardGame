@@ -1,13 +1,15 @@
 ﻿namespace BoardGame.Library.Interfaces
 {
-    public interface IBoard
+   public interface IBoard
     {
-        uint Height { get; }
+        int Height { get; }
 
-        uint Width { get; }
+        int Width { get; }
 
-        IPiece PieceAt(uint x, uint y);
+        IPiece PieceAt(ILocation location);
 
-        void PieceAt(uint x, uint y, IPiece piece);
+        void PieceAt(ILocation location, IPiece piece);
+
+        bool CheckBounds(ILocation location);
     }
 }

@@ -9,7 +9,7 @@
     public class PieceShould
     {
         [Test]
-        public void Construct()
+        public void ConstructWithDefault()
         {
             var sut = new Piece();
 
@@ -18,20 +18,21 @@
         }
 
         [Test]
+        public void ConstructWithValueGiven()
+        {
+            string value = "X";
+
+            var sut = new Piece(value);
+
+            sut.Value.ShouldBe(value);
+        }
+
+        [Test]
         public void InheritFromIPiece()
         {
             var sut = new Piece();
 
             sut.ShouldBeAssignableTo<IPiece>();
-        }
-
-        [Test]
-        public void TakeValueGiven()
-        {
-            string value = "X";
-            var sut = new Piece(value);
-
-            sut.Value.ShouldBe(value);
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿namespace BoardGame.Tests
 {
-    using System;
     using Shouldly;
     using NUnit.Framework;
     using Library.Implementations;
@@ -18,10 +17,11 @@
             sut.Width.ShouldBe(Board.DEFAULT_LENGTH);
         }
         [Test]
-        public void ConstructWithPassedInValues()
+        public void ConstructWithValuesGiven()
         {
-            uint width = 5;
-            uint height = 9;
+            int width = 5;
+            int height = 9;
+
             var sut = new Board(width, height);
 
             sut.Height.ShouldBe(height);
@@ -36,28 +36,57 @@
             sut.ShouldBeAssignableTo<IBoard>();
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "Parameter name: x")]
-        public void ThrowArgumentExceptionWhenPassedOutOfBoundsX()
+        [Test]
+        public void ReturnTrueWhenPassedInBounds()
         {
             var sut = new Board();
+            var location = new Location(sut.Width - 1, sut.Height - 1);
 
-            sut.PieceAt(sut.Width + 1, sut.Height);
+            var result = sut.CheckBounds(location);
+
+            result.ShouldBeTrue();
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "Parameter name: y")]
-        public void ThrowArgumentExceptionWhenPassedOutOfBoundsY()
+        [Test]
+        public void ReturnFalseWhenPassedOutOfBounds()
         {
             var sut = new Board();
+            var location = new Location(sut.Width, sut.Height);
 
-            var piece = sut.PieceAt(sut.Width, sut.Height + 1);
+            var result = sut.CheckBounds(location);
+
+            result.ShouldBeFalse();
+        }
+
+        [Test]
+        public void ReturnFalseWhenPassedOutOfBoundsX()
+        {
+            var sut = new Board();
+            var location = new Location(sut.Width, sut.Height - 1);
+
+            var result = sut.CheckBounds(location);
+
+            result.ShouldBeFalse();
+        }
+
+        [Test]
+        public void ReturnFalseWhenPassedOutOfBoundsY()
+        {
+            var sut = new Board();
+            var location = new Location(sut.Width - 1, sut.Height);
+
+            var result = sut.CheckBounds(location);
+
+            result.ShouldBeFalse();
         }
 
         [Test]
         public void ReturnBlankPiece()
         {
             var sut = new Board();
+            var location = new Location(0, 0);
 
-            var piece = sut.PieceAt(0, 0);
+            var piece = sut.PieceAt(location);
 
             piece.Value.ShouldBe(Piece.Blank);
         }
@@ -66,15 +95,18 @@
         public void ContainTheRightNumberOfBlankPieces()
         {
             var sut = new Board();
-            uint count = 0;
-            for (uint x = 0; x < sut.Width; x++)
+
+            int count = 0;
+            for (int x = 0; x < sut.Width; x++)
             {
-                for (uint y = 0; y < sut.Height; y++)
+                for (int y = 0; y < sut.Height; y++)
                 {
-                    sut.PieceAt(x, y).Value.ShouldBe(Piece.Blank);
+                    var location = new Location(x, y);
+                    sut.PieceAt(location).Value.ShouldBe(Piece.Blank);
                     count++;
                 }
             }
+
             count.ShouldBe(sut.Width * sut.Height);
         }
 
@@ -82,13 +114,13 @@
         public void ReturnPieceSet()
         {
             var sut = new Board();
-
             const string value = "X";
             var piece = new Piece(value);
+            var location = new Location(0, 0);
 
-            sut.PieceAt(0, 0, piece);
+            sut.PieceAt(location, piece);
 
-            sut.PieceAt(0, 0).Value.ShouldBe(value);
+            sut.PieceAt(location).Value.ShouldBe(value);
         }
     }
 }

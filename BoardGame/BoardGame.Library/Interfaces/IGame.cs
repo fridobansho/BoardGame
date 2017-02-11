@@ -10,5 +10,7 @@
         IBoard Board { get; }
 
         IEnumerable<IPlayer> Players { get; }
+
+        bool DoTurns();
     }
 }
