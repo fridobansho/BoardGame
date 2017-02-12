@@ -1,16 +1,17 @@
 ﻿namespace BoardGame.Library.Interfaces
 {
-    using Enumerations;
     using System.Collections.Generic;
 
     public interface IGameLogic
     {
-        Status Status { get; }
+        IDictionary<IPlayer, IPiece> PlayerPieces { get; }
 
-        IEnumerable<IPlayer> Players { get; }
+        void MapPieces(IEnumerable<IPlayer> players);
 
-        IEnumerable<IPiece> PlayerPieces { get; }
+        bool IsValidMove(IBoard board, ILocation location);
 
-        IEnumerable<IPlayer> DoTurn(IBoard board, IEnumerable<IPlayer> players);
+        IPiece GetPiece(IPlayer player);
+
+        IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players);
     }
 }

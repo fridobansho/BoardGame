@@ -2,30 +2,44 @@
 {
     using Interfaces;
     using System.Collections.Generic;
-    using System.Linq;
-    using Enumerations;
+    using System;
 
     public class SillyLogic : IGameLogic
     {
-        public IEnumerable<IPlayer> Players { get; }
+        public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
-        public IEnumerable<IPiece> PlayerPieces { get; }
-
-        public Status Status { get; private set; }
-
-        public SillyLogic() : this(new[] { new SillyPlayer() })
+        public SillyLogic()
         {
+            PlayerPieces = new Dictionary<IPlayer, IPiece>();
         }
 
-        public SillyLogic(IEnumerable<IPlayer> players)
+        public void MapPieces(IEnumerable<IPlayer> players)
         {
-            Players = players;
-            PlayerPieces = Enumerable.Repeat(Piece.Blank, players.Count());
+            if (players == null) throw new ArgumentNullException("players");
+            foreach (var player in players)
+            {
+                PlayerPieces.Add(player, Piece.Blank);
+            }
         }
 
-        public IEnumerable<IPlayer> DoTurn(IBoard board, IEnumerable<IPlayer> players)
+        public bool IsValidMove(IBoard board, ILocation location)
         {
-            return Enumerable.Repeat(players.First(), 1);
+            return true;
+        }
+
+        public IPiece GetPiece(IPlayer player)
+        {
+            IPiece piece;
+            if (PlayerPieces.TryGetValue(player, out piece))
+            {
+                return piece;
+            }
+            throw new ArgumentOutOfRangeException("player");
+        }
+
+        public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
+        {
+            return players;
         }
     }
 }

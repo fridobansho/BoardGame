@@ -4,31 +4,55 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using Enumerations;
 
     public class TicTacToeLogic : IGameLogic
     {
-        public IEnumerable<IPlayer> Players { get; }
+        public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
-        public IEnumerable<IPiece> PlayerPieces { get; }
-
-        public Status Status { get; private set; }
-        
-        public TicTacToeLogic(IEnumerable<IPlayer> players)
+        public TicTacToeLogic()
         {
-            PlayerPieces = new[] { XPiece.X, OPiece.O };
-            if (players.Count() != PlayerPieces.Count()) throw new ArgumentOutOfRangeException("players.Count()");
-            Players = players;
-            Status = Status.InProgress;
+            PlayerPieces = new Dictionary<IPlayer, IPiece>();
         }
 
-        public IEnumerable<IPlayer> DoTurn(IBoard board, IEnumerable<IPlayer> players)
+        public void MapPieces(IEnumerable<IPlayer> players)
         {
-            foreach(var player in players)
-            {
-                var location = player.GetMove(board);
-            }
+            ValidatePlayers(players);
+            PlayerPieces.Add(players.ElementAt(0), XPiece.X);
+            PlayerPieces.Add(players.ElementAt(1), OPiece.O);
+        }
 
+        private static void ValidatePlayers(IEnumerable<IPlayer> players)
+        {
+            if (players == null) throw new ArgumentNullException("players");
+            if (players.Count() != 2) throw new ArgumentOutOfRangeException("players.Count()");
+        }
+
+        public bool IsValidMove(IBoard board, ILocation location)
+        {
+            if (board.CheckBounds(location))
+            {
+                var piece = board.PieceAt(location);
+                if (piece == Piece.Blank)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public IPiece GetPiece(IPlayer player)
+        {
+            IPiece piece;
+            if (PlayerPieces.TryGetValue(player, out piece))
+            {
+                return piece;
+            }
+            throw new ArgumentOutOfRangeException("player");
+        }
+
+        public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
+        {
+            ValidatePlayers(players);
             return Enumerable.Empty<IPlayer>();
         }
     }

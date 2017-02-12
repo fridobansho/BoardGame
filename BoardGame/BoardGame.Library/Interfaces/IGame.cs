@@ -13,8 +13,6 @@
 
         IEnumerable<IPlayer> Players { get; }
 
-        IEnumerable<IPiece> PlayerPieces { get; }
-
         IEnumerable<IPlayer> DoTurns();
     }
 }

@@ -7,76 +7,164 @@
     using Library.Implementations.TicTacToe;
     using System;
     using System.Linq;
+    using Library.Implementations;
 
     [TestFixture]
     public class TicTacToeLogicShould
     {
         [Test]
-        public void ConstructWithValuesGiven()
+        public void ConstructWithDefaults()
         {
-            var player = new Mock<IPlayer>();
-            var players = Enumerable.Repeat(player.Object, 2);
+            var sut = new TicTacToeLogic();
 
-            var sut = new TicTacToeLogic(players);
-
-            sut.Players.ShouldBe(players);
-            sut.PlayerPieces.ShouldBe(new[] { XPiece.X, OPiece.O });
-        }
-
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
-        public void ThrowExceptionWhenCalledWithEmpty()
-        {
-            var player = new Mock<IPlayer>();
-            var players = new[] { player.Object };
-
-            var sut = new TicTacToeLogic(Enumerable.Empty<IPlayer>());
-        }
-
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
-        public void ThrowExceptionWhenCalledWithSinglePlayer()
-        {
-            var player = new Mock<IPlayer>();
-            var players = new[] { player.Object };
-
-            var sut = new TicTacToeLogic(players);
-        }
-
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
-        public void ThrowExceptionWhenCalledWithThreePlayers()
-        {
-            var player = new Mock<IPlayer>();
-            var players = Enumerable.Repeat(player.Object, 3);
-
-            var sut = new TicTacToeLogic(players);
+            sut.PlayerPieces.ShouldBeEmpty();
         }
 
         [Test]
-        public void ReturnEmptyForAnEmptyBoard()
+        [TestCase(-1, -1)]
+        [TestCase(3, 3)]
+        public void ReturnFalseForOutOfBounds(int x, int y)
         {
             var board = new Mock<IBoard>();
-            var player = new Mock<IPlayer>();
-            var players = Enumerable.Repeat(player.Object, 2);
-            var sut = new TicTacToeLogic(players);
+            var location = new Location(x, y);
+            var sut = new TicTacToeLogic();
+            board.Setup(mock => mock.CheckBounds(location)).Returns(false);
 
-            var result = sut.DoTurn(board.Object, players);
+            var result = sut.IsValidMove(board.Object, location);
 
-            result.ShouldBeEmpty();
-            player.Verify(mock => mock.GetMove(board.Object), Times.Exactly(2));
+            board.Verify(mock => mock.CheckBounds(location), Times.Once);
+            result.ShouldBeFalse();
         }
 
         [Test]
-        public void AskPlayersForTheirMoves()
+        [TestCase(0, 0)]
+        [TestCase(1, 1)]
+        [TestCase(2, 2)]
+        public void ReturnTrueForInBoundsBlank(int x, int y)
+        {
+            var board = new Mock<IBoard>();
+            var location = new Location(x, y);
+            var sut = new TicTacToeLogic();
+            board.Setup(mock => mock.CheckBounds(location)).Returns(true);
+            board.Setup(mock => mock.PieceAt(location)).Returns(Piece.Blank);
+
+            var result = sut.IsValidMove(board.Object, location);
+
+            board.Verify(mock => mock.CheckBounds(location), Times.Once);
+            board.Verify(mock => mock.PieceAt(location), Times.Once);
+            result.ShouldBeTrue();
+        }
+
+        [Test]
+        public void ReturnFalseForAlreadyTaken()
+        {
+            var board = new Mock<IBoard>();
+            var location = new Location(0, 0);
+            var sut = new TicTacToeLogic();
+            board.Setup(mock => mock.CheckBounds(location)).Returns(true);
+            board.Setup(mock => mock.PieceAt(location)).Returns(XPiece.X);
+
+            var result = sut.IsValidMove(board.Object, location);
+
+            board.Verify(mock => mock.CheckBounds(location), Times.Once);
+            board.Verify(mock => mock.PieceAt(location), Times.Once);
+            result.ShouldBeFalse();
+        }
+
+        [Test, ExpectedException(typeof(ArgumentNullException), MatchType = MessageMatch.Contains, ExpectedMessage = "players")]
+        public void ThrowsExceptionIfPassedNull()
+        {
+            var sut = new TicTacToeLogic();
+
+            sut.MapPieces(null);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        public void ThrowsExceptionIfPassedEmpty()
+        {
+            var players = Enumerable.Empty<IPlayer>();
+            var sut = new TicTacToeLogic();
+
+            sut.MapPieces(players);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        public void ThrowsExceptionIfPassedSingle()
+        {
+            var player = new Mock<IPlayer>();
+            var players = Enumerable.Repeat(player.Object, 1);
+            var sut = new TicTacToeLogic();
+
+            sut.MapPieces(players);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "player")]
+        public void ThrowsExceptionIfNoMappedPlayer()
+        {
+            var player = new Mock<IPlayer>();
+            var sut = new TicTacToeLogic();
+
+            var result = sut.GetPiece(player.Object);
+        }
+
+        [Test]
+        public void ReturnMappedPiece()
+        {
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var sut = new TicTacToeLogic();
+            sut.MapPieces(players);
+
+            var result1 = sut.GetPiece(player1.Object);
+            var result2 = sut.GetPiece(player2.Object);
+
+            result1.ShouldBe(XPiece.X);
+            result2.ShouldBe(OPiece.O);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentNullException), MatchType = MessageMatch.Contains, ExpectedMessage = "players")]
+        public void ThrowExceptionIfPassedNull()
+        {
+            var board = new Mock<IBoard>();
+            var sut = new TicTacToeLogic();
+
+            var result = sut.GetWinners(board.Object, null);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        public void ThrowExceptionIfPassedEmpty()
+        {
+            var board = new Mock<IBoard>();
+            var players = Enumerable.Empty<IPlayer>();
+            var sut = new TicTacToeLogic();
+
+            var result = sut.GetWinners(board.Object, players);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        public void ThrowExceptionIfPassedSingle()
         {
             var board = new Mock<IBoard>();
             var player = new Mock<IPlayer>();
-            var players = Enumerable.Repeat(player.Object, 2);
-            var sut = new TicTacToeLogic(players);
-            player.Setup(mock => mock.GetMove(board.Object));
+            var players = Enumerable.Repeat(player.Object, 1);
+            var sut = new TicTacToeLogic();
 
-            var result = sut.DoTurn(board.Object, players);
+            var result = sut.GetWinners(board.Object, players);
+        }
+
+        [Test]
+        public void ReturnEmptyIfNoWinners()
+        {
+            var board = new Mock<IBoard>();
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var sut = new TicTacToeLogic();
+
+            var result = sut.GetWinners(board.Object, players);
 
             result.ShouldBeEmpty();
-            player.Verify(mock => mock.GetMove(board.Object), Times.Exactly(2));
         }
     }
 }

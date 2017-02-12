@@ -3,7 +3,6 @@
     using Shouldly;
     using NUnit.Framework;
     using Library.Implementations;
-    using Library.Enumerations;
 
     [TestFixture]
     public class GameRunnerShould
