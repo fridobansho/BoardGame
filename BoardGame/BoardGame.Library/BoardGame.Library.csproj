@@ -41,18 +41,23 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Implementations\Board.cs" />
+    <Compile Include="Implementations\Silly\SillyLogic.cs" />
     <Compile Include="Implementations\Game.cs" />
     <Compile Include="Enumerations\Status.cs" />
+    <Compile Include="Implementations\TicTacToe\TicTacToeLogic.cs" />
     <Compile Include="Implementations\GameRunner.cs" />
     <Compile Include="Implementations\Location.cs" />
     <Compile Include="Implementations\Piece.cs" />
+    <Compile Include="Implementations\TicTacToe\XPiece.cs" />
+    <Compile Include="Implementations\TicTacToe\OPiece.cs" />
     <Compile Include="Interfaces\IBoard.cs" />
     <Compile Include="Interfaces\IGame.cs" />
     <Compile Include="Interfaces\IGameRunner.cs" />
     <Compile Include="Interfaces\ILocation.cs" />
+    <Compile Include="Interfaces\IGameLogic.cs" />
     <Compile Include="Interfaces\IPiece.cs" />
     <Compile Include="Interfaces\IPlayer.cs" />
-    <Compile Include="Implementations\SillyPlayer.cs" />
+    <Compile Include="Implementations\Silly\SillyPlayer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

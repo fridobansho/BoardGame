@@ -14,7 +14,7 @@
             var sut = new Piece();
 
             sut.ShouldBeOfType<Piece>();
-            sut.Value.ShouldBe(Piece.Blank);
+            sut.Value.ShouldBe(Piece.BlankValue);
         }
 
         [Test]

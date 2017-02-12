@@ -88,7 +88,7 @@
 
             var piece = sut.PieceAt(location);
 
-            piece.Value.ShouldBe(Piece.Blank);
+            piece.Value.ShouldBe(Piece.BlankValue);
         }
 
         [Test]
@@ -102,7 +102,7 @@
                 for (int y = 0; y < sut.Height; y++)
                 {
                     var location = new Location(x, y);
-                    sut.PieceAt(location).Value.ShouldBe(Piece.Blank);
+                    sut.PieceAt(location).Value.ShouldBe(Piece.BlankValue);
                     count++;
                 }
             }

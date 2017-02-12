@@ -1,9 +1,11 @@
 ﻿namespace BoardGame.Library.Interfaces
 {
+    using System.Collections.Generic;
+
     public interface IGameRunner
     {
         IGame Game { get; }
 
-        IPlayer RunGame();
+        IEnumerable<IPlayer> RunGame();
     }
 }

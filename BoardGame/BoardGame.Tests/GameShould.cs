@@ -16,21 +16,22 @@
         {
             var sut = new Game();
 
-            sut.Status.ShouldBe(Status.InProgress);
             sut.Board.ShouldNotBeNull();
             sut.Players.ShouldNotBeNull();
         }
         [Test]
         public void ConstructWithValuesGiven()
         {
-            var board = new Board();
-            var players = new List<IPlayer>(new[] { new SillyPlayer() });
+            var board = new Mock<IBoard>();
+            var player = new Mock<IPlayer>();
+            var players = new List<IPlayer>(new[] { player.Object });
+            var gameLogic = new Mock<IGameLogic>();
 
-            var sut = new Game(board, players);
+            var sut = new Game(board.Object, players, gameLogic.Object);
 
-            sut.Status.ShouldBe(Status.InProgress);
-            sut.Board.ShouldBe(board);
+            sut.Board.ShouldBe(board.Object);
             sut.Players.ShouldBe(players);
+            sut.GameLogic.ShouldBe(gameLogic.Object);
         }
 
         [Test]
@@ -42,35 +43,18 @@
         }
 
         [Test]
-        public void AskPlayersForTheirMovesEachTurn()
+        public void ApplyLogicOnEachTurn()
         {
-            var player1 = new Mock<IPlayer>();
-            var player2 = new Mock<IPlayer>();
-            var board = new Board();
-            var sut = new Game(board, new IPlayer[] { player1.Object, player2.Object });
-            player1.Setup(player => player.GetMove(board)).Returns(new Location(1, 2));
-            player2.Setup(player => player.GetMove(board)).Returns(new Location(2, 1));
+            var player = new Mock<IPlayer>();
+            var board = new Mock<IBoard>();
+            var gameLogic = new Mock<IGameLogic>();
+            var players = new IPlayer[] { player.Object };
+            var sut = new Game(board.Object, players, gameLogic.Object);
+            gameLogic.Setup(logic => logic.DoTurn(board.Object, players)).Returns(players);
 
-            sut.DoTurns().ShouldBeTrue();
+            sut.DoTurns().ShouldBe(players);
 
-            player1.VerifyAll();
-            player2.VerifyAll();
-        }
-
-        [Test]
-        public void GivePlayers3ChancesToMakeValidMoves()
-        {
-            var player1 = new Mock<IPlayer>();
-            var player2 = new Mock<IPlayer>();
-            var board = new Board();
-            var sut = new Game(board, new IPlayer[] { player1.Object, player2.Object });
-            player1.Setup(player => player.GetMove(board)).Returns(new Location(-1, -1));
-            player2.Setup(player => player.GetMove(board)).Returns(new Location(-1, -1));
-
-            sut.DoTurns().ShouldBeFalse();
-
-            player1.Verify(player => player.GetMove(board), Times.Exactly(3));
-            player2.Verify(player => player.GetMove(board), Times.Exactly(3));
+            gameLogic.Verify(logic => logic.DoTurn(board.Object, players), Times.Once);
         }
     }
 }

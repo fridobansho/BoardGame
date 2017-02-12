@@ -4,6 +4,7 @@
     using Library.Implementations;
     using Library.Interfaces;
     using NUnit.Framework;
+    using Library.Implementations.Silly;
 
     [TestFixture]
     public class SillyPlayerShould

@@ -3,13 +3,15 @@
     using Interfaces;
     public class Piece : IPiece
     {
-        public const string Blank = " ";
+        public const string BlankValue = " ";
+
+        public static IPiece Blank = new Piece(BlankValue);
 
         public string Value { get; }
 
         public Piece()
         {
-            Value = Blank;
+            Value = BlankValue;
         }
 
         public Piece(string value)

@@ -1,20 +1,16 @@
 ﻿namespace BoardGame.Library.Interfaces
 {
-    using System.Collections.Generic;
     using Enumerations;
+    using System.Collections.Generic;
 
-    public interface IGame
+    public interface IGameLogic
     {
-        IGameLogic GameLogic { get; }
-
         Status Status { get; }
-
-        IBoard Board { get; }
 
         IEnumerable<IPlayer> Players { get; }
 
         IEnumerable<IPiece> PlayerPieces { get; }
 
-        IEnumerable<IPlayer> DoTurns();
+        IEnumerable<IPlayer> DoTurn(IBoard board, IEnumerable<IPlayer> players);
     }
 }

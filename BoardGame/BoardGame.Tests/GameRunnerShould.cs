@@ -12,8 +12,7 @@
         public void ConstructWithDefaults()
         {
             var sut = new GameRunner();
-
-            sut.Game.Status.ShouldBe(Status.InProgress);
+            
         }
 
         [Test]

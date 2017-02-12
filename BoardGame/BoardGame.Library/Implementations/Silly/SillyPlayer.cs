@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Library.Implementations
+﻿namespace BoardGame.Library.Implementations.Silly
 {
     using Interfaces;
 

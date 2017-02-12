@@ -2,6 +2,7 @@
 {
     using System;
     using Interfaces;
+    using System.Collections.Generic;
 
     public class GameRunner : IGameRunner
     {
@@ -9,7 +10,6 @@
 
         public GameRunner() : this(new Game())
         {
-
         }
 
         public GameRunner(IGame game)
@@ -17,7 +17,7 @@
             Game = game;
         }
 
-        public IPlayer RunGame()
+        public IEnumerable<IPlayer> RunGame()
         {
             throw new NotImplementedException();
         }

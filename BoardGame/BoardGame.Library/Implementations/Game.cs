@@ -3,47 +3,39 @@
     using System.Collections.Generic;
     using Enumerations;
     using Interfaces;
+    using Silly;
 
     public class Game : IGame
     {
-        public Status Status { get; }
+        public IGameLogic GameLogic { get; }
+
+        public Status Status { get { return GameLogic.Status; } }
 
         public IBoard Board { get; }
 
         public IEnumerable<IPlayer> Players { get; }
 
-        public Game() : this(new Board(), new[] { new SillyPlayer(), new SillyPlayer() })
+        public IEnumerable<IPiece> PlayerPieces { get; }
+
+        public Game() : this(new Board(), new[] { new SillyPlayer(), new SillyPlayer() }, new SillyLogic())
         {
         }
 
-        public Game(IBoard board, IEnumerable<IPlayer> players)
+        public Game(IBoard board, IEnumerable<IPlayer> players, IGameLogic gameLogic)
         {
             Board = board;
             Players = players;
-            Status = Status.InProgress;
+            GameLogic = gameLogic;
         }
 
-        public bool DoTurns()
+        public IEnumerable<IPlayer> DoTurns()
         {
-            bool validMoves = false;
+            IEnumerable<IPlayer> winners = null;
             foreach(var player in Players)
             {
-                bool validMove = false;
-                int tries = 0;
-                ILocation location;
-                while ((!validMove) && (tries < 3))
-                {
-                    location = player.GetMove(Board);
-
-                    if(Board.CheckBounds(location))
-                    {
-                        validMove = true;
-                        validMoves = true;
-                    }
-                    tries++;
-                }
+                winners = GameLogic.DoTurn(Board, Players);
             }
-            return validMoves;
+            return winners;
         }
     }
 }
