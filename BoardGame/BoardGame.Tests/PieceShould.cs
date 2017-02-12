@@ -18,10 +18,11 @@
         }
 
         [Test]
-        public void ConstructWithValueGiven()
+        [TestCase("X")]
+        [TestCase("O")]
+        [TestCase(" ")]
+        public void ConstructWithValueGiven(string value)
         {
-            string value = "X";
-
             var sut = new Piece(value);
 
             sut.Value.ShouldBe(value);

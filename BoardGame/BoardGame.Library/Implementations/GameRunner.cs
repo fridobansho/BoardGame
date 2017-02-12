@@ -1,6 +1,5 @@
 ﻿namespace BoardGame.Library.Implementations
 {
-    using System;
     using Interfaces;
     using System.Collections.Generic;
 
@@ -19,7 +18,14 @@
 
         public IEnumerable<IPlayer> RunGame()
         {
-            throw new NotImplementedException();
+            int turnsWithNoValidMoves = 0;
+            while((Game.Status != Enumerations.Status.Finished) && (turnsWithNoValidMoves < 3))
+            {
+                var validMoves = Game.DoTurns();
+
+                if (!validMoves) turnsWithNoValidMoves++;
+            }
+            return Game.GetWinners();
         }
     }
 }

@@ -3,7 +3,7 @@
     using Interfaces;
     public class Piece : IPiece
     {
-        public const string BlankValue = " ";
+        public const string BlankValue = " ";
 
         public static IPiece Blank = new Piece(BlankValue);
 

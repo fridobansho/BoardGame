@@ -1,6 +1,7 @@
 ﻿namespace BoardGame.Library.Implementations
 {
     using Interfaces;
+    using System;
 
     public class Board : IBoard
     {
@@ -25,7 +26,7 @@
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    pieces[x, y] = new Piece();
+                    pieces[x, y] = Piece.Blank;
                 }
             }
         }
@@ -36,7 +37,7 @@
             {
                 return pieces[location.X, location.Y];
             }
-            return new Piece();
+            throw new ArgumentOutOfRangeException("location");
         }
 
         public bool CheckBounds(ILocation location)
@@ -51,7 +52,9 @@
             if (CheckBounds(location))
             {
                 pieces[location.X, location.Y] = piece;
+                return;
             }
+            throw new ArgumentOutOfRangeException("location");
         }
     }
 }

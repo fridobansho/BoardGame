@@ -4,6 +4,8 @@
     using NUnit.Framework;
     using Library.Implementations;
     using Library.Interfaces;
+    using System;
+    using Moq;
 
     [TestFixture]
     public class BoardShould
@@ -121,6 +123,25 @@
             sut.PieceAt(location, piece);
 
             sut.PieceAt(location).Value.ShouldBe(value);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "location")]
+        public void ThrowExceptionWhenGettingOutOfBounds()
+        {
+            var sut = new Board();
+            var location = new Location(-1, -1);
+
+            var piece = sut.PieceAt(location);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "location")]
+        public void ThrowExceptionWhenSettingOutOfBounds()
+        {
+            var piece = new Mock<IPiece>();
+            var sut = new Board();
+            var location = new Location(-1, -1);
+
+            sut.PieceAt(location, piece.Object);
         }
     }
 }

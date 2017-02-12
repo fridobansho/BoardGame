@@ -5,7 +5,7 @@
     public interface IGameRunner
     {
         IGame Game { get; }
-
+        
         IEnumerable<IPlayer> RunGame();
     }
 }

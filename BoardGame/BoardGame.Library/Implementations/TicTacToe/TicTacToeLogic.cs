@@ -32,7 +32,7 @@
             if (board.CheckBounds(location))
             {
                 var piece = board.PieceAt(location);
-                if (piece == Piece.Blank)
+                if (piece.Value == Piece.BlankValue)
                 {
                     return true;
                 }
@@ -53,7 +53,27 @@
         public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
         {
             ValidatePlayers(players);
+
+            if(!ValidMoves(board)) return players;
+
             return Enumerable.Empty<IPlayer>();
+        }
+
+        public bool ValidMoves(IBoard board)
+        {
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var location = new Location(x, y);
+                    if (IsValidMove(board, location))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }

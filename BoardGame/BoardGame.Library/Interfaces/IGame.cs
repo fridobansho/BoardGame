@@ -13,6 +13,8 @@
 
         IEnumerable<IPlayer> Players { get; }
 
-        IEnumerable<IPlayer> DoTurns();
+        bool DoTurns();
+
+        IEnumerable<IPlayer> GetWinners();
     }
 }

@@ -5,6 +5,7 @@
     using Interfaces;
     using Silly;
     using System.Linq;
+    using System;
 
     public class Game : IGame
     {
@@ -29,9 +30,9 @@
             Status = Status.InProgress;
         }
 
-        public IEnumerable<IPlayer> DoTurns()
+        public bool DoTurns()
         {
-            IEnumerable<IPlayer> winners = null;
+            bool validMoves = false;
             foreach(var player in Players)
             {
                 var location = player.GetMove(Board);
@@ -40,16 +41,25 @@
                 {
                     var piece = GameLogic.GetPiece(player);
                     Board.PieceAt(location, piece);
+                    validMoves = true;
                 }
-                winners = GameLogic.GetWinners(Board, Players);
-                if (winners.Any())
+                if (GetWinners().Any())
                 {
-                    Status = Status.Finished;
-                    return winners;
+                    break;
                 }
+
             }
-            winners = GameLogic.GetWinners(Board, Players);
-            return winners;
+            if (GetWinners().Any())
+            {
+                Status = Status.Finished;
+                return false;
+            }
+            return validMoves;
+        }
+
+        public IEnumerable<IPlayer> GetWinners()
+        {
+            return GameLogic.GetWinners(Board, Players);
         }
     }
 }

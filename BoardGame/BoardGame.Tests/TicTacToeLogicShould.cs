@@ -154,17 +154,67 @@
         }
 
         [Test]
-        public void ReturnEmptyIfNoWinners()
+        public void ReturnEmptyIfNoWinAndValidMoves()
         {
             var board = new Mock<IBoard>();
             var player1 = new Mock<IPlayer>();
             var player2 = new Mock<IPlayer>();
             var players = new[] { player1.Object, player2.Object };
             var sut = new TicTacToeLogic();
+            board.Setup(mock => mock.Width).Returns(1);
+            board.Setup(mock => mock.Height).Returns(1);
+            board.Setup(mock => mock.CheckBounds(It.IsAny<ILocation>())).Returns(true);
+            board.Setup(mock => mock.PieceAt(It.IsAny<ILocation>())).Returns(Piece.Blank);
 
             var result = sut.GetWinners(board.Object, players);
 
             result.ShouldBeEmpty();
+        }
+
+        [Test]
+        public void ReturnAllPlayersIfNoWinAndNoValidMoves()
+        {
+            var board = new Mock<IBoard>();
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var sut = new TicTacToeLogic();
+            board.Setup(mock => mock.Width).Returns(1);
+            board.Setup(mock => mock.Height).Returns(1);
+            board.Setup(mock => mock.CheckBounds(It.IsAny<ILocation>())).Returns(true);
+            board.Setup(mock => mock.PieceAt(It.IsAny<ILocation>())).Returns(XPiece.X);
+
+            var result = sut.GetWinners(board.Object, players);
+
+            result.ShouldBe(players);
+        }
+
+        [Test]
+        public void ReturnFalseIfNoValidMoves()
+        {
+            var board = new Mock<IBoard>();
+            var sut = new TicTacToeLogic();
+
+            var result = sut.ValidMoves(board.Object);
+
+            result.ShouldBeFalse();
+        }
+
+        [Test]
+        public void ReturnTrueIfValidMoves()
+        {
+            var board = new Mock<IBoard>();
+            var sut = new TicTacToeLogic();
+            var location = new Location(2, 2);
+            board.Setup(mock => mock.Width).Returns(3);
+            board.Setup(mock => mock.Height).Returns(3);
+            board.Setup(mock => mock.CheckBounds(It.IsAny<ILocation>())).Returns(true);
+            board.Setup(mock => mock.PieceAt(It.IsAny<ILocation>())).Returns(Piece.Blank);
+
+            var result = sut.ValidMoves(board.Object);
+
+            board.Verify(mock => mock.PieceAt(It.IsAny<ILocation>()), Times.Once);
+            result.ShouldBeTrue();
         }
     }
 }

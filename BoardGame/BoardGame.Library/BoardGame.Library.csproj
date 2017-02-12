@@ -44,6 +44,7 @@
     <Compile Include="Implementations\Silly\SillyLogic.cs" />
     <Compile Include="Implementations\Game.cs" />
     <Compile Include="Enumerations\Status.cs" />
+    <Compile Include="Implementations\TicTacToe\SimplePlayer.cs" />
     <Compile Include="Implementations\TicTacToe\TicTacToeLogic.cs" />
     <Compile Include="Implementations\GameRunner.cs" />
     <Compile Include="Implementations\Location.cs" />
