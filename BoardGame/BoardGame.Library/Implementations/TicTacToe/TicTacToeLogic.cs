@@ -13,14 +13,10 @@
         public IEnumerable<IPiece> PlayerPieces { get; }
 
         public Status Status { get; private set; }
-
-        public TicTacToeLogic()
+        
+        public TicTacToeLogic(IEnumerable<IPlayer> players)
         {
             PlayerPieces = new[] { XPiece.X, OPiece.O };
-        }
-
-        public TicTacToeLogic(IEnumerable<IPlayer> players) : this()
-        {
             if (players.Count() != PlayerPieces.Count()) throw new ArgumentOutOfRangeException("players.Count()");
             Players = players;
             Status = Status.InProgress;

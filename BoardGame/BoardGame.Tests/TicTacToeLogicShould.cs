@@ -12,15 +12,6 @@
     public class TicTacToeLogicShould
     {
         [Test]
-        public void ConstructWithDefaults()
-        {
-            var sut = new TicTacToeLogic();
-
-            sut.Players.ShouldBeNull();
-            sut.PlayerPieces.ShouldBe(new[] { XPiece.X, OPiece.O });
-        }
-
-        [Test]
         public void ConstructWithValuesGiven()
         {
             var player = new Mock<IPlayer>();
@@ -64,12 +55,13 @@
         {
             var board = new Mock<IBoard>();
             var player = new Mock<IPlayer>();
-            var sut = new TicTacToeLogic();
+            var players = Enumerable.Repeat(player.Object, 2);
+            var sut = new TicTacToeLogic(players);
 
-            var result = sut.DoTurn(board.Object, new[] { player.Object });
+            var result = sut.DoTurn(board.Object, players);
 
             result.ShouldBeEmpty();
-            player.Verify(mock => mock.GetMove(board.Object), Times.Once);
+            player.Verify(mock => mock.GetMove(board.Object), Times.Exactly(2));
         }
 
         [Test]
@@ -77,14 +69,14 @@
         {
             var board = new Mock<IBoard>();
             var player = new Mock<IPlayer>();
-            var players = new[] { player.Object };
-            var sut = new TicTacToeLogic();
+            var players = Enumerable.Repeat(player.Object, 2);
+            var sut = new TicTacToeLogic(players);
             player.Setup(mock => mock.GetMove(board.Object));
 
             var result = sut.DoTurn(board.Object, players);
 
             result.ShouldBeEmpty();
-            player.Verify(mock => mock.GetMove(board.Object), Times.Once);
+            player.Verify(mock => mock.GetMove(board.Object), Times.Exactly(2));
         }
     }
 }
