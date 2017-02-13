@@ -5,7 +5,6 @@
     using Interfaces;
     using Silly;
     using System.Linq;
-    using System;
 
     public class Game : IGame
     {
@@ -40,7 +39,7 @@
                 if(GameLogic.IsValidMove(Board, location))
                 {
                     var piece = GameLogic.GetPiece(player);
-                    Board.PieceAt(location, piece);
+                    Board.PieceAt(location.X, location.Y, piece);
                     validMoves = true;
                 }
                 if (GetWinners().Any())

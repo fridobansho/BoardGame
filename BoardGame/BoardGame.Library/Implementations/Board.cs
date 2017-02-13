@@ -26,35 +26,34 @@
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    pieces[x, y] = Piece.Blank;
+                    pieces[x, y] = BlankPiece.Blank;
                 }
             }
         }
 
-        public IPiece PieceAt(ILocation location)
+        public IPiece PieceAt(int x, int y)
         {
-            if (CheckBounds(location))
+            if (CheckBounds(x, y))
             {
-                return pieces[location.X, location.Y];
+                return pieces[x, y];
             }
-            throw new ArgumentOutOfRangeException("location");
+            return null;
         }
 
-        public bool CheckBounds(ILocation location)
+        public bool CheckBounds(int x, int y)
         {
-            if ((location.X > (Width - 1)) || (location.X < 0)) return false;
-            if ((location.Y > (Height - 1)) || (location.Y < 0)) return false;
+            if ((x > (Width - 1)) || (x < 0)) throw new ArgumentOutOfRangeException("x");
+            if ((y > (Height - 1)) || (y < 0)) throw new ArgumentOutOfRangeException("y");
             return true;
         }
 
-        public void PieceAt(ILocation location, IPiece piece)
+        public void PieceAt(int x, int y, IPiece piece)
         {
-            if (CheckBounds(location))
+            if (CheckBounds(x, y))
             {
-                pieces[location.X, location.Y] = piece;
+                pieces[x, y] = piece;
                 return;
             }
-            throw new ArgumentOutOfRangeException("location");
         }
     }
 }

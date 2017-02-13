@@ -8,14 +8,6 @@
     [TestFixture]
     public class PieceShould
     {
-        [Test]
-        public void ConstructWithDefault()
-        {
-            var sut = new Piece();
-
-            sut.ShouldBeOfType<Piece>();
-            sut.Value.ShouldBe(Piece.BlankValue);
-        }
 
         [Test]
         [TestCase("X")]

@@ -152,7 +152,7 @@
             var players = Enumerable.Repeat(player.Object, 1);
             var gameLogic = new Mock<IGameLogic>();
             var piece = new Mock<IPiece>();
-            board.Setup(mock => mock.PieceAt(location, piece.Object));
+            board.Setup(mock => mock.PieceAt(location.X, location.Y, piece.Object));
             player.Setup(mock => mock.GetMove(board.Object)).Returns(location);
             gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(true);
             gameLogic.Setup(mock => mock.GetPiece(player.Object)).Returns(piece.Object);
@@ -164,7 +164,7 @@
             player.Verify(mock => mock.GetMove(board.Object), Times.Once);
             gameLogic.Verify(mock => mock.IsValidMove(board.Object, location), Times.Once);
             gameLogic.Verify(mock => mock.GetPiece(player.Object), Times.Once);
-            board.Verify(mock => mock.PieceAt(location, piece.Object), Times.Once);
+            board.Verify(mock => mock.PieceAt(location.X, location.Y, piece.Object), Times.Once);
             result.ShouldBeTrue();
         }
 
@@ -177,7 +177,7 @@
             var players = Enumerable.Repeat(player.Object, 1);
             var gameLogic = new Mock<IGameLogic>();
             var piece = new Mock<IPiece>();
-            board.Setup(mock => mock.PieceAt(It.IsAny<ILocation>(), It.IsAny<IPiece>()));
+            board.Setup(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IPiece>()));
             player.Setup(mock => mock.GetMove(board.Object)).Returns(location);
             gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(false);
             gameLogic.Setup(mock => mock.GetPiece(It.IsAny<IPlayer>()));
@@ -189,7 +189,7 @@
             player.Verify(mock => mock.GetMove(board.Object), Times.Once);
             gameLogic.Verify(mock => mock.IsValidMove(board.Object, location), Times.Once);
             gameLogic.Verify(mock => mock.GetPiece(It.IsAny<IPlayer>()), Times.Never);
-            board.Verify(mock => mock.PieceAt(It.IsAny<ILocation>(), It.IsAny<IPiece>()), Times.Never);
+            board.Verify(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IPiece>()), Times.Never);
             result.ShouldBeFalse();
             sut.Status.ShouldBe(Status.InProgress);
         }
@@ -203,13 +203,13 @@
             var gameLogic = new Mock<IGameLogic>();
             gameLogic.Setup(mock => mock.GetWinners(board.Object, players)).Returns(Enumerable.Empty<IPlayer>());
             gameLogic.Setup(mock => mock.GetPiece(It.IsAny<IPlayer>()));
-            board.Setup(mock => mock.PieceAt(It.IsAny<ILocation>()));
+            board.Setup(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>()));
 
             var sut = new Game(board.Object, players, gameLogic.Object);
 
             var result = sut.DoTurns();
 
-            board.Verify(mock => mock.PieceAt(It.IsAny<ILocation>()), Times.Never);
+            board.Verify(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
             gameLogic.Verify(mock => mock.GetPiece(It.IsAny<IPlayer>()), Times.Never);
             gameLogic.Verify(mock => mock.GetWinners(board.Object, players), Times.AtLeastOnce);
             result.ShouldBeFalse();
@@ -224,13 +224,13 @@
             var gameLogic = new Mock<IGameLogic>();
             gameLogic.Setup(mock => mock.GetWinners(board.Object, players)).Returns(players);
             gameLogic.Setup(mock => mock.GetPiece(It.IsAny<IPlayer>()));
-            board.Setup(mock => mock.PieceAt(It.IsAny<ILocation>()));
+            board.Setup(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>()));
 
             var sut = new Game(board.Object, players, gameLogic.Object);
 
             var result = sut.DoTurns();
 
-            board.Verify(mock => mock.PieceAt(It.IsAny<ILocation>()), Times.Never);
+            board.Verify(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
             gameLogic.Verify(mock => mock.GetPiece(It.IsAny<IPlayer>()), Times.Never);
             gameLogic.Verify(mock => mock.GetWinners(board.Object, players), Times.Once);
             result.ShouldBeFalse();

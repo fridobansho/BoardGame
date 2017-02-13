@@ -41,6 +41,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Implementations\Board.cs" />
+    <Compile Include="Implementations\BlankPiece.cs" />
     <Compile Include="Implementations\Silly\SillyLogic.cs" />
     <Compile Include="Implementations\Game.cs" />
     <Compile Include="Enumerations\Status.cs" />

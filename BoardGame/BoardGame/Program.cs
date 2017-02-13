@@ -10,8 +10,8 @@
     {
         static void Main(string[] args)
         {
-            var player1 = new SillyPlayer();
-            var player2 = new SimplePlayer();
+            var player1 = new SimplePlayer("Player 1");
+            var player2 = new SillyPlayer("Player 2");
 
             var players = new IPlayer[] { player1, player2 };
 

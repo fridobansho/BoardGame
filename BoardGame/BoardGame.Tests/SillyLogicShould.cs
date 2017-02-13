@@ -55,7 +55,7 @@
             var player2 = new Mock<IPlayer>();
             var player3 = new Mock<IPlayer>();
             var players = new[] { player1.Object, player2.Object, player3.Object };
-            var blanks = Enumerable.Repeat(Piece.Blank, players.Count());
+            var blanks = Enumerable.Repeat(BlankPiece.Blank, players.Count());
             var pairs = players.Zip(blanks, (p, b) => new KeyValuePair<IPlayer, IPiece>(p, b));
             var dictionary = new Dictionary<IPlayer, IPiece>();
             var sut = new SillyLogic();
@@ -103,11 +103,9 @@
             var sut = new SillyLogic();
             sut.MapPieces(players);
 
-            var result1 = sut.GetPiece(player1.Object);
-            var result2 = sut.GetPiece(player2.Object);
+            var results = players.Select(player => sut.GetPiece(player));
 
-            result1.ShouldBe(Piece.Blank);
-            result2.ShouldBe(Piece.Blank);
+            results.ShouldAllBe(piece => piece.Value == BlankPiece.BlankValue);
         }
 
         [Test]

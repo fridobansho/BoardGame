@@ -44,42 +44,9 @@
             var sut = new Board();
             var location = new Location(sut.Width - 1, sut.Height - 1);
 
-            var result = sut.CheckBounds(location);
+            var result = sut.CheckBounds(location.X, location.Y);
 
             result.ShouldBeTrue();
-        }
-
-        [Test]
-        public void ReturnFalseWhenPassedOutOfBounds()
-        {
-            var sut = new Board();
-            var location = new Location(sut.Width, sut.Height);
-
-            var result = sut.CheckBounds(location);
-
-            result.ShouldBeFalse();
-        }
-
-        [Test]
-        public void ReturnFalseWhenPassedOutOfBoundsX()
-        {
-            var sut = new Board();
-            var location = new Location(sut.Width, sut.Height - 1);
-
-            var result = sut.CheckBounds(location);
-
-            result.ShouldBeFalse();
-        }
-
-        [Test]
-        public void ReturnFalseWhenPassedOutOfBoundsY()
-        {
-            var sut = new Board();
-            var location = new Location(sut.Width - 1, sut.Height);
-
-            var result = sut.CheckBounds(location);
-
-            result.ShouldBeFalse();
         }
 
         [Test]
@@ -88,9 +55,9 @@
             var sut = new Board();
             var location = new Location(0, 0);
 
-            var piece = sut.PieceAt(location);
+            var piece = sut.PieceAt(location.X, location.Y);
 
-            piece.Value.ShouldBe(Piece.BlankValue);
+            piece.Value.ShouldBe(BlankPiece.BlankValue);
         }
 
         [Test]
@@ -104,7 +71,7 @@
                 for (int y = 0; y < sut.Height; y++)
                 {
                     var location = new Location(x, y);
-                    sut.PieceAt(location).Value.ShouldBe(Piece.BlankValue);
+                    sut.PieceAt(location.X, location.Y).Value.ShouldBe(BlankPiece.BlankValue);
                     count++;
                 }
             }
@@ -120,28 +87,47 @@
             var piece = new Piece(value);
             var location = new Location(0, 0);
 
-            sut.PieceAt(location, piece);
+            sut.PieceAt(location.X, location.Y, piece);
 
-            sut.PieceAt(location).Value.ShouldBe(value);
+            sut.PieceAt(location.X, location.Y).Value.ShouldBe(value);
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "location")]
-        public void ThrowExceptionWhenGettingOutOfBounds()
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "x")]
+        public void ThrowExceptionWhenGettingOutOfBoundsX()
         {
             var sut = new Board();
-            var location = new Location(-1, -1);
+            var location = new Location(-1, 0);
 
-            var piece = sut.PieceAt(location);
+            sut.PieceAt(location.X, location.Y);
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "location")]
-        public void ThrowExceptionWhenSettingOutOfBounds()
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "y")]
+        public void ThrowExceptionWhenGettingOutOfBoundsY()
+        {
+            var sut = new Board();
+            var location = new Location(0, -1);
+
+            sut.PieceAt(location.X, location.Y);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "x")]
+        public void ThrowExceptionWhenSettingOutOfBoundsX()
         {
             var piece = new Mock<IPiece>();
             var sut = new Board();
-            var location = new Location(-1, -1);
+            var location = new Location(-1, 0);
 
-            sut.PieceAt(location, piece.Object);
+            sut.PieceAt(location.X, location.Y, piece.Object);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "y")]
+        public void ThrowExceptionWhenSettingOutOfBoundsY()
+        {
+            var piece = new Mock<IPiece>();
+            var sut = new Board();
+            var location = new Location(0, -1);
+
+            sut.PieceAt(location.X, location.Y, piece.Object);
         }
     }
 }

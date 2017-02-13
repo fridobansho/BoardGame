@@ -8,7 +8,7 @@
 
         public static IPiece X = new XPiece();
 
-        public XPiece() : base(XValue)
+        private XPiece() : base(XValue)
         {
 
         }

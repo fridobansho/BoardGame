@@ -6,10 +6,10 @@
 
         int Width { get; }
 
-        IPiece PieceAt(ILocation location);
+        IPiece PieceAt(int x, int y);
 
-        void PieceAt(ILocation location, IPiece piece);
+        void PieceAt(int x, int y, IPiece piece);
 
-        bool CheckBounds(ILocation location);
+        bool CheckBounds(int x, int y);
     }
 }

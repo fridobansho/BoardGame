@@ -29,10 +29,10 @@
 
         public bool IsValidMove(IBoard board, ILocation location)
         {
-            if (board.CheckBounds(location))
+            if (board.CheckBounds(location.X, location.Y))
             {
-                var piece = board.PieceAt(location);
-                if (piece.Value == Piece.BlankValue)
+                var piece = board.PieceAt(location.X, location.Y);
+                if (piece.Value == BlankPiece.BlankValue)
                 {
                     return true;
                 }
@@ -50,15 +50,6 @@
             throw new ArgumentOutOfRangeException("player");
         }
 
-        public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
-        {
-            ValidatePlayers(players);
-
-            if(!ValidMoves(board)) return players;
-
-            return Enumerable.Empty<IPlayer>();
-        }
-
         public bool ValidMoves(IBoard board)
         {
             for (int x = 0; x < board.Width; x++)
@@ -74,6 +65,37 @@
             }
 
             return false;
+        }
+
+        public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
+        {
+            ValidatePlayers(players);
+
+            for(int x = 0;x < board.Width;x++)
+            {
+                var pieces = new List<IPiece>();
+                for(int y = 0;y < board.Height;y++)
+                {
+                    var piece = board.PieceAt(x, y);
+                    if (piece.Value != BlankPiece.BlankValue)
+                    {
+                        pieces.Add(piece);
+                    }
+                }
+                if(pieces.Count() == board.Height)
+                {
+                    var distinct = pieces.Distinct();
+                    if(distinct.Count() == 1)
+                    {
+                        var winner = PlayerPieces.First(pair => pair.Value.Value == distinct.First().Value).Key;
+                        return Enumerable.Repeat(winner, 1);
+                    }
+                }
+            }
+
+            if(!ValidMoves(board)) return players;
+
+            return Enumerable.Empty<IPlayer>();
         }
     }
 }

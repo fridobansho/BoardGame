@@ -24,8 +24,8 @@
                 for(int y = 0;y < board.Height;y++)
                 {
                     location = new Location(x, y);
-                    var piece = board.PieceAt(location);
-                    if(piece.Value == Piece.BlankValue)
+                    var piece = board.PieceAt(location.X, location.Y);
+                    if(piece.Value == BlankPiece.BlankValue)
                     {
                         return location;
                     }

@@ -18,7 +18,7 @@
             if (players == null) throw new ArgumentNullException("players");
             foreach (var player in players)
             {
-                PlayerPieces.Add(player, Piece.Blank);
+                PlayerPieces.Add(player, BlankPiece.Blank);
             }
         }
 
