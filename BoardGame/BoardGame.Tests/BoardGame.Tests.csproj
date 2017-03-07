@@ -65,15 +65,16 @@
     <Otherwise />
   </Choose>
   <ItemGroup>
-    <Compile Include="GameRunnerShould.cs" />
-    <Compile Include="GameShould.cs" />
-    <Compile Include="LocationShould.cs" />
-    <Compile Include="PieceShould.cs" />
-    <Compile Include="SillyLogicShould.cs" />
-    <Compile Include="SillyPlayerShould.cs" />
-    <Compile Include="BoardShould.cs" />
+    <Compile Include="Implementations\GameRunnerShould.cs" />
+    <Compile Include="Implementations\GameShould.cs" />
+    <Compile Include="Implementations\LocationShould.cs" />
+    <Compile Include="Implementations\PieceShould.cs" />
+    <Compile Include="Implementations\Silly\SillyLogicShould.cs" />
+    <Compile Include="Implementations\Silly\SillyPlayerShould.cs" />
+    <Compile Include="Implementations\BoardShould.cs" />
+    <Compile Include="Implementations\TicTacToe\SimplePlayerShould.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="TicTacToeLogicShould.cs" />
+    <Compile Include="Implementations\TicTacToe\TicTacToeLogicShould.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BoardGame.Library\BoardGame.Library.csproj">

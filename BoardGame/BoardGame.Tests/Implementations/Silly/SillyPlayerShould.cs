@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests
+﻿namespace BoardGame.Tests.Implementations.Silly
 {
     using Shouldly;
     using Library.Implementations;

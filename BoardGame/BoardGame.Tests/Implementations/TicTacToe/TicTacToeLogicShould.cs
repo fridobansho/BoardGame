@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests
+﻿namespace BoardGame.Tests.Implementations.TicTacToe
 {
     using Moq;
     using Shouldly;

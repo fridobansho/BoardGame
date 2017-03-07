@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests
+﻿namespace BoardGame.Tests.Implementations
 {
     using Shouldly;
     using NUnit.Framework;
@@ -92,42 +92,50 @@
             sut.PieceAt(location.X, location.Y).Value.ShouldBe(value);
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "x")]
+        [Test]
         public void ThrowExceptionWhenGettingOutOfBoundsX()
         {
             var sut = new Board();
             var location = new Location(-1, 0);
 
-            sut.PieceAt(location.X, location.Y);
+            Action action = () => sut.PieceAt(location.X, location.Y);
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "y")]
+        [Test]
         public void ThrowExceptionWhenGettingOutOfBoundsY()
         {
             var sut = new Board();
             var location = new Location(0, -1);
 
-            sut.PieceAt(location.X, location.Y);
+            Action action = () => sut.PieceAt(location.X, location.Y);
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "x")]
+        [Test]
         public void ThrowExceptionWhenSettingOutOfBoundsX()
         {
             var piece = new Mock<IPiece>();
             var sut = new Board();
             var location = new Location(-1, 0);
 
-            sut.PieceAt(location.X, location.Y, piece.Object);
+            Action action = () => sut.PieceAt(location.X, location.Y, piece.Object);
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "y")]
+        [Test]
         public void ThrowExceptionWhenSettingOutOfBoundsY()
         {
             var piece = new Mock<IPiece>();
             var sut = new Board();
             var location = new Location(0, -1);
 
-            sut.PieceAt(location.X, location.Y, piece.Object);
+            Action action = () => sut.PieceAt(location.X, location.Y, piece.Object);
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y");
         }
     }
 }

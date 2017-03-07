@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests
+﻿namespace BoardGame.Tests.Implementations
 {
     using Shouldly;
     using NUnit.Framework;
