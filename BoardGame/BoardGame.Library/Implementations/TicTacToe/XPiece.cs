@@ -10,7 +10,6 @@
 
         private XPiece() : base(XValue)
         {
-
         }
     }
 }

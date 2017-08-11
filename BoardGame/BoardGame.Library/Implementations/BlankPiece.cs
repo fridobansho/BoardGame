@@ -1,6 +1,7 @@
 ﻿namespace BoardGame.Library.Implementations
 {
     using Interfaces;
+
     public class BlankPiece : Piece
     {
         public const string BlankValue = " ";

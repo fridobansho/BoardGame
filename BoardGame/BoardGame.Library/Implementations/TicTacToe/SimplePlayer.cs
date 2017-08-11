@@ -8,7 +8,6 @@
 
         public SimplePlayer() : this(typeof(SimplePlayer).Name)
         {
-
         }
 
         public SimplePlayer(string name)

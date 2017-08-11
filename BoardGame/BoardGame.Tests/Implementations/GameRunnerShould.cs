@@ -6,7 +6,6 @@
     using Moq;
     using Library.Interfaces;
     using Library.Enumerations;
-    using System.Linq;
 
     [TestFixture]
     public class GameRunnerShould

@@ -31,6 +31,11 @@
             }
         }
 
+        public IPiece PieceAt(ILocation location)
+        {
+            return PieceAt(location.X, location.Y);
+        }
+
         public IPiece PieceAt(int x, int y)
         {
             if (CheckBounds(x, y))
@@ -42,9 +47,14 @@
 
         public bool CheckBounds(int x, int y)
         {
-            if ((x > (Width - 1)) || (x < 0)) throw new ArgumentOutOfRangeException("x");
-            if ((y > (Height - 1)) || (y < 0)) throw new ArgumentOutOfRangeException("y");
+            if ((x > (Width - 1)) || (x < 0)) throw new ArgumentOutOfRangeException("x", x, "Specified argument was out of the range of valid values.");
+            if ((y > (Height - 1)) || (y < 0)) throw new ArgumentOutOfRangeException("y", y, "Specified argument was out of the range of valid values.");
             return true;
+        }
+
+        public void PieceAt(ILocation location, IPiece piece)
+        {
+            PieceAt(location.X, location.Y, piece);
         }
 
         public void PieceAt(int x, int y, IPiece piece)

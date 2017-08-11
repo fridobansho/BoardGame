@@ -100,7 +100,7 @@
 
             Action action = () => sut.PieceAt(location.X, location.Y);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x");
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x\r\nActual value was -1.");
         }
 
         [Test]
@@ -111,7 +111,7 @@
 
             Action action = () => sut.PieceAt(location.X, location.Y);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y");
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y\r\nActual value was -1.");
         }
 
         [Test]
@@ -123,7 +123,7 @@
 
             Action action = () => sut.PieceAt(location.X, location.Y, piece.Object);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x");
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x\r\nActual value was -1.");
         }
 
         [Test]
@@ -135,7 +135,7 @@
 
             Action action = () => sut.PieceAt(location.X, location.Y, piece.Object);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y");
+            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y\r\nActual value was -1.");
         }
     }
 }

@@ -10,7 +10,6 @@
 
         public OPiece() : base(OValue)
         {
-
         }
     }
 }
