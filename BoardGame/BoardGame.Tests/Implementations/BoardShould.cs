@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests.Implementations
+namespace BoardGame.Tests.Implementations
 {
     using Shouldly;
     using NUnit.Framework;
@@ -93,49 +93,116 @@
         }
 
         [Test]
-        public void ThrowExceptionWhenGettingOutOfBoundsX()
+        [TestCase(-1, 0)]
+        [TestCase(0, -1)]
+        [TestCase(3, 0)]
+        [TestCase(0, 3)]
+        public void ReturnFalseWhenPassedOutOfBounds(int x, int y)
         {
             var sut = new Board();
-            var location = new Location(-1, 0);
+
+            var result = sut.CheckBounds(x, y);
+
+            result.ShouldBeFalse();
+        }
+
+        [Test]
+        public void ReturnPieceSetUsingLocationOverload()
+        {
+            var sut = new Board();
+            const string value = "X";
+            var piece = new Piece(value);
+            var location = new Location(1, 2);
+
+            sut.PieceAt(location, piece);
+
+            sut.PieceAt(location).ShouldBe(piece);
+            sut.PieceAt(location).Value.ShouldBe(value);
+        }
+
+        [Test]
+        public void ThrowArgumentNullExceptionWhenGettingWithNullLocation()
+        {
+            var sut = new Board();
+
+            Action action = () => sut.PieceAt(null);
+
+            var exception = action.ShouldThrow<ArgumentNullException>();
+            exception.ParamName.ShouldBe("location");
+        }
+
+        [Test]
+        public void ThrowArgumentNullExceptionWhenSettingWithNullLocation()
+        {
+            var sut = new Board();
+            var piece = new Piece("X");
+
+            Action action = () => sut.PieceAt(null, piece);
+
+            var exception = action.ShouldThrow<ArgumentNullException>();
+            exception.ParamName.ShouldBe("location");
+        }
+
+        [Test]
+        [TestCase(-1)]
+        [TestCase(3)]
+        public void ThrowExceptionWhenGettingOutOfBoundsX(int outOfBoundsX)
+        {
+            var sut = new Board();
+            var location = new Location(outOfBoundsX, 0);
 
             Action action = () => sut.PieceAt(location.X, location.Y);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x\r\nActual value was -1.");
+            exception.Message.ShouldStartWith("Specified argument was out of the range of valid values.");
+            exception.ParamName.ShouldBe("x");
+            exception.ActualValue.ShouldBe(outOfBoundsX);
         }
 
         [Test]
-        public void ThrowExceptionWhenGettingOutOfBoundsY()
+        [TestCase(-1)]
+        [TestCase(3)]
+        public void ThrowExceptionWhenGettingOutOfBoundsY(int outOfBoundsY)
         {
             var sut = new Board();
-            var location = new Location(0, -1);
+            var location = new Location(0, outOfBoundsY);
 
             Action action = () => sut.PieceAt(location.X, location.Y);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y\r\nActual value was -1.");
+            exception.Message.ShouldStartWith("Specified argument was out of the range of valid values.");
+            exception.ParamName.ShouldBe("y");
+            exception.ActualValue.ShouldBe(outOfBoundsY);
         }
 
         [Test]
-        public void ThrowExceptionWhenSettingOutOfBoundsX()
+        [TestCase(-1)]
+        [TestCase(3)]
+        public void ThrowExceptionWhenSettingOutOfBoundsX(int outOfBoundsX)
         {
             var piece = new Mock<IPiece>();
             var sut = new Board();
-            var location = new Location(-1, 0);
+            var location = new Location(outOfBoundsX, 0);
 
             Action action = () => sut.PieceAt(location.X, location.Y, piece.Object);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: x\r\nActual value was -1.");
+            exception.Message.ShouldStartWith("Specified argument was out of the range of valid values.");
+            exception.ParamName.ShouldBe("x");
+            exception.ActualValue.ShouldBe(outOfBoundsX);
         }
 
         [Test]
-        public void ThrowExceptionWhenSettingOutOfBoundsY()
+        [TestCase(-1)]
+        [TestCase(3)]
+        public void ThrowExceptionWhenSettingOutOfBoundsY(int outOfBoundsY)
         {
             var piece = new Mock<IPiece>();
             var sut = new Board();
-            var location = new Location(0, -1);
+            var location = new Location(0, outOfBoundsY);
 
             Action action = () => sut.PieceAt(location.X, location.Y, piece.Object);
             var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
-            exception.Message.ShouldBe("Specified argument was out of the range of valid values.\r\nParameter name: y\r\nActual value was -1.");
+            exception.Message.ShouldStartWith("Specified argument was out of the range of valid values.");
+            exception.ParamName.ShouldBe("y");
+            exception.ActualValue.ShouldBe(outOfBoundsY);
         }
     }
 }

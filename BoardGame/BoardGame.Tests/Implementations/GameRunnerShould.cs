@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests.Implementations
+namespace BoardGame.Tests.Implementations
 {
     using Shouldly;
     using NUnit.Framework;
@@ -41,6 +41,38 @@
 
             game.Verify(mock => mock.Status, Times.Exactly(2));
             results.ShouldBeEmpty();
+        }
+
+        [Test]
+        public void StopAfterThreeTurnsWithNoValidMoves()
+        {
+            var game = new Mock<IGame>();
+            var sut = new GameRunner(game.Object);
+            game.Setup(mock => mock.Status).Returns(Status.InProgress);
+            game.Setup(mock => mock.DoTurns()).Returns(false);
+
+            var results = sut.RunGame();
+
+            game.Verify(mock => mock.DoTurns(), Times.Exactly(3));
+            results.ShouldBeEmpty();
+        }
+
+        [Test]
+        public void ReturnWinnersFromGameWhenFinished()
+        {
+            var game = new Mock<IGame>();
+            var winner = new Mock<IPlayer>();
+            var expectedWinners = new[] { winner.Object };
+            var sut = new GameRunner(game.Object);
+            game.SetupSequence(mock => mock.Status)
+                .Returns(Status.InProgress)
+                .Returns(Status.Finished);
+            game.Setup(mock => mock.DoTurns()).Returns(true);
+            game.Setup(mock => mock.GetWinners()).Returns(expectedWinners);
+
+            var results = sut.RunGame();
+
+            results.ShouldBe(expectedWinners);
         }
     }
 }

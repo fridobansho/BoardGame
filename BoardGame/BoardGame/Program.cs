@@ -1,4 +1,4 @@
-﻿namespace BoardGame
+namespace BoardGame
 {
     using Library.Implementations;
     using Library.Implementations.Silly;
@@ -29,7 +29,10 @@
             {
                 Console.WriteLine("Winner: " + winner.Name);
             }
-            Console.ReadKey();
+            if (!Console.IsInputRedirected)
+            {
+                Console.ReadKey();
+            }
         }
     }
 }

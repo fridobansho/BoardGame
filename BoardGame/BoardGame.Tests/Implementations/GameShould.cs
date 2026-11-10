@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests.Implementations
+namespace BoardGame.Tests.Implementations
 {
     using Moq;
     using Shouldly;
@@ -235,6 +235,33 @@
             gameLogic.Verify(mock => mock.GetWinners(board.Object, players), Times.Once);
             result.ShouldBeFalse();
             sut.Status.ShouldBe(Status.InProgress);
+        }
+
+        [Test]
+        public void SetStatusToFinishedAndSkipRemainingPlayersWhenWinnerFound()
+        {
+            var board = new Mock<IBoard>();
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var location = new Location(0, 0);
+            var piece = new Mock<IPiece>();
+            var gameLogic = new Mock<IGameLogic>();
+
+            player1.Setup(mock => mock.GetMove(board.Object)).Returns(location);
+            gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(true);
+            gameLogic.Setup(mock => mock.GetPiece(player1.Object)).Returns(piece.Object);
+            gameLogic.Setup(mock => mock.GetWinners(board.Object, players)).Returns(new[] { player1.Object });
+
+            var sut = new Game(board.Object, players, gameLogic.Object);
+
+            var result = sut.DoTurns();
+
+            result.ShouldBeFalse();
+            sut.Status.ShouldBe(Status.Finished);
+            player1.Verify(mock => mock.GetMove(board.Object), Times.Once);
+            player2.Verify(mock => mock.GetMove(board.Object), Times.Never);
+            sut.GetWinners().ShouldBe(new[] { player1.Object });
         }
     }
 }

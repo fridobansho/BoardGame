@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Library.Implementations.TicTacToe
+namespace BoardGame.Library.Implementations.TicTacToe
 {
     using Interfaces;
 
@@ -8,7 +8,7 @@
 
         public static IPiece X = new XPiece();
 
-        private XPiece() : base(XValue)
+        public XPiece() : base(XValue)
         {
         }
     }

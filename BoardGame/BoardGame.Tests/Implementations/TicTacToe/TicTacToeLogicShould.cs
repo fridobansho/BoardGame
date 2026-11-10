@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests.Implementations.TicTacToe
+namespace BoardGame.Tests.Implementations.TicTacToe
 {
     using Moq;
     using Shouldly;
@@ -71,40 +71,65 @@
             result.ShouldBeFalse();
         }
 
-        [Test, ExpectedException(typeof(ArgumentNullException), MatchType = MessageMatch.Contains, ExpectedMessage = "players")]
+        [Test]
         public void ThrowsExceptionIfPassedNull()
         {
             var sut = new TicTacToeLogic();
 
-            sut.MapPieces(null);
+            Action action = () => sut.MapPieces(null);
+
+            var exception = action.ShouldThrow<ArgumentNullException>();
+            exception.ParamName.ShouldBe("players");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        [Test]
         public void ThrowsExceptionIfPassedEmpty()
         {
             var players = Enumerable.Empty<IPlayer>();
             var sut = new TicTacToeLogic();
 
-            sut.MapPieces(players);
+            Action action = () => sut.MapPieces(players);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("players.Count()");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        [Test]
         public void ThrowsExceptionIfPassedSingle()
         {
             var player = new Mock<IPlayer>();
             var players = Enumerable.Repeat(player.Object, 1);
             var sut = new TicTacToeLogic();
 
-            sut.MapPieces(players);
+            Action action = () => sut.MapPieces(players);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("players.Count()");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "player")]
+        [Test]
+        public void ThrowsExceptionIfPassedMoreThanTwoPlayers()
+        {
+            var player = new Mock<IPlayer>();
+            var players = Enumerable.Repeat(player.Object, 3);
+            var sut = new TicTacToeLogic();
+
+            Action action = () => sut.MapPieces(players);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("players.Count()");
+        }
+
+        [Test]
         public void ThrowsExceptionIfNoMappedPlayer()
         {
             var player = new Mock<IPlayer>();
             var sut = new TicTacToeLogic();
 
-            var result = sut.GetPiece(player.Object);
+            Action action = () => sut.GetPiece(player.Object);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("player");
         }
 
         [Test]
@@ -123,26 +148,32 @@
             result2.ShouldBe(OPiece.O);
         }
 
-        [Test, ExpectedException(typeof(ArgumentNullException), MatchType = MessageMatch.Contains, ExpectedMessage = "players")]
+        [Test]
         public void ThrowExceptionIfPassedNull()
         {
             var board = new Mock<IBoard>();
             var sut = new TicTacToeLogic();
 
-            var result = sut.GetWinners(board.Object, null);
+            Action action = () => sut.GetWinners(board.Object, null);
+
+            var exception = action.ShouldThrow<ArgumentNullException>();
+            exception.ParamName.ShouldBe("players");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        [Test]
         public void ThrowExceptionIfPassedEmpty()
         {
             var board = new Mock<IBoard>();
             var players = Enumerable.Empty<IPlayer>();
             var sut = new TicTacToeLogic();
 
-            var result = sut.GetWinners(board.Object, players);
+            Action action = () => sut.GetWinners(board.Object, players);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("players.Count()");
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "players.Count()")]
+        [Test]
         public void ThrowExceptionIfPassedSingle()
         {
             var board = new Mock<IBoard>();
@@ -150,7 +181,10 @@
             var players = Enumerable.Repeat(player.Object, 1);
             var sut = new TicTacToeLogic();
 
-            var result = sut.GetWinners(board.Object, players);
+            Action action = () => sut.GetWinners(board.Object, players);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("players.Count()");
         }
 
         [Test]
@@ -245,6 +279,92 @@
             result.ShouldBe(winner);
             board.Verify(mock => mock.PieceAt(x, It.IsAny<int>()), Times.Exactly(3));
             board.Verify(mock => mock.PieceAt(It.IsNotIn(x), It.IsAny<int>()), Times.Exactly(3 * x));
+        }
+
+        [Test]
+        [TestCase(0, XPiece.XValue)]
+        [TestCase(1, XPiece.XValue)]
+        [TestCase(2, XPiece.XValue)]
+        [TestCase(0, OPiece.OValue)]
+        [TestCase(1, OPiece.OValue)]
+        [TestCase(2, OPiece.OValue)]
+        public void CheckHorizontalsForWins(int y, string winningPiece)
+        {
+            var board = new Board(3, 3);
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var sut = new TicTacToeLogic();
+            sut.MapPieces(players);
+            for (int x = 0; x < board.Width; x++)
+            {
+                board.PieceAt(x, y, new Piece(winningPiece));
+            }
+            var winner = sut.PlayerPieces.Where(pair => pair.Value.Value == winningPiece).Select(pair => pair.Key);
+
+            var result = sut.GetWinners(board, players);
+
+            result.ShouldBe(winner);
+        }
+
+        [Test]
+        [TestCase(XPiece.XValue)]
+        [TestCase(OPiece.OValue)]
+        public void CheckMainDiagonalForWins(string winningPiece)
+        {
+            var board = new Board(3, 3);
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var sut = new TicTacToeLogic();
+            sut.MapPieces(players);
+            for (int i = 0; i < board.Width; i++)
+            {
+                board.PieceAt(i, i, new Piece(winningPiece));
+            }
+            var winner = sut.PlayerPieces.Where(pair => pair.Value.Value == winningPiece).Select(pair => pair.Key);
+
+            var result = sut.GetWinners(board, players);
+
+            result.ShouldBe(winner);
+        }
+
+        [Test]
+        [TestCase(XPiece.XValue)]
+        [TestCase(OPiece.OValue)]
+        public void CheckAntiDiagonalForWins(string winningPiece)
+        {
+            var board = new Board(3, 3);
+            var player1 = new Mock<IPlayer>();
+            var player2 = new Mock<IPlayer>();
+            var players = new[] { player1.Object, player2.Object };
+            var sut = new TicTacToeLogic();
+            sut.MapPieces(players);
+            for (int i = 0; i < board.Width; i++)
+            {
+                board.PieceAt(i, board.Height - 1 - i, new Piece(winningPiece));
+            }
+            var winner = sut.PlayerPieces.Where(pair => pair.Value.Value == winningPiece).Select(pair => pair.Key);
+
+            var result = sut.GetWinners(board, players);
+
+            result.ShouldBe(winner);
+        }
+
+        [Test]
+        [TestCase(-1, 0)]
+        [TestCase(0, -1)]
+        [TestCase(3, 0)]
+        [TestCase(0, 3)]
+        public void ReturnFalseForOutOfBoundsWithRealBoard(int x, int y)
+        {
+            var board = new Board(3, 3);
+            var location = new Location(x, y);
+            var sut = new TicTacToeLogic();
+
+            var result = sut.IsValidMove(board, location);
+
+            result.ShouldBeFalse();
         }
     }
 }

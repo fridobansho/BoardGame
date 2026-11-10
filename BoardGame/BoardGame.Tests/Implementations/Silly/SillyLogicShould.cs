@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Tests.Implementations.Silly
+namespace BoardGame.Tests.Implementations.Silly
 {
     using Shouldly;
     using NUnit.Framework;
@@ -29,12 +29,15 @@
             sut.ShouldBeAssignableTo<IGameLogic>();
         }
 
-        [Test, ExpectedException(typeof(ArgumentNullException), MatchType = MessageMatch.Contains, ExpectedMessage = "players")]
+        [Test]
         public void ThrowArgumentNullExceptionWhenPassedNull()
         {
             var sut = new SillyLogic();
 
-            sut.MapPieces(null);
+            Action action = () => sut.MapPieces(null);
+
+            var exception = action.ShouldThrow<ArgumentNullException>();
+            exception.ParamName.ShouldBe("players");
         }
 
         [Test]
@@ -85,13 +88,16 @@
             result.ShouldBeTrue();
         }
 
-        [Test, ExpectedException(typeof(ArgumentOutOfRangeException), MatchType = MessageMatch.Contains, ExpectedMessage = "player")]
+        [Test]
         public void ThrowsExceptionIfNoMappedPlayer()
         {
             var player = new Mock<IPlayer>();
             var sut = new SillyLogic();
 
-            var result = sut.GetPiece(player.Object);
+            Action action = () => sut.GetPiece(player.Object);
+
+            var exception = action.ShouldThrow<ArgumentOutOfRangeException>();
+            exception.ParamName.ShouldBe("player");
         }
 
         [Test]

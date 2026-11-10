@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Library.Implementations.TicTacToe
+namespace BoardGame.Library.Implementations.TicTacToe
 {
     using Interfaces;
     using System;
@@ -71,31 +71,100 @@
         {
             ValidatePlayers(players);
 
-            for(int x = 0;x < board.Width;x++)
+            // Check verticals
+            for (int x = 0; x < board.Width; x++)
             {
                 var pieces = new List<IPiece>();
-                for(int y = 0;y < board.Height;y++)
+                for (int y = 0; y < board.Height; y++)
                 {
                     var piece = board.PieceAt(x, y);
-                    if (piece.Value != BlankPiece.BlankValue)
+                    if (piece != null && piece.Value != BlankPiece.BlankValue)
                     {
                         pieces.Add(piece);
                     }
                 }
-                if(pieces.Count() == board.Height)
+                if (TryGetLineWinner(pieces, board.Height, out var winner))
                 {
-                    var distinct = pieces.Distinct();
-                    if(distinct.Count() == 1)
-                    {
-                        var winner = PlayerPieces.First(pair => pair.Value.Value == distinct.First().Value).Key;
-                        return Enumerable.Repeat(winner, 1);
-                    }
+                    return Enumerable.Repeat(winner, 1);
                 }
             }
 
-            if(!ValidMoves(board)) return players;
+            // Check horizontals
+            for (int y = 0; y < board.Height; y++)
+            {
+                var pieces = new List<IPiece>();
+                for (int x = 0; x < board.Width; x++)
+                {
+                    var piece = board.PieceAt(x, y);
+                    if (piece != null && piece.Value != BlankPiece.BlankValue)
+                    {
+                        pieces.Add(piece);
+                    }
+                }
+                if (TryGetLineWinner(pieces, board.Width, out var winner))
+                {
+                    return Enumerable.Repeat(winner, 1);
+                }
+            }
+
+            // Check diagonals when board is square
+            if (board.Width > 0 && board.Width == board.Height)
+            {
+                var mainDiagonal = new List<IPiece>();
+                for (int i = 0; i < board.Width; i++)
+                {
+                    var piece = board.PieceAt(i, i);
+                    if (piece != null && piece.Value != BlankPiece.BlankValue)
+                    {
+                        mainDiagonal.Add(piece);
+                    }
+                }
+                if (TryGetLineWinner(mainDiagonal, board.Width, out var mainWinner))
+                {
+                    return Enumerable.Repeat(mainWinner, 1);
+                }
+
+                var antiDiagonal = new List<IPiece>();
+                for (int i = 0; i < board.Width; i++)
+                {
+                    var piece = board.PieceAt(i, board.Height - 1 - i);
+                    if (piece != null && piece.Value != BlankPiece.BlankValue)
+                    {
+                        antiDiagonal.Add(piece);
+                    }
+                }
+                if (TryGetLineWinner(antiDiagonal, board.Width, out var antiWinner))
+                {
+                    return Enumerable.Repeat(antiWinner, 1);
+                }
+            }
+
+            if (!ValidMoves(board)) return players;
 
             return Enumerable.Empty<IPlayer>();
+        }
+
+        private bool TryGetLineWinner(IReadOnlyCollection<IPiece> pieces, int expectedLength, out IPlayer winner)
+        {
+            winner = null;
+            if (expectedLength <= 0 || pieces.Count != expectedLength)
+            {
+                return false;
+            }
+
+            var distinct = pieces.Distinct().ToList();
+            if (distinct.Count == 1)
+            {
+                var winningValue = distinct[0].Value;
+                var match = PlayerPieces.FirstOrDefault(pair => pair.Value.Value == winningValue);
+                if (match.Key != null)
+                {
+                    winner = match.Key;
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }
