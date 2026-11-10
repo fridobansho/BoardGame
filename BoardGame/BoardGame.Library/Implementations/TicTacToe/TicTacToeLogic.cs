@@ -27,17 +27,33 @@ namespace BoardGame.Library.Implementations.TicTacToe
             if (players.Count() != 2) throw new ArgumentOutOfRangeException("players.Count()");
         }
 
+        public void InitializeBoard(IBoard board)
+        {
+        }
+
         public bool IsValidMove(IBoard board, ILocation location)
         {
-            if (board.CheckBounds(location.X, location.Y))
+            if (location != null && board != null && board.CheckBounds(location.X, location.Y))
             {
                 var piece = board.PieceAt(location.X, location.Y);
-                if (piece.Value == BlankPiece.BlankValue)
+                if (piece != null && piece.Value == BlankPiece.BlankValue)
                 {
                     return true;
                 }
             }
             return false;
+        }
+
+        public bool ApplyMove(IBoard board, IPlayer player, ILocation location)
+        {
+            if (!IsValidMove(board, location))
+            {
+                return false;
+            }
+
+            var piece = GetPiece(player);
+            board.PieceAt(location.X, location.Y, piece);
+            return true;
         }
 
         public IPiece GetPiece(IPlayer player)

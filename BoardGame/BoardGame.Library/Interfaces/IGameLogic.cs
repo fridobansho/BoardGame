@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Library.Interfaces
+namespace BoardGame.Library.Interfaces
 {
     using System.Collections.Generic;
 
@@ -7,8 +7,12 @@
         IDictionary<IPlayer, IPiece> PlayerPieces { get; }
 
         void MapPieces(IEnumerable<IPlayer> players);
-        
+
+        void InitializeBoard(IBoard board);
+
         bool IsValidMove(IBoard board, ILocation location);
+
+        bool ApplyMove(IBoard board, IPlayer player, ILocation location);
 
         IPiece GetPiece(IPlayer player);
 

@@ -1,6 +1,7 @@
 namespace BoardGame
 {
     using Library.Implementations;
+    using Library.Implementations.Chomp;
     using Library.Implementations.Silly;
     using Library.Implementations.TicTacToe;
     using Library.Interfaces;
@@ -10,28 +11,31 @@ namespace BoardGame
     {
         static void Main(string[] args)
         {
-            var player1 = new SimplePlayer("Player 1");
-            var player2 = new SillyPlayer("Player 2");
+            Console.WriteLine("=== Tic-Tac-Toe ===");
+            PlayGame(new Board(3, 3),
+                     new IPlayer[] { new SimplePlayer("TicTacToe Player 1"), new SillyPlayer("TicTacToe Player 2") },
+                     new TicTacToeLogic());
 
-            var players = new IPlayer[] { player1, player2 };
+            Console.WriteLine("\n=== Chomp (2D Nim) ===");
+            PlayGame(new Board(4, 3),
+                     new IPlayer[] { new ChompPlayer("Chomp Player 1"), new ChompPlayer("Chomp Player 2") },
+                     new ChompLogic());
 
-            var gameLogic = new TicTacToeLogic();
-
-            var board = new Board(3, 3);
-
-            var game = new Game(board, players, gameLogic);
-
-            var gameRunner = new GameRunner(game);
-
-            var winners = gameRunner.RunGame();
-
-            foreach(var winner in winners)
-            {
-                Console.WriteLine("Winner: " + winner.Name);
-            }
             if (!Console.IsInputRedirected)
             {
                 Console.ReadKey();
+            }
+        }
+
+        private static void PlayGame(IBoard board, IPlayer[] players, IGameLogic logic)
+        {
+            var game = new Game(board, players, logic);
+            var runner = new GameRunner(game);
+            var winners = runner.RunGame();
+
+            foreach (var winner in winners)
+            {
+                Console.WriteLine("Winner: " + winner.Name);
             }
         }
     }

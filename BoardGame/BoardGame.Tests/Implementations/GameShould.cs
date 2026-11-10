@@ -99,7 +99,20 @@ namespace BoardGame.Tests.Implementations
         }
 
         [Test]
-        public void GetPieceIfValidMove()
+        public void InitializeBoardOnConstruction()
+        {
+            var board = new Mock<IBoard>();
+            var player = new Mock<IPlayer>();
+            var players = Enumerable.Repeat(player.Object, 1);
+            var gameLogic = new Mock<IGameLogic>();
+
+            var sut = new Game(board.Object, players, gameLogic.Object);
+
+            gameLogic.Verify(mock => mock.InitializeBoard(board.Object), Times.Once);
+        }
+
+        [Test]
+        public void ApplyMoveIfValidMove()
         {
             var board = new Mock<IBoard>();
             var player = new Mock<IPlayer>();
@@ -108,7 +121,7 @@ namespace BoardGame.Tests.Implementations
             var gameLogic = new Mock<IGameLogic>();
             player.Setup(mock => mock.GetMove(board.Object)).Returns(location);
             gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(true);
-            gameLogic.Setup(mock => mock.GetPiece(player.Object));
+            gameLogic.Setup(mock => mock.ApplyMove(board.Object, player.Object, location)).Returns(true);
 
             var sut = new Game(board.Object, players, gameLogic.Object);
 
@@ -116,12 +129,12 @@ namespace BoardGame.Tests.Implementations
 
             player.Verify(mock => mock.GetMove(board.Object), Times.Once);
             gameLogic.Verify(mock => mock.IsValidMove(board.Object, location), Times.Once);
-            gameLogic.Verify(mock => mock.GetPiece(player.Object), Times.Once);
+            gameLogic.Verify(mock => mock.ApplyMove(board.Object, player.Object, location), Times.Once);
             result.ShouldBeTrue();
         }
 
         [Test]
-        public void NotGetPieceIfInvalidMove()
+        public void NotApplyMoveIfInvalidMove()
         {
             var board = new Mock<IBoard>();
             var player = new Mock<IPlayer>();
@@ -130,7 +143,6 @@ namespace BoardGame.Tests.Implementations
             var gameLogic = new Mock<IGameLogic>();
             player.Setup(mock => mock.GetMove(board.Object)).Returns(location);
             gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(false);
-            gameLogic.Setup(mock => mock.GetPiece(player.Object));
 
             var sut = new Game(board.Object, players, gameLogic.Object);
 
@@ -138,58 +150,7 @@ namespace BoardGame.Tests.Implementations
 
             player.Verify(mock => mock.GetMove(board.Object), Times.Once);
             gameLogic.Verify(mock => mock.IsValidMove(board.Object, location), Times.Once);
-            gameLogic.Verify(mock => mock.GetPiece(player.Object), Times.Never);
-            result.ShouldBeFalse();
-            sut.Status.ShouldBe(Status.InProgress);
-        }
-
-        [Test]
-        public void SetPieceIfValidMove()
-        {
-            var board = new Mock<IBoard>();
-            var player = new Mock<IPlayer>();
-            var location = new Location();
-            var players = Enumerable.Repeat(player.Object, 1);
-            var gameLogic = new Mock<IGameLogic>();
-            var piece = new Mock<IPiece>();
-            board.Setup(mock => mock.PieceAt(location.X, location.Y, piece.Object));
-            player.Setup(mock => mock.GetMove(board.Object)).Returns(location);
-            gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(true);
-            gameLogic.Setup(mock => mock.GetPiece(player.Object)).Returns(piece.Object);
-
-            var sut = new Game(board.Object, players, gameLogic.Object);
-
-            var result = sut.DoTurns();
-
-            player.Verify(mock => mock.GetMove(board.Object), Times.Once);
-            gameLogic.Verify(mock => mock.IsValidMove(board.Object, location), Times.Once);
-            gameLogic.Verify(mock => mock.GetPiece(player.Object), Times.Once);
-            board.Verify(mock => mock.PieceAt(location.X, location.Y, piece.Object), Times.Once);
-            result.ShouldBeTrue();
-        }
-
-        [Test]
-        public void NotSetPieceIfInvalidMove()
-        {
-            var board = new Mock<IBoard>();
-            var player = new Mock<IPlayer>();
-            var location = new Location();
-            var players = Enumerable.Repeat(player.Object, 1);
-            var gameLogic = new Mock<IGameLogic>();
-            var piece = new Mock<IPiece>();
-            board.Setup(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IPiece>()));
-            player.Setup(mock => mock.GetMove(board.Object)).Returns(location);
-            gameLogic.Setup(mock => mock.IsValidMove(board.Object, location)).Returns(false);
-            gameLogic.Setup(mock => mock.GetPiece(It.IsAny<IPlayer>()));
-
-            var sut = new Game(board.Object, players, gameLogic.Object);
-
-            var result = sut.DoTurns();
-
-            player.Verify(mock => mock.GetMove(board.Object), Times.Once);
-            gameLogic.Verify(mock => mock.IsValidMove(board.Object, location), Times.Once);
-            gameLogic.Verify(mock => mock.GetPiece(It.IsAny<IPlayer>()), Times.Never);
-            board.Verify(mock => mock.PieceAt(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IPiece>()), Times.Never);
+            gameLogic.Verify(mock => mock.ApplyMove(It.IsAny<IBoard>(), It.IsAny<IPlayer>(), It.IsAny<ILocation>()), Times.Never);
             result.ShouldBeFalse();
             sut.Status.ShouldBe(Status.InProgress);
         }

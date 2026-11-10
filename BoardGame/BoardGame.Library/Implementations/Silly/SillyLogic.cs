@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Library.Implementations.Silly
+namespace BoardGame.Library.Implementations.Silly
 {
     using Interfaces;
     using System.Collections.Generic;
@@ -22,9 +22,24 @@
             }
         }
 
+        public void InitializeBoard(IBoard board)
+        {
+        }
+
         public bool IsValidMove(IBoard board, ILocation location)
         {
             return true;
+        }
+
+        public bool ApplyMove(IBoard board, IPlayer player, ILocation location)
+        {
+            if (board != null && location != null)
+            {
+                var piece = GetPiece(player);
+                board.PieceAt(location.X, location.Y, piece);
+                return true;
+            }
+            return false;
         }
 
         public IPiece GetPiece(IPlayer player)

@@ -1,4 +1,4 @@
-﻿namespace BoardGame.Library.Implementations
+namespace BoardGame.Library.Implementations
 {
     using System.Collections.Generic;
     using Enumerations;
@@ -26,6 +26,7 @@
             Players = players;
             GameLogic = gameLogic;
             GameLogic.MapPieces(players);
+            GameLogic.InitializeBoard(Board);
             Status = Status.InProgress;
         }
 
@@ -38,8 +39,7 @@
 
                 if(GameLogic.IsValidMove(Board, location))
                 {
-                    var piece = GameLogic.GetPiece(player);
-                    Board.PieceAt(location.X, location.Y, piece);
+                    GameLogic.ApplyMove(Board, player, location);
                     validMoves = true;
                 }
                 if (GetWinners().Any())
