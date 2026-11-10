@@ -14,6 +14,19 @@ export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 export DOTNET_NOLOGO=1
 export DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1
 
+# Pre-flight check: Test reachability of api.nuget.org with short timeout
+if ! curl -sI --connect-timeout 5 https://api.nuget.org/v3/index.json >/dev/null 2>&1; then
+    echo ">> Warning: Direct connection to https://api.nuget.org timed out or failed."
+    if curl -4 -sI --connect-timeout 5 https://api.nuget.org/v3/index.json >/dev/null 2>&1; then
+        echo ">> Detected IPv6 connectivity issue. Forcing .NET to use IPv4 (DOTNET_SYSTEM_NET_DISABLEIPV6=1)..."
+        export DOTNET_SYSTEM_NET_DISABLEIPV6=1
+    else
+        echo ">> ERROR: Cannot connect to api.nuget.org via IPv4 or IPv6." >&2
+        echo ">> Please verify your internet connection, proxy, or firewall settings." >&2
+        exit 1
+    fi
+fi
+
 echo "=========================================================="
 echo " BoardGame CI/Test Script"
 echo " Target dir: $TARGET_DIR"
