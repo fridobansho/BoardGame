@@ -92,7 +92,7 @@ echo ">> Building solution..."
 
 # 4. Run test suite
 echo ">> Running unit test suite..."
-"$DOTNET_BIN" test "$SLN_PATH" --configuration Release --no-build --verbosity normal
+"$DOTNET_BIN" test "$SLN_PATH" --configuration Release --no-build --logger "console;verbosity=detailed"
 
 echo "=========================================================="
 echo " All tests passed successfully!"
