@@ -8,6 +8,12 @@ BRANCH="${BRANCH:-}"
 DOTNET_CHANNEL="${DOTNET_CHANNEL:-8.0}"
 DOTNET_DIR="${DOTNET_DIR:-$HOME/.dotnet}"
 
+# Speed up dotnet CLI on Linux: disable telemetry, first-time greeting, and workload update checks
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+export DOTNET_NOLOGO=1
+export DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1
+
 echo "=========================================================="
 echo " BoardGame CI/Test Script"
 echo " Target dir: $TARGET_DIR"
