@@ -58,6 +58,21 @@ namespace BoardGame.Tests.Implementations
         }
 
         [Test]
+        public void RenderBoardWhenRendererProvided()
+        {
+            var game = new Mock<IGame>();
+            var renderer = new Mock<IBoardRenderer>();
+            var board = new Board(3, 3);
+            game.Setup(mock => mock.Board).Returns(board);
+            game.Setup(mock => mock.Status).Returns(Status.Finished);
+
+            var sut = new GameRunner(game.Object, renderer.Object);
+            sut.RunGame();
+
+            renderer.Verify(r => r.Render(board), Times.Once);
+        }
+
+        [Test]
         public void ReturnWinnersFromGameWhenFinished()
         {
             var game = new Mock<IGame>();
