@@ -206,4 +206,68 @@ public class GameSessionShould
         session.CurrentTurnIndex.ShouldBe(0);
         session.Board.PieceAt(0, 0).Value.ShouldBe(BlankPiece.BlankValue);
     }
+
+    [Test]
+    public void SupportUndoInPassAndPlay()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob");
+        session.MakeMove(0, 0);
+        session.Board.PieceAt(0, 0).Value.ShouldBe("X");
+        session.MoveCount.ShouldBe(1);
+        session.CurrentTurnIndex.ShouldBe(1);
+
+        var (success, err) = session.Undo();
+        success.ShouldBeTrue();
+        err.ShouldBeNull();
+        session.MoveCount.ShouldBe(0);
+        session.CurrentTurnIndex.ShouldBe(0);
+        session.Board.PieceAt(0, 0).Value.ShouldBe(BlankPiece.BlankValue);
+    }
+
+    [Test]
+    public void SupportUndoInVsAiMode()
+    {
+        var session = new GameSession("tictactoe", "vs-ai", "smart", "Human", null);
+        session.MakeMove(0, 0); // Human moves, then AI moves
+        session.MoveCount.ShouldBe(2);
+
+        var (success, _) = session.Undo();
+        success.ShouldBeTrue();
+        session.MoveCount.ShouldBe(0);
+        session.CurrentTurnIndex.ShouldBe(0);
+        session.Board.PieceAt(0, 0).Value.ShouldBe(BlankPiece.BlankValue);
+    }
+
+    [Test]
+    public void TrackScoreAndAlternateStartsInRematch()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob");
+        // Alice wins
+        session.MakeMove(0, 0); // Alice
+        session.MakeMove(0, 1); // Bob
+        session.MakeMove(1, 0); // Alice
+        session.MakeMove(1, 1); // Bob
+        session.MakeMove(2, 0); // Alice wins!
+
+        session.Status.ShouldBe("Finished");
+        session.Player1Score.ShouldBe(1);
+        session.Player2Score.ShouldBe(0);
+
+        // Rematch (Game 2)
+        session.Reset(isRematch: true);
+        session.GameNumber.ShouldBe(2);
+        session.CurrentTurnIndex.ShouldBe(1); // Bob goes first in Game 2!
+        session.MoveCount.ShouldBe(0);
+        session.Status.ShouldBe("InProgress");
+    }
+
+    [Test]
+    public void TrackLastMoveCoordinatesCorrectly()
+    {
+        var session = new GameSession("connect4", "pass-and-play", "smart", "Alice", "Bob");
+        session.MakeMove(3, 0); // Drop in column 3 -> lands at row 5 (bottom)
+
+        session.LastMoveX.ShouldBe(3);
+        session.LastMoveY.ShouldBe(5);
+    }
 }

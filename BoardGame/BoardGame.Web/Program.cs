@@ -108,13 +108,49 @@ app.MapPost("/api/session/{id}/move", (string id, MoveRequest req, SessionManage
     return Results.Ok(new { success = true, session = session.ToDto() });
 });
 
-app.MapPost("/api/session/{id}/reset", (string id, SessionManager sm) =>
+app.MapPost("/api/session/{id}/reset", (string id, ResetRequest? req, SessionManager sm) =>
 {
     var session = sm.GetSession(id);
     if (session == null) return Results.NotFound(new { error = "Session not found" });
 
-    session.Reset();
+    session.Reset(req?.IsRematch ?? false);
     return Results.Ok(new { success = true, session = session.ToDto() });
+});
+
+app.MapPost("/api/session/{id}/reset-series", (string id, SessionManager sm) =>
+{
+    var session = sm.GetSession(id);
+    if (session == null) return Results.NotFound(new { error = "Session not found" });
+
+    session.ResetSeries();
+    return Results.Ok(new { success = true, session = session.ToDto() });
+});
+
+app.MapPost("/api/session/{id}/undo", (string id, UndoRequest? req, SessionManager sm) =>
+{
+    var session = sm.GetSession(id);
+    if (session == null) return Results.NotFound(new { error = "Session not found" });
+
+    var (success, error) = session.Undo(req?.PlayerToken);
+    if (!success)
+    {
+        return Results.BadRequest(new { error, session = session.ToDto() });
+    }
+
+    return Results.Ok(new { success = true, session = session.ToDto() });
+});
+
+app.MapPost("/api/session/{id}/reaction", (string id, ReactionRequest req, SessionManager sm) =>
+{
+    var session = sm.GetSession(id);
+    if (session == null) return Results.NotFound(new { error = "Session not found" });
+
+    if (!string.IsNullOrWhiteSpace(req.Emoji))
+    {
+        session.SendReaction(req.Emoji);
+    }
+
+    return Results.Ok(new { success = true });
 });
 
 app.MapPost("/api/room/join", (JoinRoomRequest req, SessionManager sm) =>
@@ -154,6 +190,12 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         return;
     }
 
+    bool isSpectator = context.Request.Query["spectator"] == "true" || context.Request.Query["role"] == "spectator";
+    if (isSpectator)
+    {
+        session.IncrementSpectators();
+    }
+
     context.Response.Headers.ContentType = "text/event-stream";
     context.Response.Headers.CacheControl = "no-cache";
     context.Response.Headers.Connection = "keep-alive";
@@ -176,12 +218,32 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         }
     }
 
+    async Task SendReactionAsync(string emoji)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(new { emoji }, jsonOpts);
+            await context.Response.WriteAsync($"event: reaction\ndata: {json}\n\n", ct);
+            await context.Response.Body.FlushAsync(ct);
+        }
+        catch
+        {
+            tcs.TrySetResult(true);
+        }
+    }
+
     Action stateHandler = () =>
     {
         _ = SendStateAsync();
     };
 
+    Action<string> reactionHandler = emoji =>
+    {
+        _ = SendReactionAsync(emoji);
+    };
+
     session.OnStateChanged += stateHandler;
+    session.OnReaction += reactionHandler;
 
     try
     {
@@ -200,6 +262,11 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
     finally
     {
         session.OnStateChanged -= stateHandler;
+        session.OnReaction -= reactionHandler;
+        if (isSpectator)
+        {
+            session.DecrementSpectators();
+        }
     }
 });
 

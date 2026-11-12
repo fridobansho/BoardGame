@@ -33,6 +33,18 @@ public record JoinRoomRequest(
     string? PlayerName
 );
 
+public record ResetRequest(
+    bool? IsRematch = false
+);
+
+public record ReactionRequest(
+    string Emoji
+);
+
+public record UndoRequest(
+    string? PlayerToken
+);
+
 public record SessionStateDto(
     string Id,
     string RoomCode,
@@ -49,5 +61,13 @@ public record SessionStateDto(
     int MoveCount,
     string Player1Name,
     string Player2Name,
-    bool IsAiTurn
+    bool IsAiTurn,
+    int? LastMoveX = null,
+    int? LastMoveY = null,
+    int SpectatorCount = 0,
+    int Player1Score = 0,
+    int Player2Score = 0,
+    int DrawScore = 0,
+    int GameNumber = 1,
+    bool CanUndo = false
 );

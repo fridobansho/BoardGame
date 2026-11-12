@@ -22,11 +22,16 @@
   // DOM Elements
   const gameTitle = document.getElementById('game-title');
   const modeBadge = document.getElementById('mode-badge');
+  const seriesScore = document.getElementById('series-score');
+  const connectionPill = document.getElementById('connection-pill');
   const statusText = document.getElementById('status-text');
   const turnDot = document.getElementById('turn-dot');
+  const spectatorCounter = document.getElementById('spectator-counter');
   const roomCodeTag = document.getElementById('room-code-tag');
   const roomCodeVal = document.getElementById('room-code-val');
   const boardContainer = document.getElementById('board-container');
+  const reactionContainer = document.getElementById('reaction-container');
+  const reactionBar = document.getElementById('reaction-bar');
 
   const btnOpenMenu = document.getElementById('btn-open-menu');
   const btnCloseMenu = document.getElementById('btn-close-menu');
@@ -44,10 +49,12 @@
   const iconSoundOn = document.getElementById('icon-sound-on');
   const iconSoundOff = document.getElementById('icon-sound-off');
 
+  const btnUndo = document.getElementById('btn-undo');
   const btnReset = document.getElementById('btn-reset');
   const btnNewGame = document.getElementById('btn-new-game');
   const btnOpenLobby = document.getElementById('btn-open-lobby');
   const btnStartGame = document.getElementById('btn-start-game');
+  const btnResetSeries = document.getElementById('btn-reset-series');
 
   const gameOverModal = document.getElementById('game-over-modal');
   const gameOverTitle = document.getElementById('game-over-title');
@@ -113,7 +120,15 @@
       currentTurnIndex: s.currentTurnIndex !== undefined ? s.currentTurnIndex : (s.CurrentTurnIndex !== undefined ? s.CurrentTurnIndex : 0),
       winner: s.winner || s.Winner || null,
       lastMoveText: s.lastMoveText || s.LastMoveText || null,
+      lastMoveX: s.lastMoveX !== undefined ? s.lastMoveX : (s.LastMoveX !== undefined ? s.LastMoveX : null),
+      lastMoveY: s.lastMoveY !== undefined ? s.lastMoveY : (s.LastMoveY !== undefined ? s.LastMoveY : null),
       moveCount: s.moveCount !== undefined ? s.moveCount : (s.MoveCount || 0),
+      spectatorCount: Number(s.spectatorCount !== undefined ? s.spectatorCount : (s.SpectatorCount || 0)),
+      player1Score: Number(s.player1Score !== undefined ? s.player1Score : (s.Player1Score || 0)),
+      player2Score: Number(s.player2Score !== undefined ? s.player2Score : (s.Player2Score || 0)),
+      drawScore: Number(s.drawScore !== undefined ? s.drawScore : (s.DrawScore || 0)),
+      gameNumber: Number(s.gameNumber !== undefined ? s.gameNumber : (s.GameNumber || 1)),
+      canUndo: Boolean(s.canUndo !== undefined ? s.canUndo : s.CanUndo),
       player1Name: s.player1Name || s.Player1Name || 'Player 1',
       player2Name: s.player2Name || s.Player2Name || 'Player 2',
       isAiTurn: s.isAiTurn !== undefined ? s.isAiTurn : (s.IsAiTurn || false)
@@ -409,6 +424,76 @@
     }
   }
 
+  // Connection status updater
+  function setConnectionStatus(status) {
+    if (!connectionPill) return;
+    connectionPill.className = 'connection-pill ' + status;
+    connectionPill.title = status === 'connected' ? 'Connection: Live' : (status === 'reconnecting' ? 'Reconnecting to game...' : 'Disconnected');
+  }
+
+  // Floating reactions
+  function showFloatingEmoji(emoji) {
+    if (!reactionContainer || !emoji) return;
+    const span = document.createElement('span');
+    span.className = 'floating-emoji';
+    span.textContent = emoji;
+    const leftPercent = 15 + Math.floor(Math.random() * 70);
+    const rotDeg = -15 + Math.floor(Math.random() * 30);
+    span.style.left = `${leftPercent}%`;
+    span.style.setProperty('--rot', `${rotDeg}deg`);
+    reactionContainer.appendChild(span);
+    setTimeout(() => {
+      if (span.parentElement) span.parentElement.removeChild(span);
+    }, 2500);
+  }
+
+  async function sendReaction(emoji) {
+    if (!currentSession || !emoji) return;
+    triggerHaptic(10);
+    showFloatingEmoji(emoji);
+    try {
+      await fetch(`/api/session/${currentSession.id}/reaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji: emoji })
+      });
+    } catch (e) { }
+  }
+
+  // Undo move
+  async function undoMove() {
+    if (!currentSession || !currentSession.canUndo || isSpectator) return;
+    try {
+      const res = await fetch(`/api/session/${currentSession.id}/undo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerToken: playerToken })
+      });
+      if (res.ok) {
+        playSound('tap');
+        triggerHaptic(20);
+        const data = await res.json();
+        const sessionObj = data.session || data.Session;
+        if (sessionObj) onSessionUpdated(sessionObj);
+      }
+    } catch (e) { }
+  }
+
+  // Reset match series
+  async function resetSeries() {
+    if (!currentSession) return;
+    try {
+      const res = await fetch(`/api/session/${currentSession.id}/reset-series`, { method: 'POST' });
+      if (res.ok) {
+        playSound('tap');
+        const data = await res.json();
+        const sessionObj = data.session || data.Session;
+        if (sessionObj) onSessionUpdated(sessionObj);
+        modalMenu.classList.add('hidden');
+      }
+    } catch (e) { }
+  }
+
   // Connect Server-Sent Events stream for live real-time sync
   function connectStream(sessionId) {
     if (!sessionId) return;
@@ -416,18 +501,32 @@
       sseSource.close();
       sseSource = null;
     }
+    setConnectionStatus('reconnecting');
     try {
-      sseSource = new EventSource(`/api/session/${sessionId}/stream`);
+      const url = `/api/session/${sessionId}/stream?spectator=${Boolean(isSpectator)}`;
+      sseSource = new EventSource(url);
+      sseSource.onopen = function () {
+        setConnectionStatus('connected');
+      };
       sseSource.onmessage = function (event) {
+        setConnectionStatus('connected');
         try {
           const state = JSON.parse(event.data);
           onSessionUpdated(state);
         } catch (e) { }
       };
+      sseSource.addEventListener('reaction', function (event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.emoji) showFloatingEmoji(data.emoji);
+        } catch (e) { }
+      });
       sseSource.onerror = function () {
-        // Stream reconnection is handled automatically by EventSource
+        setConnectionStatus('reconnecting');
       };
-    } catch (e) { }
+    } catch (e) {
+      setConnectionStatus('disconnected');
+    }
   }
 
   // Submit move
@@ -461,10 +560,14 @@
   }
 
   // Reset current session
-  async function resetSession() {
+  async function resetSession(isRematch = false) {
     if (!currentSession || isSpectator) return;
     try {
-      const res = await fetch(`/api/session/${currentSession.id}/reset`, { method: 'POST' });
+      const res = await fetch(`/api/session/${currentSession.id}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRematch: Boolean(isRematch) })
+      });
       if (res.ok) {
         const data = await res.json();
         const sessionObj = data.session || data.Session;
@@ -483,6 +586,12 @@
     const prevMoveCount = currentSession ? currentSession.moveCount : 0;
     currentSession = session;
 
+    // Persist active session to localStorage for auto-reconnect
+    try {
+      localStorage.setItem('bg_session_id', session.id);
+      localStorage.setItem('bg_is_spectator', String(Boolean(isSpectator)));
+    } catch (e) { }
+
     // Header info
     const gameNames = { connect4: 'Connect Four', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp' };
     const modeNames = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Wi-Fi Room' };
@@ -491,6 +600,31 @@
       modeBadge.textContent = `👀 Spectating (${modeNames[session.mode] || session.mode})`;
     } else {
       modeBadge.textContent = modeNames[session.mode] || session.mode;
+    }
+
+    // Series score tag
+    if (seriesScore) {
+      if (session.player1Score > 0 || session.player2Score > 0 || session.drawScore > 0 || session.gameNumber > 1) {
+        seriesScore.classList.remove('hidden');
+        seriesScore.textContent = `${session.player1Name} ${session.player1Score} - ${session.player2Score} ${session.player2Name} • Game ${session.gameNumber}`;
+      } else {
+        seriesScore.classList.add('hidden');
+      }
+    }
+
+    // Spectator counter tag
+    if (spectatorCounter) {
+      if (session.spectatorCount > 0) {
+        spectatorCounter.classList.remove('hidden');
+        spectatorCounter.textContent = `👀 ${session.spectatorCount}`;
+      } else {
+        spectatorCounter.classList.add('hidden');
+      }
+    }
+
+    // Undo button
+    if (btnUndo) {
+      btnUndo.classList.toggle('hidden', !session.canUndo || isSpectator);
     }
 
     // Room tag
@@ -576,9 +710,9 @@
         openLobby();
       };
     } else {
-      btnPlayAgain.textContent = 'Play Again';
+      btnPlayAgain.textContent = `Next Round (Game ${session.gameNumber + 1})`;
       btnPlayAgain.onclick = () => {
-        resetSession();
+        resetSession(true);
       };
     }
 
@@ -646,14 +780,17 @@
           }
         });
 
+        const isLastMove = (session.lastMoveX !== null && session.lastMoveY !== null &&
+                            x === session.lastMoveX && y === session.lastMoveY);
+
         const piece = (session.grid && session.grid[y] && session.grid[y][x]) || ' ';
         if (piece === 'R') {
           const chip = document.createElement('div');
-          chip.className = 'c4-chip red';
+          chip.className = 'c4-chip red' + (isLastMove ? ' last-move' : '');
           slot.appendChild(chip);
         } else if (piece === 'Y') {
           const chip = document.createElement('div');
-          chip.className = 'c4-chip yellow';
+          chip.className = 'c4-chip yellow' + (isLastMove ? ' last-move' : '');
           slot.appendChild(chip);
         }
 
@@ -673,7 +810,9 @@
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
         const cell = document.createElement('div');
-        cell.className = 'ttt-cell';
+        const isLastMove = (session.lastMoveX !== null && session.lastMoveY !== null &&
+                            x === session.lastMoveX && y === session.lastMoveY);
+        cell.className = 'ttt-cell' + (isLastMove ? ' last-move' : '');
         const piece = (session.grid && session.grid[y] && session.grid[y][x]) || ' ';
 
         if (piece === 'X') {
@@ -703,7 +842,9 @@
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
         const block = document.createElement('div');
-        block.className = 'chomp-block';
+        const isLastMove = (session.lastMoveX !== null && session.lastMoveY !== null &&
+                            x === session.lastMoveX && y === session.lastMoveY);
+        block.className = 'chomp-block' + (isLastMove ? ' last-move' : '');
         const piece = (session.grid && session.grid[y] && session.grid[y][x]) || ' ';
 
         if (piece === 'P') {
@@ -830,10 +971,29 @@
       }
     });
 
-    // Game Over buttons
-    btnPlayAgain.addEventListener('click', () => {
-      resetSession();
+    // Undo button
+    if (btnUndo) {
+      btnUndo.addEventListener('click', () => undoMove());
+    }
+
+    // Reset Series button
+    if (btnResetSeries) {
+      btnResetSeries.addEventListener('click', () => {
+        if (confirm('Reset match series scores to 0-0?')) {
+          resetSeries();
+        }
+      });
+    }
+
+    // Floating reaction buttons
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const emoji = btn.dataset.emoji;
+        if (emoji) sendReaction(emoji);
+      });
     });
+
     btnChangeGame.addEventListener('click', () => {
       gameOverModal.classList.add('hidden');
       modalMenu.classList.remove('hidden');
@@ -943,8 +1103,26 @@
 
     const joinedFromUrl = parseUrlParams();
     if (!joinedFromUrl) {
-      // Start default Connect Four pass-and-play session
-      await createSession('connect4', 'pass-and-play', 'smart', 'Player 1', 'Player 2');
+      let resumed = false;
+      const savedId = localStorage.getItem('bg_session_id');
+      if (savedId) {
+        try {
+          const res = await fetch(`/api/session/${savedId}`);
+          if (res.ok) {
+            const data = await res.json();
+            isSpectator = localStorage.getItem('bg_is_spectator') === 'true';
+            playerToken = localStorage.getItem('bg_player_token') || playerToken;
+            onSessionUpdated(data);
+            connectStream(data.id || data.Id || savedId);
+            resumed = true;
+          }
+        } catch (e) { }
+      }
+
+      if (!resumed) {
+        // Start default Connect Four pass-and-play session
+        await createSession('connect4', 'pass-and-play', 'smart', 'Player 1', 'Player 2');
+      }
     }
   }
 

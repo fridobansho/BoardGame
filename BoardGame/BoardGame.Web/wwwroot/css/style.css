@@ -81,10 +81,54 @@ html, body {
   gap: 12px;
 }
 
+.header-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .header-titles h1 {
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.connection-pill {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  transition: all 0.3s ease;
+}
+
+.connection-pill.reconnecting {
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: pulse-conn 1s infinite alternate;
+}
+
+.connection-pill.disconnected {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+@keyframes pulse-conn {
+  0% { opacity: 0.4; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
+.subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
 }
 
 .badge {
@@ -98,6 +142,16 @@ html, body {
   background: rgba(99, 102, 241, 0.2);
   color: #a5b4fc;
   border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.series-score {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
 }
 
 .header-right {
@@ -137,6 +191,22 @@ html, body {
   border-radius: var(--radius-md);
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.status-right-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spectator-counter {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #c7d2fe;
 }
 
 .turn-indicator {
@@ -417,6 +487,104 @@ html, body {
 .board-container.spectator-mode .ttt-cell,
 .board-container.spectator-mode .chomp-block {
   cursor: default !important;
+}
+
+/* Last-Move Highlight */
+.c4-chip.last-move {
+  box-shadow: 0 0 0 3px #38bdf8, 0 0 16px rgba(56, 189, 248, 0.9) !important;
+  animation: lastMovePulse 1.6s ease-in-out infinite;
+}
+
+.ttt-cell.last-move {
+  box-shadow: inset 0 0 0 2px #38bdf8, 0 0 14px rgba(56, 189, 248, 0.6) !important;
+  animation: lastMovePulse 1.6s ease-in-out infinite;
+}
+
+.chomp-block.last-move {
+  box-shadow: 0 0 0 2px #38bdf8, 0 0 12px rgba(56, 189, 248, 0.8) !important;
+}
+
+@keyframes lastMovePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Floating Reactions */
+.board-viewport {
+  position: relative;
+}
+
+.reaction-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.floating-emoji {
+  position: absolute;
+  bottom: 24px;
+  font-size: 2.2rem;
+  pointer-events: none;
+  animation: floatUpAndFade 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+
+@keyframes floatUpAndFade {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-40px) scale(1.2) rotate(var(--rot, 0deg));
+  }
+  75% {
+    opacity: 0.9;
+    transform: translateY(-280px) scale(1) rotate(var(--rot, 0deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-380px) scale(0.8) rotate(var(--rot, 0deg));
+  }
+}
+
+.reaction-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 14px;
+  margin-top: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(8px);
+  max-width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.reaction-btn {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: transform 0.15s ease, background 0.15s ease;
+  line-height: 1;
+}
+
+.reaction-btn:hover {
+  transform: scale(1.25);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.reaction-btn:active {
+  transform: scale(0.9);
 }
 
 .btn {

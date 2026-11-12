@@ -7,7 +7,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>BoardGame • Mobile & Local Play</title>
-  <link rel="stylesheet" href="/css/style.css?v=4">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/css/style.css?v=5">
 </head>
 <body>
   <div class="app-container">
@@ -18,11 +21,20 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
         <div class="header-titles">
-          <h1 id="game-title">Connect Four</h1>
-          <span id="mode-badge" class="badge">Pass &amp; Play</span>
+          <div class="title-row">
+            <h1 id="game-title">Connect Four</h1>
+            <span id="connection-pill" class="connection-pill connected" title="Connection status: Live"></span>
+          </div>
+          <div class="subtitle-row">
+            <span id="mode-badge" class="badge">Pass &amp; Play</span>
+            <span id="series-score" class="series-score hidden">Game 1</span>
+          </div>
         </div>
       </div>
       <div class="header-right">
+        <button id="btn-undo" class="icon-btn hidden" title="Undo Last Move" aria-label="Undo Move">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        </button>
         <button id="btn-share" class="icon-btn" title="Share with Mobile / QR" aria-label="Share">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
         </button>
@@ -42,15 +54,31 @@
         <span id="turn-dot" class="turn-dot"></span>
         <span id="status-text">Player 1's Turn</span>
       </div>
-      <div id="room-code-tag" class="room-code-tag hidden">
-        Room: <strong id="room-code-val">----</strong>
+      <div class="status-right-tags">
+        <span id="spectator-counter" class="spectator-counter hidden">👀 0</span>
+        <div id="room-code-tag" class="room-code-tag hidden">
+          Room: <strong id="room-code-val">----</strong>
+        </div>
       </div>
     </div>
 
     <!-- Main Game Board Container -->
     <main class="board-viewport">
+      <!-- Floating Emojis Overlay -->
+      <div id="reaction-container" class="reaction-container"></div>
+
       <div id="board-container" class="board-container connect4-mode">
         <!-- Rendered dynamically by JS -->
+      </div>
+
+      <!-- Quick Floating Reactions Bar -->
+      <div id="reaction-bar" class="reaction-bar">
+        <button class="reaction-btn" data-emoji="👏" title="Cheer">👏</button>
+        <button class="reaction-btn" data-emoji="🔥" title="Fire">🔥</button>
+        <button class="reaction-btn" data-emoji="😮" title="Wow">😮</button>
+        <button class="reaction-btn" data-emoji="😂" title="Laugh">😂</button>
+        <button class="reaction-btn" data-emoji="🧠" title="Big Brain">🧠</button>
+        <button class="reaction-btn" data-emoji="🤝" title="Good Game">🤝</button>
       </div>
     </main>
 
@@ -166,6 +194,10 @@
             <input type="text" id="input-p2" placeholder="Player 2" value="Player 2" maxlength="16">
           </div>
         </div>
+
+        <div class="form-section menu-secondary-actions">
+          <button id="btn-reset-series" type="button" class="btn btn-sm btn-secondary btn-block">Reset Match Series Scores</button>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -212,6 +244,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=4"></script>
+  <script src="/js/app.js?v=5"></script>
 </body>
 </html>

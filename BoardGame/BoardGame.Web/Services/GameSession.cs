@@ -28,12 +28,34 @@ public class GameSession
     public string Status { get; private set; } = "InProgress";
     public string? Winner { get; private set; }
     public string? LastMoveText { get; private set; }
+    public int? LastMoveX { get; private set; }
+    public int? LastMoveY { get; private set; }
     public int MoveCount { get; private set; } = 0;
 
+    public int SpectatorCount { get; private set; } = 0;
+    public int Player1Score { get; private set; } = 0;
+    public int Player2Score { get; private set; } = 0;
+    public int DrawScore { get; private set; } = 0;
+    public int GameNumber { get; private set; } = 1;
+
     public event Action? OnStateChanged;
+    public event Action<string>? OnReaction;
 
     public bool IsPublic { get; set; } = true;
     public DateTime CreatedAt { get; } = DateTime.UtcNow;
+
+    private readonly Stack<GameSnapshot> _history = new();
+
+    private record GameSnapshot(
+        string[][] Grid,
+        int CurrentTurnIndex,
+        int MoveCount,
+        string Status,
+        string? Winner,
+        string? LastMoveText,
+        int? LastMoveX,
+        int? LastMoveY
+    );
 
     public GameSession(string? gameType, string? mode, string? aiDifficulty, string? p1Name, string? p2Name, string? customRoomCode = null, bool isPublic = true)
     {
@@ -173,9 +195,26 @@ public class GameSession
                 return (false, "Invalid move.");
             }
 
+            int actualY = y;
+            if (GameType == "connect4")
+            {
+                for (int r = Board.Height - 1; r >= 0; r--)
+                {
+                    if (Board.PieceAt(x, r).Value == BlankPiece.BlankValue)
+                    {
+                        actualY = r;
+                        break;
+                    }
+                }
+            }
+
+            SaveSnapshot();
+
             GameLogic.ApplyMove(Board, currentPlayer, moveLocation);
             MoveCount++;
             LastMoveText = $"{currentPlayer.Name} played at ({x}, {y})";
+            LastMoveX = x;
+            LastMoveY = actualY;
 
             CheckGameState(currentPlayer);
 
@@ -202,9 +241,27 @@ public class GameSession
 
         if (GameLogic.IsValidMove(Board, aiMove))
         {
+            int aiX = aiMove.X;
+            int aiY = aiMove.Y;
+            if (GameType == "connect4")
+            {
+                for (int r = Board.Height - 1; r >= 0; r--)
+                {
+                    if (Board.PieceAt(aiX, r).Value == BlankPiece.BlankValue)
+                    {
+                        aiY = r;
+                        break;
+                    }
+                }
+            }
+
+            SaveSnapshot();
+
             GameLogic.ApplyMove(Board, aiPlayer, aiMove);
             MoveCount++;
             LastMoveText = $"{aiPlayer.Name} played at ({aiMove.X}, {aiMove.Y})";
+            LastMoveX = aiX;
+            LastMoveY = aiY;
             CheckGameState(aiPlayer);
 
             if (Status == "InProgress")
@@ -222,9 +279,26 @@ public class GameSession
                     var loc = new Location(x, y);
                     if (GameLogic.IsValidMove(Board, loc))
                     {
+                        int fallbackY = y;
+                        if (GameType == "connect4")
+                        {
+                            for (int r = Board.Height - 1; r >= 0; r--)
+                            {
+                                if (Board.PieceAt(x, r).Value == BlankPiece.BlankValue)
+                                {
+                                    fallbackY = r;
+                                    break;
+                                }
+                            }
+                        }
+
+                        SaveSnapshot();
+
                         GameLogic.ApplyMove(Board, aiPlayer, loc);
                         MoveCount++;
                         LastMoveText = $"{aiPlayer.Name} played at ({x}, {y})";
+                        LastMoveX = x;
+                        LastMoveY = fallbackY;
                         CheckGameState(aiPlayer);
                         if (Status == "InProgress") CurrentTurnIndex = 0;
                         return;
@@ -234,6 +308,135 @@ public class GameSession
         }
     }
 
+    private void SaveSnapshot()
+    {
+        string[][] gridCopy = new string[Board.Height][];
+        for (int y = 0; y < Board.Height; y++)
+        {
+            gridCopy[y] = new string[Board.Width];
+            for (int x = 0; x < Board.Width; x++)
+            {
+                gridCopy[y][x] = Board.PieceAt(x, y)?.Value ?? BlankPiece.BlankValue;
+            }
+        }
+
+        _history.Push(new GameSnapshot(
+            Grid: gridCopy,
+            CurrentTurnIndex: CurrentTurnIndex,
+            MoveCount: MoveCount,
+            Status: Status,
+            Winner: Winner,
+            LastMoveText: LastMoveText,
+            LastMoveX: LastMoveX,
+            LastMoveY: LastMoveY
+        ));
+    }
+
+    private void RestoreSnapshot(GameSnapshot snapshot)
+    {
+        CurrentTurnIndex = snapshot.CurrentTurnIndex;
+        MoveCount = snapshot.MoveCount;
+        Status = snapshot.Status;
+        Winner = snapshot.Winner;
+        LastMoveText = snapshot.LastMoveText;
+        LastMoveX = snapshot.LastMoveX;
+        LastMoveY = snapshot.LastMoveY;
+
+        for (int y = 0; y < Board.Height; y++)
+        {
+            for (int x = 0; x < Board.Width; x++)
+            {
+                string val = snapshot.Grid[y][x];
+                IPiece piece = val switch
+                {
+                    "R" => RedPiece.Red,
+                    "Y" => YellowPiece.Yellow,
+                    "X" => XPiece.X,
+                    "O" => OPiece.O,
+                    "P" => PoisonPiece.Poison,
+                    "C" => ChocolatePiece.Chocolate,
+                    _ => BlankPiece.Blank
+                };
+                Board.PieceAt(x, y, piece);
+            }
+        }
+    }
+
+    public (bool Success, string? Error) Undo(string? playerToken = null)
+    {
+        lock (_lock)
+        {
+            if (Mode != "pass-and-play" && Mode != "vs-ai")
+            {
+                return (false, "Undo is only supported in Pass & Play and vs AI modes.");
+            }
+
+            if (Status == "WaitingForPlayer")
+            {
+                return (false, "Game has not started yet.");
+            }
+
+            if (_history.Count == 0)
+            {
+                return (false, "No moves to undo.");
+            }
+
+            // Spectators cannot undo
+            if (string.Equals(playerToken, "spectator", StringComparison.OrdinalIgnoreCase))
+            {
+                return (false, "Spectators cannot undo moves.");
+            }
+
+            if (Mode == "vs-ai")
+            {
+                // In vs-ai, human and AI each made a move. Revert both so human player gets turn back.
+                GameSnapshot? target = null;
+                if (_history.Count >= 2)
+                {
+                    _history.Pop(); // Pop AI snapshot
+                    target = _history.Pop(); // Pop Human snapshot
+                }
+                else
+                {
+                    target = _history.Pop();
+                }
+                RestoreSnapshot(target);
+            }
+            else
+            {
+                var snapshot = _history.Pop();
+                RestoreSnapshot(snapshot);
+            }
+
+            NotifyChanged();
+            return (true, null);
+        }
+    }
+
+    public void SendReaction(string emoji)
+    {
+        if (string.IsNullOrWhiteSpace(emoji)) return;
+        OnReaction?.Invoke(emoji.Trim());
+    }
+
+    public void IncrementSpectators()
+    {
+        lock (_lock)
+        {
+            SpectatorCount++;
+        }
+        NotifyChanged();
+    }
+
+    public void DecrementSpectators()
+    {
+        lock (_lock)
+        {
+            if (SpectatorCount > 0) SpectatorCount--;
+        }
+        NotifyChanged();
+    }
+
     private void CheckGameState(IPlayer lastPlayer)
     {
         var winners = GameLogic.GetWinners(Board, Players).ToList();
@@ -241,6 +444,8 @@ public class GameSession
         {
             Winner = winners[0].Name;
             Status = "Finished";
+            if (Winner == Players[0].Name) Player1Score++;
+            else if (Winner == Players[1].Name) Player2Score++;
             return;
         }
 
@@ -248,6 +453,7 @@ public class GameSession
         if (IsDraw())
         {
             Status = "Draw";
+            DrawScore++;
         }
     }
 
@@ -278,7 +484,9 @@ public class GameSession
         return false;
     }
 
-    public void Reset()
+    public int StartingPlayerIndex { get; private set; } = 0;
+
+    public void Reset(bool isRematch = false)
     {
         lock (_lock)
         {
@@ -290,12 +498,39 @@ public class GameSession
                 }
             }
             GameLogic.InitializeBoard(Board);
-            CurrentTurnIndex = 0;
+            if (isRematch)
+            {
+                GameNumber++;
+                StartingPlayerIndex = (GameNumber - 1) % 2;
+            }
+            CurrentTurnIndex = StartingPlayerIndex;
             MoveCount = 0;
             Winner = null;
             LastMoveText = null;
+            LastMoveX = null;
+            LastMoveY = null;
+            _history.Clear();
             Status = Mode == "room" && Players.Count < 2 ? "WaitingForPlayer" : "InProgress";
+
+            if (Mode == "vs-ai" && CurrentTurnIndex == 1)
+            {
+                ExecuteAiMove();
+            }
+
             NotifyChanged();
+        }
+    }
+
+    public void ResetSeries()
+    {
+        lock (_lock)
+        {
+            Player1Score = 0;
+            Player2Score = 0;
+            DrawScore = 0;
+            GameNumber = 1;
+            StartingPlayerIndex = 0;
+            Reset(isRematch: false);
         }
     }
 
@@ -332,7 +567,15 @@ public class GameSession
                 MoveCount: MoveCount,
                 Player1Name: Players[0].Name,
                 Player2Name: Players[1].Name,
-                IsAiTurn: isAiTurn
+                IsAiTurn: isAiTurn,
+                LastMoveX: LastMoveX,
+                LastMoveY: LastMoveY,
+                SpectatorCount: SpectatorCount,
+                Player1Score: Player1Score,
+                Player2Score: Player2Score,
+                DrawScore: DrawScore,
+                GameNumber: GameNumber,
+                CanUndo: (Mode == "pass-and-play" || Mode == "vs-ai") && _history.Count > 0 && Status == "InProgress"
             );
         }
     }
