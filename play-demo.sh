@@ -3,10 +3,12 @@ set -euo pipefail
 
 # Ensure .NET is available on PATH
 if ! command -v dotnet >/dev/null 2>&1; then
-    if [ -x "/home/linuxbrew/.linuxbrew/bin/dotnet" ]; then
-        export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
-    elif [ -x "$HOME/.dotnet/dotnet" ]; then
+    if [ -x "$HOME/.dotnet/dotnet" ]; then
         export PATH="$HOME/.dotnet:$PATH"
+    elif [ -x "/var/home/david/.dotnet/dotnet" ]; then
+        export PATH="/var/home/david/.dotnet:$PATH"
+    elif [ -x "/home/linuxbrew/.linuxbrew/bin/dotnet" ]; then
+        export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
     fi
 fi
 
@@ -26,4 +28,4 @@ echo " Playing in-place (no scrolling) with turn-by-turn animation"
 echo " Usage: ./play-demo.sh [connect4|tictactoe|chomp|all] [--delay <ms>] [--alt|--no-alt]"
 echo "=========================================================="
 
-dotnet run --project "$PROJECT_PATH" --configuration Release -- --in-place "$@"
+dotnet run --project "$PROJECT_PATH" --no-restore --configuration Release -- --in-place "$@"

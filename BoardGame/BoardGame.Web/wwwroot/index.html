@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>BoardGame • Mobile & Local Play</title>
+  <link rel="stylesheet" href="/css/style.css?v=2">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top App Bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <button id="btn-open-menu" class="icon-btn" title="Game Menu" aria-label="Game Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div class="header-titles">
+          <h1 id="game-title">Connect Four</h1>
+          <span id="mode-badge" class="badge">Pass &amp; Play</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="btn-share" class="icon-btn" title="Share with Mobile / QR" aria-label="Share">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+        </button>
+        <button id="btn-sound" class="icon-btn" title="Toggle Sound" aria-label="Toggle Sound">
+          <svg id="icon-sound-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          <svg id="icon-sound-off" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+        </button>
+        <button id="btn-reset" class="icon-btn" title="Restart Game" aria-label="Restart">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Turn / Status Indicator Banner -->
+    <div id="status-card" class="status-card">
+      <div class="turn-indicator">
+        <span id="turn-dot" class="turn-dot"></span>
+        <span id="status-text">Player 1's Turn</span>
+      </div>
+      <div id="room-code-tag" class="room-code-tag hidden">
+        Room: <strong id="room-code-val">----</strong>
+      </div>
+    </div>
+
+    <!-- Main Game Board Container -->
+    <main class="board-viewport">
+      <div id="board-container" class="board-container connect4-mode">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </main>
+
+    <!-- Bottom Controls -->
+    <footer class="app-footer">
+      <button id="btn-new-game" class="btn btn-primary">
+        <span>New Game</span>
+      </button>
+      <button id="btn-quick-rules" class="btn btn-secondary">
+        <span>How to Play</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- Setup / Menu Modal -->
+  <div id="modal-menu" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Game Setup</h2>
+        <button class="modal-close" id="btn-close-menu">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Game Selection -->
+        <label class="section-label">Select Game</label>
+        <div class="pill-group" id="group-game">
+          <button class="pill-btn active" data-game="connect4">
+            <span class="pill-icon">🔴</span>
+            <span>Connect 4</span>
+          </button>
+          <button class="pill-btn" data-game="tictactoe">
+            <span class="pill-icon">❌</span>
+            <span>Tic-Tac-Toe</span>
+          </button>
+          <button class="pill-btn" data-game="chomp">
+            <span class="pill-icon">🍫</span>
+            <span>Chomp</span>
+          </button>
+        </div>
+
+        <!-- Mode Selection -->
+        <label class="section-label">Game Mode</label>
+        <div class="pill-group" id="group-mode">
+          <button class="pill-btn active" data-mode="pass-and-play">
+            <span class="pill-icon">📱</span>
+            <span>Pass &amp; Play</span>
+          </button>
+          <button class="pill-btn" data-mode="vs-ai">
+            <span class="pill-icon">🤖</span>
+            <span>vs AI</span>
+          </button>
+          <button class="pill-btn" data-mode="room">
+            <span class="pill-icon">🌐</span>
+            <span>Wi-Fi Room</span>
+          </button>
+        </div>
+
+        <!-- AI Difficulty (shown when vs-ai is selected) -->
+        <div id="sec-ai-diff" class="form-section hidden">
+          <label class="section-label">AI Difficulty</label>
+          <div class="pill-group" id="group-diff">
+            <button class="pill-btn" data-diff="easy">Casual (Easy)</button>
+            <button class="pill-btn active" data-diff="smart">Master (Smart)</button>
+          </div>
+        </div>
+
+        <!-- Room Options (shown when room is selected) -->
+        <div id="sec-room" class="form-section hidden">
+          <label class="section-label">Wi-Fi Multiplayer</label>
+          <div class="room-action-tabs">
+            <button id="tab-host" class="tab-btn active">Host New Room</button>
+            <button id="tab-join" class="tab-btn">Join with Code</button>
+          </div>
+          <div id="room-join-input" class="room-input-box hidden">
+            <input type="text" id="input-room-code" placeholder="ENTER 4-LETTER CODE" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters">
+          </div>
+        </div>
+
+        <!-- Player Names -->
+        <div class="form-section">
+          <label class="section-label">Player Names</label>
+          <div class="input-row">
+            <input type="text" id="input-p1" placeholder="Player 1" value="Player 1" maxlength="16">
+            <input type="text" id="input-p2" placeholder="Player 2" value="Player 2" maxlength="16">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-start-game" class="btn btn-primary btn-block">Start Playing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share / QR Modal -->
+  <div id="modal-share" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content text-center">
+      <div class="modal-header">
+        <h2>Play on Phone</h2>
+        <button class="modal-close" id="btn-close-share">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle">Scan this code with any phone connected to the same Wi-Fi network:</p>
+        
+        <div class="qr-wrapper">
+          <div id="qr-container"></div>
+        </div>
+
+        <div class="url-box">
+          <span id="share-url-text">Loading...</span>
+          <button id="btn-copy-url" class="btn btn-sm btn-secondary">Copy</button>
+        </div>
+        <p id="copy-feedback" class="copy-feedback hidden">Link copied to clipboard!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Win / Game Over Overlay Banner -->
+  <div id="game-over-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content text-center game-over-box">
+      <div id="game-over-icon" class="game-over-icon">🏆</div>
+      <h2 id="game-over-title">Player 1 Wins!</h2>
+      <p id="game-over-msg">Outstanding match!</p>
+      <div class="game-over-actions">
+        <button id="btn-play-again" class="btn btn-primary btn-block">Play Again</button>
+        <button id="btn-change-game" class="btn btn-secondary btn-block">Change Game</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=2"></script>
+</body>
+</html>

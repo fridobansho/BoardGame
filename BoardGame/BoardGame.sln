@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoardGame.Library", "BoardG
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoardGame.Tests", "BoardGame.Tests\BoardGame.Tests.csproj", "{0DDBD5D7-3928-4FFB-88AF-CFAA6758DB93}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoardGame.Web", "BoardGame.Web\BoardGame.Web.csproj", "{5EEF420A-99E9-4A28-8CAD-2331135DDA7B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{0DDBD5D7-3928-4FFB-88AF-CFAA6758DB93}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0DDBD5D7-3928-4FFB-88AF-CFAA6758DB93}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DDBD5D7-3928-4FFB-88AF-CFAA6758DB93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5EEF420A-99E9-4A28-8CAD-2331135DDA7B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5EEF420A-99E9-4A28-8CAD-2331135DDA7B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5EEF420A-99E9-4A28-8CAD-2331135DDA7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5EEF420A-99E9-4A28-8CAD-2331135DDA7B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

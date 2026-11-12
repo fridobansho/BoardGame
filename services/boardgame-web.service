@@ -1,0 +1,13 @@
+[Unit]
+Description=BoardGame Local Web Server (.NET 8)
+After=network.target
+
+[Service]
+Type=notify
+WorkingDirectory=/var/home/david/Source/BoardGame-workspace
+ExecStart=/var/home/david/Source/BoardGame-workspace/run-service.sh
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target
