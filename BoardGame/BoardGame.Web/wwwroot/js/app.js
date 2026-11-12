@@ -31,7 +31,9 @@
   const roomCodeVal = document.getElementById('room-code-val');
   const boardContainer = document.getElementById('board-container');
   const reactionContainer = document.getElementById('reaction-container');
-  const reactionBar = document.getElementById('reaction-bar');
+  const reactionWidget = document.getElementById('reaction-widget');
+  const reactionPicker = document.getElementById('reaction-picker');
+  const btnToggleReactions = document.getElementById('btn-toggle-reactions');
 
   const btnOpenMenu = document.getElementById('btn-open-menu');
   const btnCloseMenu = document.getElementById('btn-close-menu');
@@ -985,13 +987,33 @@
       });
     }
 
-    // Floating reaction buttons
+    // Toggle reaction picker
+    if (btnToggleReactions && reactionPicker) {
+      btnToggleReactions.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willShow = reactionPicker.classList.contains('hidden');
+        reactionPicker.classList.toggle('hidden', !willShow);
+        btnToggleReactions.classList.toggle('active', willShow);
+      });
+    }
+
+    // Floating reaction buttons (send and autohide)
     document.querySelectorAll('.reaction-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const emoji = btn.dataset.emoji;
         if (emoji) sendReaction(emoji);
+        if (reactionPicker) reactionPicker.classList.add('hidden');
+        if (btnToggleReactions) btnToggleReactions.classList.remove('active');
       });
+    });
+
+    // Close reaction picker when tapping anywhere else
+    document.addEventListener('click', (e) => {
+      if (reactionWidget && !reactionWidget.contains(e.target)) {
+        if (reactionPicker) reactionPicker.classList.add('hidden');
+        if (btnToggleReactions) btnToggleReactions.classList.remove('active');
+      }
     });
 
     btnChangeGame.addEventListener('click', () => {
