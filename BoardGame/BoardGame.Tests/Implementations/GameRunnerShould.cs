@@ -73,6 +73,17 @@ namespace BoardGame.Tests.Implementations
         }
 
         [Test]
+        public void ConstructWithTurnDelayMs()
+        {
+            var game = new Mock<IGame>();
+            var renderer = new Mock<IBoardRenderer>();
+
+            var sut = new GameRunner(game.Object, renderer.Object, 250);
+
+            sut.TurnDelayMs.ShouldBe(250);
+        }
+
+        [Test]
         public void ReturnWinnersFromGameWhenFinished()
         {
             var game = new Mock<IGame>();
