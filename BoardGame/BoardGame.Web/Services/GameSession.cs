@@ -32,12 +32,16 @@ public class GameSession
 
     public event Action? OnStateChanged;
 
-    public GameSession(string? gameType, string? mode, string? aiDifficulty, string? p1Name, string? p2Name, string? customRoomCode = null)
+    public bool IsPublic { get; set; } = true;
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
+
+    public GameSession(string? gameType, string? mode, string? aiDifficulty, string? p1Name, string? p2Name, string? customRoomCode = null, bool isPublic = true)
     {
         GameType = (!string.IsNullOrWhiteSpace(gameType) ? gameType : "connect4").ToLowerInvariant();
         Mode = (!string.IsNullOrWhiteSpace(mode) ? mode : "pass-and-play").ToLowerInvariant();
         AiDifficulty = (!string.IsNullOrWhiteSpace(aiDifficulty) ? aiDifficulty : "smart").ToLowerInvariant();
         RoomCode = customRoomCode ?? GenerateRoomCode();
+        IsPublic = isPublic;
 
         string player1Name = !string.IsNullOrWhiteSpace(p1Name) ? p1Name.Trim() : "Player 1";
         string player2Name = !string.IsNullOrWhiteSpace(p2Name) ? p2Name.Trim() : 
@@ -310,6 +314,26 @@ public class GameSession
                 Player1Name: Players[0].Name,
                 Player2Name: Players[1].Name,
                 IsAiTurn: isAiTurn
+            );
+        }
+    }
+
+    public RoomSummaryDto ToSummaryDto()
+    {
+        lock (_lock)
+        {
+            var span = DateTime.UtcNow - CreatedAt;
+            string timeAgo = span.TotalSeconds < 60 ? "just now" :
+                             span.TotalMinutes < 60 ? $"{(int)span.TotalMinutes}m ago" :
+                             $"{(int)span.TotalHours}h ago";
+
+            return new RoomSummaryDto(
+                RoomCode: RoomCode,
+                GameType: GameType,
+                HostName: Players.Count > 0 ? Players[0].Name : "Host",
+                Status: Status,
+                CreatedAt: CreatedAt,
+                TimeAgo: timeAgo
             );
         }
     }

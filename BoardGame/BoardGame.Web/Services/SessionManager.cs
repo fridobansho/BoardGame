@@ -1,18 +1,28 @@
 namespace BoardGame.Web.Services;
 
 using System.Collections.Concurrent;
+using BoardGame.Web.Models;
 
 public class SessionManager
 {
     private readonly ConcurrentDictionary<string, GameSession> _sessions = new();
     private readonly ConcurrentDictionary<string, string> _roomCodeToSessionId = new(StringComparer.OrdinalIgnoreCase);
 
-    public GameSession CreateSession(string? gameType, string? mode, string? aiDifficulty, string? p1Name, string? p2Name)
+    public GameSession CreateSession(string? gameType, string? mode, string? aiDifficulty, string? p1Name, string? p2Name, bool isPublic = true)
     {
-        var session = new GameSession(gameType, mode, aiDifficulty, p1Name, p2Name);
+        var session = new GameSession(gameType, mode, aiDifficulty, p1Name, p2Name, isPublic: isPublic);
         _sessions[session.Id] = session;
         _roomCodeToSessionId[session.RoomCode] = session.Id;
         return session;
+    }
+
+    public IEnumerable<RoomSummaryDto> GetAvailableRooms()
+    {
+        return _sessions.Values
+            .Where(s => s.Mode == "room" && s.IsPublic && s.Status == "WaitingForPlayer" && (DateTime.UtcNow - s.CreatedAt).TotalHours < 2)
+            .OrderByDescending(s => s.CreatedAt)
+            .Select(s => s.ToSummaryDto())
+            .ToList();
     }
 
     public GameSession? GetSession(string id)

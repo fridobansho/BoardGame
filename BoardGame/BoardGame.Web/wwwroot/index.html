@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>BoardGame • Mobile & Local Play</title>
-  <link rel="stylesheet" href="/css/style.css?v=2">
+  <link rel="stylesheet" href="/css/style.css?v=3">
 </head>
 <body>
   <div class="app-container">
@@ -123,10 +123,35 @@
           <label class="section-label">Wi-Fi Multiplayer</label>
           <div class="room-action-tabs">
             <button id="tab-host" class="tab-btn active">Host New Room</button>
-            <button id="tab-join" class="tab-btn">Join with Code</button>
+            <button id="tab-join" class="tab-btn">Join / Lobby</button>
           </div>
-          <div id="room-join-input" class="room-input-box hidden">
-            <input type="text" id="input-room-code" placeholder="ENTER 4-LETTER CODE" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters">
+
+          <!-- When Hosting: show Share option -->
+          <div id="room-host-options" class="room-host-options">
+            <label class="checkbox-label" title="Allow other devices on this Wi-Fi to discover and join your game">
+              <input type="checkbox" id="chk-share-public" checked>
+              <span>List game in local Wi-Fi lobby (Share)</span>
+            </label>
+          </div>
+
+          <!-- When Joining / Browsing Lobby -->
+          <div id="room-join-box" class="room-join-box hidden">
+            <div class="lobby-header">
+              <span class="lobby-title">Available Games on Wi-Fi</span>
+              <button id="btn-refresh-rooms" class="btn btn-sm btn-secondary" type="button">↻ Refresh</button>
+            </div>
+
+            <div id="lobby-room-list" class="lobby-room-list">
+              <div class="lobby-empty">Loading available games...</div>
+            </div>
+
+            <div class="room-divider">
+              <span>or enter code manually</span>
+            </div>
+
+            <div class="room-input-box">
+              <input type="text" id="input-room-code" placeholder="ENTER 4-LETTER CODE" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters">
+            </div>
           </div>
         </div>
 
@@ -184,6 +209,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=2"></script>
+  <script src="/js/app.js?v=3"></script>
 </body>
 </html>

@@ -5,7 +5,17 @@ public record CreateSessionRequest(
     string? Mode,           // "pass-and-play", "vs-ai", "room"
     string? AiDifficulty,  // "easy", "smart"
     string? Player1Name,
-    string? Player2Name
+    string? Player2Name,
+    bool? IsPublic = true
+);
+
+public record RoomSummaryDto(
+    string RoomCode,
+    string GameType,
+    string HostName,
+    string Status,
+    DateTime CreatedAt,
+    string TimeAgo
 );
 
 public record MoveRequest(

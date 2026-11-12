@@ -74,12 +74,17 @@ var jsonOpts = new JsonSerializerOptions
 // REST Endpoints
 app.MapPost("/api/session/new", (CreateSessionRequest req, SessionManager sm) =>
 {
-    var session = sm.CreateSession(req.GameType, req.Mode, req.AiDifficulty, req.Player1Name, req.Player2Name);
+    var session = sm.CreateSession(req.GameType, req.Mode, req.AiDifficulty, req.Player1Name, req.Player2Name, req.IsPublic ?? true);
     return Results.Ok(new
     {
         session = session.ToDto(),
         playerToken = session.Player1Token
     });
+});
+
+app.MapGet("/api/rooms", (SessionManager sm) =>
+{
+    return Results.Ok(sm.GetAvailableRooms());
 });
 
 app.MapGet("/api/session/{id}", (string id, SessionManager sm) =>

@@ -1,5 +1,6 @@
 namespace BoardGame.Tests.Implementations;
 
+using System.Linq;
 using BoardGame.Library.Implementations;
 using BoardGame.Web.Services;
 using NUnit.Framework;
@@ -133,6 +134,27 @@ public class GameSessionShould
         guestToken.ShouldNotBeNullOrEmpty();
         session.Status.ShouldBe("InProgress");
         session.Players[1].Name.ShouldBe("GuestFriend");
+    }
+
+    [Test]
+    public void ListAvailablePublicRooms()
+    {
+        var sm = new SessionManager();
+        var publicSession = sm.CreateSession("connect4", "room", "smart", "HostAlice", null, isPublic: true);
+        var privateSession = sm.CreateSession("tictactoe", "room", "smart", "HostBob", null, isPublic: false);
+        var soloSession = sm.CreateSession("chomp", "pass-and-play", "smart", "Solo", null);
+
+        var rooms = sm.GetAvailableRooms().ToList();
+
+        rooms.Count.ShouldBe(1);
+        rooms[0].RoomCode.ShouldBe(publicSession.RoomCode);
+        rooms[0].GameType.ShouldBe("connect4");
+        rooms[0].HostName.ShouldBe("HostAlice");
+        rooms[0].Status.ShouldBe("WaitingForPlayer");
+
+        // Once guest joins, room is no longer in WaitingForPlayer status
+        publicSession.JoinRoomAsGuest("Guest", out _);
+        sm.GetAvailableRooms().ShouldBeEmpty();
     }
 
     [Test]

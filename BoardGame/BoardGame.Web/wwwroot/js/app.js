@@ -58,7 +58,11 @@
   const secRoom = document.getElementById('sec-room');
   const tabHost = document.getElementById('tab-host');
   const tabJoin = document.getElementById('tab-join');
-  const roomJoinInput = document.getElementById('room-join-input');
+  const roomHostOptions = document.getElementById('room-host-options');
+  const roomJoinBox = document.getElementById('room-join-box');
+  const chkSharePublic = document.getElementById('chk-share-public');
+  const lobbyRoomList = document.getElementById('lobby-room-list');
+  const btnRefreshRooms = document.getElementById('btn-refresh-rooms');
   const inputRoomCode = document.getElementById('input-room-code');
   const inputP1 = document.getElementById('input-p1');
   const inputP2 = document.getElementById('input-p2');
@@ -197,7 +201,7 @@
   }
 
   // Create new session
-  async function createSession(game, mode, diff, p1, p2) {
+  async function createSession(game, mode, diff, p1, p2, isPublic = true) {
     try {
       const res = await fetch('/api/session/new', {
         method: 'POST',
@@ -207,7 +211,8 @@
           mode: mode,
           aiDifficulty: diff,
           player1Name: p1,
-          player2Name: p2
+          player2Name: p2,
+          isPublic: Boolean(isPublic)
         })
       });
 
@@ -232,6 +237,64 @@
       });
       onSessionUpdated(fallback);
     }
+  }
+
+  // Fetch available public Wi-Fi rooms
+  async function fetchAvailableRooms() {
+    if (!lobbyRoomList) return;
+    lobbyRoomList.innerHTML = '<div class="lobby-empty">Searching for games on local Wi-Fi...</div>';
+    try {
+      const res = await fetch('/api/rooms');
+      if (!res.ok) throw new Error('Failed to fetch rooms');
+      const rooms = await res.json();
+      renderRoomList(rooms);
+    } catch (e) {
+      lobbyRoomList.innerHTML = '<div class="lobby-empty">Could not load available games. You can enter a code below.</div>';
+    }
+  }
+
+  function renderRoomList(rooms) {
+    if (!lobbyRoomList) return;
+    if (!Array.isArray(rooms) || rooms.length === 0) {
+      lobbyRoomList.innerHTML = '<div class="lobby-empty">No games currently waiting on Wi-Fi.<br><small style="color:var(--text-dim);display:inline-block;margin-top:4px;">Host a game above or enter code below.</small></div>';
+      return;
+    }
+
+    lobbyRoomList.innerHTML = '';
+    const icons = { connect4: '🔴', tictactoe: '❌', chomp: '🍫' };
+    const names = { connect4: 'Connect 4', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp' };
+
+    rooms.forEach(r => {
+      const code = r.roomCode || r.RoomCode;
+      const game = (r.gameType || r.GameType || 'connect4').toLowerCase();
+      const host = r.hostName || r.HostName || 'Host';
+      const time = r.timeAgo || r.TimeAgo || 'just now';
+
+      const card = document.createElement('div');
+      card.className = 'lobby-room-card';
+      card.innerHTML = `
+        <div class="lobby-card-left">
+          <span class="lobby-card-icon">${icons[game] || '🎲'}</span>
+          <div class="lobby-card-info">
+            <h4>${names[game] || game} <span class="lobby-code-badge">${code}</span></h4>
+            <div class="lobby-card-meta">Host: ${host} • ${time}</div>
+          </div>
+        </div>
+      `;
+
+      const joinBtn = document.createElement('button');
+      joinBtn.className = 'btn btn-sm btn-primary';
+      joinBtn.textContent = 'Join';
+      joinBtn.type = 'button';
+      joinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modalMenu.classList.add('hidden');
+        joinRoomByCode(code);
+      });
+
+      card.appendChild(joinBtn);
+      lobbyRoomList.appendChild(card);
+    });
   }
 
   // Join room by code
@@ -659,6 +722,9 @@
         selectedMode = btn.dataset.mode;
         secAiDiff.classList.toggle('hidden', selectedMode !== 'vs-ai');
         secRoom.classList.toggle('hidden', selectedMode !== 'room');
+        if (selectedMode === 'room' && roomAction === 'join') {
+          fetchAvailableRooms();
+        }
       });
     });
 
@@ -673,17 +739,26 @@
     tabHost.addEventListener('click', () => {
       tabHost.classList.add('active');
       tabJoin.classList.remove('active');
-      roomJoinInput.classList.add('hidden');
+      if (roomHostOptions) roomHostOptions.classList.remove('hidden');
+      if (roomJoinBox) roomJoinBox.classList.add('hidden');
       roomAction = 'host';
     });
 
     tabJoin.addEventListener('click', () => {
       tabJoin.classList.add('active');
       tabHost.classList.remove('active');
-      roomJoinInput.classList.remove('hidden');
-      inputRoomCode.focus();
+      if (roomHostOptions) roomHostOptions.classList.add('hidden');
+      if (roomJoinBox) roomJoinBox.classList.remove('hidden');
       roomAction = 'join';
+      fetchAvailableRooms();
     });
+
+    if (btnRefreshRooms) {
+      btnRefreshRooms.addEventListener('click', (e) => {
+        e.preventDefault();
+        fetchAvailableRooms();
+      });
+    }
 
     inputRoomCode.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -697,7 +772,7 @@
       if (selectedMode === 'room' && roomAction === 'join') {
         const code = inputRoomCode.value.trim().toUpperCase();
         if (code.length < 3) {
-          alert('Please enter a valid room code.');
+          alert('Please select an available game from the list above, or enter a 4-letter room code.');
           return;
         }
         modalMenu.classList.add('hidden');
@@ -705,13 +780,15 @@
         return;
       }
 
+      const isPublic = chkSharePublic ? chkSharePublic.checked : true;
       modalMenu.classList.add('hidden');
       createSession(
         selectedGame,
         selectedMode,
         selectedDiff,
         inputP1.value.trim() || 'Player 1',
-        inputP2.value.trim() || 'Player 2'
+        inputP2.value.trim() || 'Player 2',
+        isPublic
       );
     });
 
