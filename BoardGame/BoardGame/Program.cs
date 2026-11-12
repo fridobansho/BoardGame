@@ -7,47 +7,127 @@ namespace BoardGame
     using Library.Interfaces;
     using System;
     using System.Linq;
+    using System.Threading;
 
     class Program
     {
         static void Main(string[] args)
         {
-            bool useInPlace = args.Contains("--in-place") || (!args.Contains("--stream") && !Console.IsOutputRedirected);
-            IBoardRenderer renderer = useInPlace
-                ? new InPlaceBoardRenderer(new ConsoleRenderer())
-                : new ConsoleRenderer();
-            int turnDelayMs = useInPlace ? 250 : 0;
+            bool forceInPlace = args.Contains("--in-place");
+            bool forceStream = args.Contains("--stream");
+            bool useInPlace = forceInPlace || (!forceStream && !Console.IsOutputRedirected);
 
-            Console.WriteLine("========================================");
-            Console.WriteLine("   BoardGame Multi-Game Engine (Linux)   ");
-            Console.WriteLine($"   Render Mode: {(useInPlace ? "In-Place (TUI / No Scrolling)" : "Streaming (Log Output)")}");
-            Console.WriteLine("========================================");
+            bool forceAlt = args.Contains("--alt");
+            bool forceNoAlt = args.Contains("--no-alt");
+            bool useAlt = useInPlace && (forceAlt || (!forceNoAlt && !Console.IsOutputRedirected && !Console.IsInputRedirected));
 
-            Console.WriteLine("\n=== 1. Tic-Tac-Toe (Minimax AI vs Simple AI) ===");
-            PlayGame(new Board(3, 3),
-                     new IPlayer[] { new MinimaxPlayer("Minimax (X)"), new SimplePlayer("Simple (O)") },
-                     new TicTacToeLogic(),
-                     renderer,
-                     turnDelayMs);
+            int turnDelayMs = useInPlace ? 300 : 0;
+            string requestedGame = "all";
 
-            Console.WriteLine("\n=== 2. Chomp 2D Nim (Smart AI vs Basic Player) ===");
-            PlayGame(new Board(4, 3),
-                     new IPlayer[] { new SmartChompPlayer("SmartChomp (P1)"), new ChompPlayer("BasicChomp (P2)") },
-                     new ChompLogic(),
-                     renderer,
-                     turnDelayMs);
-
-            Console.WriteLine("\n=== 3. Connect Four (Red AI vs Yellow AI) ===");
-            PlayGame(new Board(ConnectFourLogic.DefaultWidth, ConnectFourLogic.DefaultHeight),
-                     new IPlayer[] { new ConnectFourPlayer("Red Bot"), new ConnectFourPlayer("Yellow Bot") },
-                     new ConnectFourLogic(),
-                     renderer,
-                     turnDelayMs);
-
-            if (!Console.IsInputRedirected)
+            for (int i = 0; i < args.Length; i++)
             {
-                Console.WriteLine("\nPress any key to exit...");
-                Console.ReadKey();
+                var arg = args[i].ToLowerInvariant();
+                if ((arg == "--game" || arg == "-g") && i + 1 < args.Length)
+                {
+                    requestedGame = args[++i].ToLowerInvariant();
+                }
+                else if ((arg == "--delay" || arg == "-d") && i + 1 < args.Length && int.TryParse(args[i + 1], out int delay))
+                {
+                    turnDelayMs = delay;
+                    i++;
+                }
+                else if (arg == "connect4" || arg == "c4" || arg == "connectfour" ||
+                         arg == "tictactoe" || arg == "ttt" ||
+                         arg == "chomp")
+                {
+                    requestedGame = arg;
+                }
+            }
+
+            InPlaceBoardRenderer inPlaceRenderer = null;
+            IBoardRenderer renderer;
+            if (useInPlace)
+            {
+                inPlaceRenderer = new InPlaceBoardRenderer(new ConsoleRenderer(), useAlternateScreen: useAlt);
+                if (useAlt)
+                {
+                    inPlaceRenderer.EnterAlternateScreen();
+                }
+                renderer = inPlaceRenderer;
+            }
+            else
+            {
+                renderer = new ConsoleRenderer();
+            }
+
+            Console.CancelKeyPress += (s, e) =>
+            {
+                inPlaceRenderer?.Dispose();
+            };
+
+            try
+            {
+                Console.WriteLine("========================================");
+                Console.WriteLine("   BoardGame Multi-Game Engine (Linux)   ");
+                Console.WriteLine($"   Render Mode: {(useInPlace ? (useAlt ? "In-Place (TUI / Alternate Screen)" : "In-Place (TUI / No Scrolling)") : "Streaming (Log Output)")}");
+                if (turnDelayMs > 0)
+                {
+                    Console.WriteLine($"   Turn Pacing: {turnDelayMs}ms per move");
+                }
+                Console.WriteLine("========================================");
+
+                if (requestedGame == "all" || requestedGame == "tictactoe" || requestedGame == "ttt")
+                {
+                    if (useAlt) Console.Clear();
+                    Console.WriteLine("\n=== Tic-Tac-Toe (Minimax AI vs Simple AI) ===");
+                    PlayGame(new Board(3, 3),
+                             new IPlayer[] { new MinimaxPlayer("Minimax (X)"), new SimplePlayer("Simple (O)") },
+                             new TicTacToeLogic(),
+                             renderer,
+                             turnDelayMs);
+
+                    if (requestedGame == "all" && turnDelayMs > 0)
+                    {
+                        Thread.Sleep(1200);
+                    }
+                }
+
+                if (requestedGame == "all" || requestedGame == "chomp")
+                {
+                    if (useAlt) Console.Clear();
+                    Console.WriteLine("\n=== Chomp 2D Nim (Smart AI vs Basic Player) ===");
+                    PlayGame(new Board(4, 3),
+                             new IPlayer[] { new SmartChompPlayer("SmartChomp (P1)"), new ChompPlayer("BasicChomp (P2)") },
+                             new ChompLogic(),
+                             renderer,
+                             turnDelayMs);
+
+                    if (requestedGame == "all" && turnDelayMs > 0)
+                    {
+                        Thread.Sleep(1200);
+                    }
+                }
+
+                if (requestedGame == "all" || requestedGame == "connect4" || requestedGame == "c4" || requestedGame == "connectfour")
+                {
+                    if (useAlt) Console.Clear();
+                    Console.WriteLine("\n=== Connect Four (Red AI vs Yellow AI) ===");
+                    PlayGame(new Board(ConnectFourLogic.DefaultWidth, ConnectFourLogic.DefaultHeight),
+                             new IPlayer[] { new ConnectFourPlayer("Red Bot"), new ConnectFourPlayer("Yellow Bot") },
+                             new ConnectFourLogic(),
+                             renderer,
+                             turnDelayMs);
+                }
+
+                if (!Console.IsInputRedirected)
+                {
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey(true);
+                }
+            }
+            finally
+            {
+                inPlaceRenderer?.Dispose();
             }
         }
 

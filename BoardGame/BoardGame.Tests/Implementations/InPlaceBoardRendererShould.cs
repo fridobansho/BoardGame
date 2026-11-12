@@ -6,6 +6,7 @@ namespace BoardGame.Tests.Implementations
     using NUnit.Framework;
     using Shouldly;
     using System;
+    using System.IO;
 
     [TestFixture]
     public class InPlaceBoardRendererShould
@@ -21,9 +22,8 @@ namespace BoardGame.Tests.Implementations
         public void ThrowArgumentNullExceptionWhenConstructedWithNullParams()
         {
             Should.Throw<ArgumentNullException>(() => new InPlaceBoardRenderer(null));
-            Should.Throw<ArgumentNullException>(() => new InPlaceBoardRenderer(new ConsoleRenderer(), null, () => (0, 0), () => false));
-            Should.Throw<ArgumentNullException>(() => new InPlaceBoardRenderer(new ConsoleRenderer(), (l, t) => { }, null, () => false));
-            Should.Throw<ArgumentNullException>(() => new InPlaceBoardRenderer(new ConsoleRenderer(), (l, t) => { }, () => (0, 0), null));
+            Should.Throw<ArgumentNullException>(() => new InPlaceBoardRenderer(new ConsoleRenderer(), null, () => false));
+            Should.Throw<ArgumentNullException>(() => new InPlaceBoardRenderer(new ConsoleRenderer(), new StringWriter(), null));
         }
 
         [Test]
@@ -37,84 +37,78 @@ namespace BoardGame.Tests.Implementations
         public void FallbackToInnerRendererWhenOutputIsRedirected()
         {
             var inner = new Mock<IBoardRenderer>();
-            var setCursorCalled = false;
+            var sw = new StringWriter();
             var sut = new InPlaceBoardRenderer(
                 inner.Object,
-                (l, t) => { setCursorCalled = true; },
-                () => (5, 10),
+                sw,
                 isOutputRedirected: () => true);
 
             var board = new Board(3, 3);
             sut.Render(board);
 
             inner.Verify(m => m.Render(board), Times.Once);
-            setCursorCalled.ShouldBeFalse();
+            sw.ToString().ShouldBeEmpty();
         }
 
         [Test]
-        public void RecordInitialPositionOnFirstRenderAndResetCursorOnSubsequentRenders()
+        public void OutputRelativeCursorMoveOnSubsequentRenders()
         {
             var inner = new Mock<IBoardRenderer>();
-            int setLeft = -1, setTop = -1;
-            int setCursorCount = 0;
+            var board = new Board(3, 3);
+            // Simulate 3 lines of output
+            inner.Setup(m => m.RenderToString(board)).Returns("Line1\nLine2\nLine3");
 
+            var sw = new StringWriter();
             var sut = new InPlaceBoardRenderer(
                 inner.Object,
-                (l, t) =>
-                {
-                    setLeft = l;
-                    setTop = t;
-                    setCursorCount++;
-                },
-                () => (2, 8),
+                sw,
                 isOutputRedirected: () => false);
 
-            var board = new Board(3, 3);
-
-            // First render: records position (2, 8), does not call setCursorPosition yet
+            // First render: writes lines with clear-line codes, no move-up code yet
             sut.Render(board);
-            setCursorCount.ShouldBe(0);
+            var firstOutput = sw.ToString();
+            firstOutput.ShouldContain("\x1b[?25l"); // cursor hidden
+            firstOutput.ShouldNotContain("\x1b[3F");
 
-            // Second render: moves cursor back to (2, 8) and renders
+            // Second render: must output \x1b[3F to move cursor UP 3 lines
             sut.Render(board);
-            setCursorCount.ShouldBe(1);
-            setLeft.ShouldBe(2);
-            setTop.ShouldBe(8);
+            var secondOutput = sw.ToString();
+            secondOutput.ShouldContain("\x1b[3F");
 
-            // Third render: moves cursor back to (2, 8) again
+            // Third render: must output \x1b[3F again
             sut.Render(board);
-            setCursorCount.ShouldBe(2);
-
-            inner.Verify(m => m.Render(board), Times.Exactly(3));
+            var thirdOutput = sw.ToString();
+            thirdOutput.Split(new[] { "\x1b[3F" }, StringSplitOptions.None).Length.ShouldBe(3);
         }
 
         [Test]
-        public void ResetPositionTrackingWhenResetCalled()
+        public void ResetPreviousLineCountWhenResetCalled()
         {
             var inner = new Mock<IBoardRenderer>();
-            int setCursorCount = 0;
-            int currentTop = 5;
+            var board = new Board(3, 3);
+            inner.Setup(m => m.RenderToString(board)).Returns("Row0\nRow1");
 
+            var sw = new StringWriter();
             var sut = new InPlaceBoardRenderer(
                 inner.Object,
-                (l, t) => setCursorCount++,
-                () => (0, currentTop),
+                sw,
                 isOutputRedirected: () => false);
 
-            var board = new Board(3, 3);
+            sut.Render(board); // initial render: 2 lines
+            sw.ToString().ShouldNotContain("\x1b[2F");
 
-            sut.Render(board); // initial anchor at 5
-            sut.Render(board); // overwrites at 5
-            setCursorCount.ShouldBe(1);
+            sut.Render(board); // second render: moves up 2 lines
+            sw.ToString().ShouldContain("\x1b[2F");
 
+            // Resetting for a new game:
             sut.Reset();
-            currentTop = 15; // user printed text and new game started at row 15
+            sw.GetStringBuilder().Clear();
 
-            sut.Render(board); // re-initializes anchor at 15
-            setCursorCount.ShouldBe(1);
+            sut.Render(board); // first render of new game: no move-up code
+            sw.ToString().ShouldNotContain("\x1b[2F");
 
-            sut.Render(board); // overwrites at 15
-            setCursorCount.ShouldBe(2);
+            sut.Render(board); // second render of new game: moves up 2 lines
+            sw.ToString().ShouldContain("\x1b[2F");
         }
 
         [Test]
@@ -127,6 +121,70 @@ namespace BoardGame.Tests.Implementations
             var sut = new InPlaceBoardRenderer(inner.Object);
 
             sut.RenderToString(board).ShouldBe("MockedBoard");
+        }
+
+        [Test]
+        public void RestoreCursorOnDispose()
+        {
+            var inner = new Mock<IBoardRenderer>();
+            var board = new Board(3, 3);
+            inner.Setup(m => m.RenderToString(board)).Returns("Line");
+
+            var sw = new StringWriter();
+            using (var sut = new InPlaceBoardRenderer(inner.Object, sw, () => false))
+            {
+                sut.Render(board);
+                sw.ToString().ShouldContain("\x1b[?25l"); // hide
+            }
+
+            sw.ToString().ShouldContain("\x1b[?25h"); // show cursor on dispose
+        }
+
+        [Test]
+        public void EnterAlternateScreenAndExitOnDisposeWhenEnabled()
+        {
+            var inner = new Mock<IBoardRenderer>();
+            var board = new Board(3, 3);
+            inner.Setup(m => m.RenderToString(board)).Returns("Line1\nLine2");
+
+            var sw = new StringWriter();
+            using (var sut = new InPlaceBoardRenderer(inner.Object, sw, () => false, useAlternateScreen: true))
+            {
+                sut.InAlternateScreen.ShouldBeFalse();
+                sut.Render(board);
+                sut.InAlternateScreen.ShouldBeTrue();
+                sw.ToString().ShouldContain("\x1b[?1049h\x1b[H"); // alternate screen enter + home
+            }
+
+            sw.ToString().ShouldContain("\x1b[?1049l"); // alternate screen exit
+        }
+
+        [Test]
+        public void SupportExplicitEnterAndExitAlternateScreen()
+        {
+            var inner = new Mock<IBoardRenderer>();
+            var sw = new StringWriter();
+            var sut = new InPlaceBoardRenderer(inner.Object, sw, () => false, useAlternateScreen: false);
+
+            sut.EnterAlternateScreen();
+            sut.InAlternateScreen.ShouldBeTrue();
+            sw.ToString().ShouldContain("\x1b[?1049h\x1b[H");
+
+            sut.ExitAlternateScreen();
+            sut.InAlternateScreen.ShouldBeFalse();
+            sw.ToString().ShouldContain("\x1b[?1049l");
+        }
+
+        [Test]
+        public void NotOutputAlternateScreenWhenOutputRedirected()
+        {
+            var inner = new Mock<IBoardRenderer>();
+            var sw = new StringWriter();
+            var sut = new InPlaceBoardRenderer(inner.Object, sw, () => true, useAlternateScreen: true);
+
+            sut.EnterAlternateScreen();
+            sut.InAlternateScreen.ShouldBeFalse();
+            sw.ToString().ShouldBeEmpty();
         }
     }
 }
