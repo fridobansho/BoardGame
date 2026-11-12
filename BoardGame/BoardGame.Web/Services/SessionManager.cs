@@ -19,7 +19,7 @@ public class SessionManager
     public IEnumerable<RoomSummaryDto> GetAvailableRooms()
     {
         return _sessions.Values
-            .Where(s => s.Mode == "room" && s.IsPublic && s.Status == "WaitingForPlayer" && (DateTime.UtcNow - s.CreatedAt).TotalHours < 2)
+            .Where(s => s.IsPublic && (DateTime.UtcNow - s.CreatedAt).TotalHours < 2)
             .OrderByDescending(s => s.CreatedAt)
             .Select(s => s.ToSummaryDto())
             .ToList();

@@ -134,6 +134,12 @@ public class GameSession
 
             var currentPlayer = Players[CurrentTurnIndex];
 
+            // Reject moves from spectators
+            if (string.Equals(playerToken, "spectator", StringComparison.OrdinalIgnoreCase))
+            {
+                return (false, "Spectators cannot make moves.");
+            }
+
             // In room mode or vs-ai mode, enforce player token if provided
             if (Mode == "room" && !string.IsNullOrEmpty(playerToken))
             {
@@ -143,9 +149,22 @@ public class GameSession
                     return (false, "It is not your turn!");
                 }
             }
-            else if (Mode == "vs-ai" && CurrentTurnIndex == 1)
+            else if (Mode == "vs-ai")
             {
-                return (false, "It is the AI's turn.");
+                if (CurrentTurnIndex == 1) return (false, "It is the AI's turn.");
+                if (!string.IsNullOrEmpty(playerToken) && !string.Equals(playerToken, Player1Token, StringComparison.Ordinal))
+                {
+                    return (false, "Spectators cannot make moves.");
+                }
+            }
+            else if (Mode == "pass-and-play")
+            {
+                if (!string.IsNullOrEmpty(playerToken) &&
+                    !string.Equals(playerToken, Player1Token, StringComparison.Ordinal) &&
+                    !string.Equals(playerToken, Player2Token, StringComparison.Ordinal))
+                {
+                    return (false, "Spectators cannot make moves.");
+                }
             }
 
             var moveLocation = new Location(x, y);
@@ -327,11 +346,18 @@ public class GameSession
                              span.TotalMinutes < 60 ? $"{(int)span.TotalMinutes}m ago" :
                              $"{(int)span.TotalHours}h ago";
 
+            bool canJoin = Mode == "room" && Status == "WaitingForPlayer";
+            bool canSpectate = Status == "InProgress" || Status == "WaitingForPlayer" || Status == "Finished" || Status == "Draw";
+
             return new RoomSummaryDto(
                 RoomCode: RoomCode,
+                SessionId: Id,
                 GameType: GameType,
+                Mode: Mode,
                 HostName: Players.Count > 0 ? Players[0].Name : "Host",
                 Status: Status,
+                CanJoin: canJoin,
+                CanSpectate: canSpectate,
                 CreatedAt: CreatedAt,
                 TimeAgo: timeAgo
             );

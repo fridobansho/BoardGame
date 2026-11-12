@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>BoardGame • Mobile & Local Play</title>
-  <link rel="stylesheet" href="/css/style.css?v=3">
+  <link rel="stylesheet" href="/css/style.css?v=4">
 </head>
 <body>
   <div class="app-container">
@@ -58,6 +58,9 @@
     <footer class="app-footer">
       <button id="btn-new-game" class="btn btn-primary">
         <span>New Game</span>
+      </button>
+      <button id="btn-open-lobby" class="btn btn-secondary">
+        <span>Wi-Fi Lobby</span>
       </button>
       <button id="btn-quick-rules" class="btn btn-secondary">
         <span>How to Play</span>
@@ -122,16 +125,8 @@
         <div id="sec-room" class="form-section hidden">
           <label class="section-label">Wi-Fi Multiplayer</label>
           <div class="room-action-tabs">
-            <button id="tab-host" class="tab-btn active">Host New Room</button>
-            <button id="tab-join" class="tab-btn">Join / Lobby</button>
-          </div>
-
-          <!-- When Hosting: show Share option -->
-          <div id="room-host-options" class="room-host-options">
-            <label class="checkbox-label" title="Allow other devices on this Wi-Fi to discover and join your game">
-              <input type="checkbox" id="chk-share-public" checked>
-              <span>List game in local Wi-Fi lobby (Share)</span>
-            </label>
+            <button id="tab-host" class="tab-btn active">Host Room</button>
+            <button id="tab-join" class="tab-btn">Join or Spectate</button>
           </div>
 
           <!-- When Joining / Browsing Lobby -->
@@ -153,6 +148,14 @@
               <input type="text" id="input-room-code" placeholder="ENTER 4-LETTER CODE" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters">
             </div>
           </div>
+        </div>
+
+        <!-- Share / Discoverability Option (All modes) -->
+        <div id="sec-share-option" class="form-section">
+          <label class="checkbox-label" title="Allow other devices on this Wi-Fi to discover and spectate or join your game">
+            <input type="checkbox" id="chk-share-public" checked>
+            <span>📡 Share game to Wi-Fi lobby (spectate / join)</span>
+          </label>
         </div>
 
         <!-- Player Names -->
@@ -209,6 +212,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=3"></script>
+  <script src="/js/app.js?v=4"></script>
 </body>
 </html>

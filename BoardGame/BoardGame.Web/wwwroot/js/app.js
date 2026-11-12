@@ -8,6 +8,7 @@
   // State
   let currentSession = null;
   let playerToken = localStorage.getItem('bg_player_token') || null;
+  let isSpectator = false;
   let sseSource = null;
   let soundEnabled = localStorage.getItem('bg_sound') !== 'false';
   let audioCtx = null;
@@ -45,6 +46,7 @@
 
   const btnReset = document.getElementById('btn-reset');
   const btnNewGame = document.getElementById('btn-new-game');
+  const btnOpenLobby = document.getElementById('btn-open-lobby');
   const btnStartGame = document.getElementById('btn-start-game');
 
   const gameOverModal = document.getElementById('game-over-modal');
@@ -189,9 +191,14 @@
     }
   }
 
-  // Check URL parameters for direct room joining
+  // Check URL parameters for direct room joining or spectating
   function parseUrlParams() {
     const params = new URLSearchParams(window.location.search);
+    const spectateParam = params.get('spectate');
+    if (spectateParam) {
+      spectateSession(spectateParam.trim());
+      return true;
+    }
     const roomParam = params.get('room');
     if (roomParam) {
       joinRoomByCode(roomParam.trim().toUpperCase());
@@ -202,6 +209,7 @@
 
   // Create new session
   async function createSession(game, mode, diff, p1, p2, isPublic = true) {
+    isSpectator = false;
     try {
       const res = await fetch('/api/session/new', {
         method: 'POST',
@@ -239,7 +247,7 @@
     }
   }
 
-  // Fetch available public Wi-Fi rooms
+  // Fetch available public Wi-Fi games
   async function fetchAvailableRooms() {
     if (!lobbyRoomList) return;
     lobbyRoomList.innerHTML = '<div class="lobby-empty">Searching for games on local Wi-Fi...</div>';
@@ -256,45 +264,105 @@
   function renderRoomList(rooms) {
     if (!lobbyRoomList) return;
     if (!Array.isArray(rooms) || rooms.length === 0) {
-      lobbyRoomList.innerHTML = '<div class="lobby-empty">No games currently waiting on Wi-Fi.<br><small style="color:var(--text-dim);display:inline-block;margin-top:4px;">Host a game above or enter code below.</small></div>';
+      lobbyRoomList.innerHTML = '<div class="lobby-empty">No active shared games found on Wi-Fi.<br><small style="color:var(--text-dim);display:inline-block;margin-top:4px;">Start a game with Share enabled or enter code below.</small></div>';
       return;
     }
 
     lobbyRoomList.innerHTML = '';
     const icons = { connect4: '🔴', tictactoe: '❌', chomp: '🍫' };
     const names = { connect4: 'Connect 4', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp' };
+    const modeLabels = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Room' };
 
     rooms.forEach(r => {
-      const code = r.roomCode || r.RoomCode;
+      const code = r.roomCode || r.RoomCode || '';
+      const sid = r.sessionId || r.SessionId || '';
       const game = (r.gameType || r.GameType || 'connect4').toLowerCase();
+      const mode = (r.mode || r.Mode || 'room').toLowerCase();
       const host = r.hostName || r.HostName || 'Host';
       const time = r.timeAgo || r.TimeAgo || 'just now';
+      const status = r.status || r.Status || 'InProgress';
+      const canJoin = Boolean(r.canJoin !== undefined ? r.canJoin : r.CanJoin);
+      const canSpectate = Boolean(r.canSpectate !== undefined ? r.canSpectate : r.CanSpectate);
+
+      const modeClass = mode === 'vs-ai' ? 'ai' : (mode === 'room' ? 'room' : 'local');
+      const statusClass = status === 'WaitingForPlayer' ? 'waiting' : (status === 'Finished' || status === 'Draw' ? 'finished' : 'live');
+      const statusLabel = status === 'WaitingForPlayer' ? 'Waiting' : (status === 'Finished' || status === 'Draw' ? 'Finished' : 'Live');
 
       const card = document.createElement('div');
       card.className = 'lobby-room-card';
+
+      let codeBadgeHtml = '';
+      if (mode === 'room' && code) {
+        codeBadgeHtml = `<span class="lobby-code-badge">${code}</span>`;
+      }
+
       card.innerHTML = `
         <div class="lobby-card-left">
           <span class="lobby-card-icon">${icons[game] || '🎲'}</span>
           <div class="lobby-card-info">
-            <h4>${names[game] || game} <span class="lobby-code-badge">${code}</span></h4>
-            <div class="lobby-card-meta">Host: ${host} • ${time}</div>
+            <h4>${names[game] || game} <span class="lobby-mode-badge ${modeClass}">${modeLabels[mode] || mode}</span> ${codeBadgeHtml}</h4>
+            <div class="lobby-card-meta">Host: ${host} • ${time} <span class="lobby-status-badge ${statusClass}">${statusLabel}</span></div>
           </div>
         </div>
       `;
 
-      const joinBtn = document.createElement('button');
-      joinBtn.className = 'btn btn-sm btn-primary';
-      joinBtn.textContent = 'Join';
-      joinBtn.type = 'button';
-      joinBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        modalMenu.classList.add('hidden');
-        joinRoomByCode(code);
-      });
+      const actions = document.createElement('div');
+      actions.className = 'lobby-actions';
 
-      card.appendChild(joinBtn);
+      if (canJoin) {
+        const joinBtn = document.createElement('button');
+        joinBtn.className = 'btn btn-sm btn-primary';
+        joinBtn.textContent = 'Join';
+        joinBtn.type = 'button';
+        joinBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          modalMenu.classList.add('hidden');
+          joinRoomByCode(code);
+        });
+        actions.appendChild(joinBtn);
+      }
+
+      if (canSpectate) {
+        const specBtn = document.createElement('button');
+        specBtn.className = 'btn btn-sm btn-spectate';
+        specBtn.textContent = '👀 Watch';
+        specBtn.type = 'button';
+        specBtn.title = 'Spectate live match';
+        specBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          modalMenu.classList.add('hidden');
+          spectateSession(sid);
+        });
+        actions.appendChild(specBtn);
+      }
+
+      card.appendChild(actions);
       lobbyRoomList.appendChild(card);
     });
+  }
+
+  // Spectate session live
+  async function spectateSession(sessionId) {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/session/${sessionId}`);
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (_) { }
+
+      if (!res.ok || !data) {
+        alert('Could not spectate session: ' + ((data && data.error) || text || 'Session not found'));
+        return;
+      }
+
+      isSpectator = true;
+      playerToken = 'spectator';
+      modalMenu.classList.add('hidden');
+      onSessionUpdated(data);
+      connectStream(data.id || data.Id || sessionId);
+    } catch (e) {
+      alert('Network error connecting to session: ' + e.message);
+    }
   }
 
   // Join room by code
@@ -330,6 +398,7 @@
         return;
       }
 
+      isSpectator = false;
       playerToken = data.playerToken || data.PlayerToken;
       localStorage.setItem('bg_player_token', playerToken);
       const sessionObj = data.session || data.Session;
@@ -363,6 +432,10 @@
 
   // Submit move
   async function submitMove(x, y) {
+    if (isSpectator) {
+      triggerHaptic([20, 20]);
+      return;
+    }
     if (!currentSession || currentSession.status !== 'InProgress') return;
     initAudio();
     triggerHaptic(15);
@@ -389,7 +462,7 @@
 
   // Reset current session
   async function resetSession() {
-    if (!currentSession) return;
+    if (!currentSession || isSpectator) return;
     try {
       const res = await fetch(`/api/session/${currentSession.id}/reset`, { method: 'POST' });
       if (res.ok) {
@@ -414,7 +487,11 @@
     const gameNames = { connect4: 'Connect Four', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp' };
     const modeNames = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Wi-Fi Room' };
     gameTitle.textContent = gameNames[session.gameType] || 'Board Game';
-    modeBadge.textContent = modeNames[session.mode] || session.mode;
+    if (isSpectator) {
+      modeBadge.textContent = `👀 Spectating (${modeNames[session.mode] || session.mode})`;
+    } else {
+      modeBadge.textContent = modeNames[session.mode] || session.mode;
+    }
 
     // Room tag
     if (session.mode === 'room') {
@@ -448,6 +525,19 @@
     if (session.currentTurnIndex === 1) turnDot.classList.add('p2');
     if (session.isAiTurn) turnDot.classList.add('ai');
 
+    if (isSpectator) {
+      if (session.status === 'WaitingForPlayer') {
+        statusText.textContent = `👀 Spectating: Waiting for Player 2 to join...`;
+      } else if (session.status === 'Finished') {
+        statusText.textContent = `👀 Spectating: ${session.winner} Wins!`;
+      } else if (session.status === 'Draw') {
+        statusText.textContent = `👀 Spectating: Game ended in a Draw!`;
+      } else {
+        statusText.textContent = `👀 Spectating: ${session.currentTurnPlayer}'s Turn`;
+      }
+      return;
+    }
+
     if (session.status === 'WaitingForPlayer') {
       statusText.textContent = `Room ${session.roomCode} • Waiting for player...`;
     } else if (session.status === 'InProgress') {
@@ -478,13 +568,27 @@
       gameOverTitle.textContent = `It's a Draw!`;
       gameOverMsg.textContent = 'Well played from both players!';
     }
+
+    if (isSpectator) {
+      btnPlayAgain.textContent = 'Browse Wi-Fi Lobby';
+      btnPlayAgain.onclick = () => {
+        gameOverModal.classList.add('hidden');
+        openLobby();
+      };
+    } else {
+      btnPlayAgain.textContent = 'Play Again';
+      btnPlayAgain.onclick = () => {
+        resetSession();
+      };
+    }
+
     gameOverModal.classList.remove('hidden');
   }
 
   // Board Renderers
   function renderBoard(session) {
     boardContainer.innerHTML = '';
-    boardContainer.className = `board-container ${session.gameType}-mode`;
+    boardContainer.className = `board-container ${session.gameType}-mode` + (isSpectator ? ' spectator-mode' : '');
 
     switch (session.gameType) {
       case 'connect4':
@@ -514,10 +618,10 @@
       btn.className = 'c4-col-btn';
       btn.innerHTML = '▼';
       btn.title = `Drop in column ${col + 1}`;
-      btn.disabled = session.status !== 'InProgress' || session.isAiTurn;
+      btn.disabled = session.status !== 'InProgress' || session.isAiTurn || isSpectator;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        submitMove(col, 0);
+        if (!isSpectator) submitMove(col, 0);
       });
       btnRow.appendChild(btn);
     }
@@ -537,7 +641,7 @@
 
         // Allow tapping anywhere on a column to drop
         slot.addEventListener('click', () => {
-          if (session.status === 'InProgress' && !session.isAiTurn) {
+          if (session.status === 'InProgress' && !session.isAiTurn && !isSpectator) {
             submitMove(x, 0);
           }
         });
@@ -578,7 +682,7 @@
           cell.innerHTML = '<span class="ttt-o">◯</span>';
         } else {
           cell.addEventListener('click', () => {
-            if (session.status === 'InProgress' && !session.isAiTurn) {
+            if (session.status === 'InProgress' && !session.isAiTurn && !isSpectator) {
               submitMove(x, y);
             }
           });
@@ -607,14 +711,14 @@
           block.innerHTML = '☠️';
           block.title = 'Poison Block! (Eating this loses the game)';
           block.addEventListener('click', () => {
-            if (session.status === 'InProgress' && !session.isAiTurn) {
+            if (session.status === 'InProgress' && !session.isAiTurn && !isSpectator) {
               submitMove(x, y);
             }
           });
         } else if (piece === 'C') {
           block.title = `Chomp at (${x}, ${y})`;
           block.addEventListener('click', () => {
-            if (session.status === 'InProgress' && !session.isAiTurn) {
+            if (session.status === 'InProgress' && !session.isAiTurn && !isSpectator) {
               submitMove(x, y);
             }
           });
@@ -653,8 +757,33 @@
       if (soundEnabled) playSound('tap');
     });
 
+    // Open Lobby view
+    function openLobby() {
+      modalMenu.classList.remove('hidden');
+      document.querySelectorAll('#group-mode .pill-btn').forEach(b => b.classList.remove('active'));
+      const roomPill = document.querySelector('#group-mode .pill-btn[data-mode="room"]');
+      if (roomPill) roomPill.classList.add('active');
+      selectedMode = 'room';
+      secAiDiff.classList.add('hidden');
+      secRoom.classList.remove('hidden');
+
+      tabJoin.classList.add('active');
+      tabHost.classList.remove('active');
+      if (roomJoinBox) roomJoinBox.classList.remove('hidden');
+      roomAction = 'join';
+      fetchAvailableRooms();
+    }
+
+    if (btnOpenLobby) {
+      btnOpenLobby.addEventListener('click', () => openLobby());
+    }
+
     // Reset button
     btnReset.addEventListener('click', () => {
+      if (isSpectator) {
+        alert('Spectators cannot restart the game.');
+        return;
+      }
       if (confirm('Restart the current game?')) resetSession();
     });
 
@@ -676,8 +805,12 @@
         }
       } catch (e) { }
 
-      if (currentSession && currentSession.mode === 'room') {
+      if (isSpectator && currentSession) {
+        url += `?spectate=${currentSession.id}`;
+      } else if (currentSession && currentSession.mode === 'room' && currentSession.status === 'WaitingForPlayer') {
         url += `?room=${currentSession.roomCode}`;
+      } else if (currentSession) {
+        url += `?spectate=${currentSession.id}`;
       }
 
       shareUrlText.textContent = url;

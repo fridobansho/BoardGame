@@ -11,9 +11,13 @@ public record CreateSessionRequest(
 
 public record RoomSummaryDto(
     string RoomCode,
+    string SessionId,
     string GameType,
+    string Mode,
     string HostName,
     string Status,
+    bool CanJoin,
+    bool CanSpectate,
     DateTime CreatedAt,
     string TimeAgo
 );

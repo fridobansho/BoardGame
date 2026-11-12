@@ -140,21 +140,57 @@ public class GameSessionShould
     public void ListAvailablePublicRooms()
     {
         var sm = new SessionManager();
-        var publicSession = sm.CreateSession("connect4", "room", "smart", "HostAlice", null, isPublic: true);
-        var privateSession = sm.CreateSession("tictactoe", "room", "smart", "HostBob", null, isPublic: false);
-        var soloSession = sm.CreateSession("chomp", "pass-and-play", "smart", "Solo", null);
+        var publicRoom = sm.CreateSession("connect4", "room", "smart", "HostAlice", null, isPublic: true);
+        var privateRoom = sm.CreateSession("tictactoe", "room", "smart", "HostBob", null, isPublic: false);
+        var soloSession = sm.CreateSession("chomp", "pass-and-play", "smart", "Solo", null, isPublic: true);
 
         var rooms = sm.GetAvailableRooms().ToList();
 
-        rooms.Count.ShouldBe(1);
-        rooms[0].RoomCode.ShouldBe(publicSession.RoomCode);
-        rooms[0].GameType.ShouldBe("connect4");
-        rooms[0].HostName.ShouldBe("HostAlice");
-        rooms[0].Status.ShouldBe("WaitingForPlayer");
+        // Both publicRoom and soloSession are public
+        rooms.Count.ShouldBe(2);
+        
+        var room1 = rooms.First(r => r.SessionId == publicRoom.Id);
+        room1.RoomCode.ShouldBe(publicRoom.RoomCode);
+        room1.GameType.ShouldBe("connect4");
+        room1.HostName.ShouldBe("HostAlice");
+        room1.Status.ShouldBe("WaitingForPlayer");
+        room1.CanJoin.ShouldBeTrue();
+        room1.CanSpectate.ShouldBeTrue();
 
-        // Once guest joins, room is no longer in WaitingForPlayer status
-        publicSession.JoinRoomAsGuest("Guest", out _);
-        sm.GetAvailableRooms().ShouldBeEmpty();
+        var room2 = rooms.First(r => r.SessionId == soloSession.Id);
+        room2.GameType.ShouldBe("chomp");
+        room2.CanJoin.ShouldBeFalse();
+        room2.CanSpectate.ShouldBeTrue();
+
+        // Once guest joins the room, it is in progress: CanJoin is false, CanSpectate remains true
+        publicRoom.JoinRoomAsGuest("Guest", out _);
+        var updatedRooms = sm.GetAvailableRooms().ToList();
+        var updatedRoom1 = updatedRooms.First(r => r.SessionId == publicRoom.Id);
+        updatedRoom1.CanJoin.ShouldBeFalse();
+        updatedRoom1.CanSpectate.ShouldBeTrue();
+    }
+
+    [Test]
+    public void RejectSpectatorMoves()
+    {
+        var sm = new SessionManager();
+        var session = sm.CreateSession("connect4", "room", "smart", "Host", null, isPublic: true);
+        session.JoinRoomAsGuest("Guest", out var guestToken);
+
+        // Host moves first (valid)
+        var (p1Success, _) = session.MakeMove(0, 0, session.Player1Token);
+        p1Success.ShouldBeTrue();
+
+        // Spectator tries to move (invalid)
+        var (specSuccess, specErr) = session.MakeMove(1, 0, "spectator");
+        specSuccess.ShouldBeFalse();
+        specErr.ShouldBe("Spectators cannot make moves.");
+
+        // Random non-player token tries to move in vs-ai
+        var aiSession = sm.CreateSession("tictactoe", "vs-ai", "smart", "Human", null, isPublic: true);
+        var (aiSpecSuccess, aiSpecErr) = aiSession.MakeMove(0, 0, "spectator");
+        aiSpecSuccess.ShouldBeFalse();
+        aiSpecErr.ShouldBe("Spectators cannot make moves.");
     }
 
     [Test]
