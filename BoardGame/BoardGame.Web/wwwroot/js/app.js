@@ -221,6 +221,9 @@
       iconSoundOn.classList.add('hidden');
       iconSoundOff.classList.remove('hidden');
     }
+    document.querySelectorAll('#group-setting-sound .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.sound === (soundEnabled ? 'on' : 'off'));
+    });
   }
 
   // Client Preferences / Theme application
@@ -291,6 +294,11 @@
       btn.classList.toggle('active', btn.dataset.role === clientDefaultRole);
     });
 
+    // Set sound active pill
+    document.querySelectorAll('#group-setting-sound .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.sound === (soundEnabled ? 'on' : 'off'));
+    });
+
     modalSettings.classList.remove('hidden');
   }
 
@@ -342,6 +350,14 @@
       const role = activeRoleBtn.dataset.role || 'play';
       clientDefaultRole = role;
       localStorage.setItem('bg_default_role', role);
+    }
+
+    const activeSoundBtn = document.querySelector('#group-setting-sound .pill-btn.active');
+    if (activeSoundBtn) {
+      const enable = activeSoundBtn.dataset.sound === 'on';
+      soundEnabled = enable;
+      localStorage.setItem('bg_sound', enable);
+      updateSoundUI();
     }
 
     playSound('tap');
@@ -1214,6 +1230,19 @@
       btn.addEventListener('click', () => {
         document.querySelectorAll('#group-setting-role .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+      });
+    });
+
+    // Settings Sound pills
+    document.querySelectorAll('#group-setting-sound .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-sound .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const enable = btn.dataset.sound === 'on';
+        soundEnabled = enable;
+        localStorage.setItem('bg_sound', enable);
+        updateSoundUI();
+        if (enable) playSound('tap');
       });
     });
 

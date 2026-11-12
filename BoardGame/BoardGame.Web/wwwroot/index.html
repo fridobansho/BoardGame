@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/css/style.css?v=8">
+  <link rel="stylesheet" href="/css/style.css?v=9">
 </head>
 <body>
   <div class="app-container">
@@ -395,7 +395,7 @@
           <small class="setting-hint">Game loaded on startup or quick play.</small>
         </div>
 
-        <!-- 4. Default Role -->
+        <!-- 6. Default Role -->
         <div class="form-section">
           <label class="section-label">Default Role on Launch</label>
           <div class="pill-group two-col" id="group-setting-role">
@@ -410,6 +410,22 @@
           </div>
           <small class="setting-hint">Spectating by default immediately opens the Wi-Fi Lobby to discover and watch live games.</small>
         </div>
+
+        <!-- 7. Sound Effects -->
+        <div class="form-section">
+          <label class="section-label">Sound Effects</label>
+          <div class="pill-group two-col" id="group-setting-sound">
+            <button class="pill-btn active" data-sound="on">
+              <span class="pill-icon">🔊</span>
+              <span>Sound On</span>
+            </button>
+            <button class="pill-btn" data-sound="off">
+              <span class="pill-icon">🔇</span>
+              <span>Muted</span>
+            </button>
+          </div>
+          <small class="setting-hint">Toggle all game audio effects, moves, and victory chimes.</small>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -418,6 +434,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=8"></script>
+  <script src="/js/app.js?v=9"></script>
 </body>
 </html>

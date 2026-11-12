@@ -84,7 +84,7 @@ Run the animated in-place terminal demo:
 
 ## 🧪 Testing
 
-Run the full unit test suite (208 tests):
+Run the full unit test suite (214 tests):
 ```bash
 dotnet test BoardGame/BoardGame.Tests/BoardGame.Tests.csproj --no-restore
 ```
