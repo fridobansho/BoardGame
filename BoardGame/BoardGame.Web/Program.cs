@@ -74,7 +74,17 @@ var jsonOpts = new JsonSerializerOptions
 // REST Endpoints
 app.MapPost("/api/session/new", (CreateSessionRequest req, SessionManager sm) =>
 {
-    var session = sm.CreateSession(req.GameType, req.Mode, req.AiDifficulty, req.Player1Name, req.Player2Name, req.IsPublic ?? true);
+    var session = sm.CreateSession(
+        req.GameType,
+        req.Mode,
+        req.AiDifficulty,
+        req.Player1Name,
+        req.Player2Name,
+        isPublic: req.IsPublic ?? true,
+        customWidth: req.CustomWidth,
+        customHeight: req.CustomHeight,
+        timerSeconds: req.TimerSeconds
+    );
     return Results.Ok(new
     {
         session = session.ToDto(),
@@ -151,6 +161,32 @@ app.MapPost("/api/session/{id}/reaction", (string id, ReactionRequest req, Sessi
     }
 
     return Results.Ok(new { success = true });
+});
+
+app.MapPost("/api/session/{id}/chat", (string id, ChatRequest req, SessionManager sm) =>
+{
+    var session = sm.GetSession(id);
+    if (session == null) return Results.NotFound(new { error = "Session not found" });
+
+    if (!string.IsNullOrWhiteSpace(req.Text))
+    {
+        session.SendChat(req.Sender ?? "Player", req.Text);
+    }
+
+    return Results.Ok(new { success = true });
+});
+
+app.MapPost("/api/session/{id}/predict", (string id, PredictionRequest req, SessionManager sm) =>
+{
+    var session = sm.GetSession(id);
+    if (session == null) return Results.NotFound(new { error = "Session not found" });
+
+    if (req.PlayerIndex == 0 || req.PlayerIndex == 1)
+    {
+        session.AddPrediction(req.PlayerIndex);
+    }
+
+    return Results.Ok(new { success = true, p1 = session.Player1Predictions, p2 = session.Player2Predictions });
 });
 
 app.MapPost("/api/room/join", (JoinRoomRequest req, SessionManager sm) =>
@@ -232,6 +268,34 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         }
     }
 
+    async Task SendChatAsync(string sender, string text)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(new { sender, text }, jsonOpts);
+            await context.Response.WriteAsync($"event: chat\ndata: {json}\n\n", ct);
+            await context.Response.Body.FlushAsync(ct);
+        }
+        catch
+        {
+            tcs.TrySetResult(true);
+        }
+    }
+
+    async Task SendPredictionAsync(int p1, int p2)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(new { p1, p2 }, jsonOpts);
+            await context.Response.WriteAsync($"event: prediction\ndata: {json}\n\n", ct);
+            await context.Response.Body.FlushAsync(ct);
+        }
+        catch
+        {
+            tcs.TrySetResult(true);
+        }
+    }
+
     Action stateHandler = () =>
     {
         _ = SendStateAsync();
@@ -242,8 +306,20 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         _ = SendReactionAsync(emoji);
     };
 
+    Action<string, string> chatHandler = (sender, text) =>
+    {
+        _ = SendChatAsync(sender, text);
+    };
+
+    Action<int, int> predictionHandler = (p1, p2) =>
+    {
+        _ = SendPredictionAsync(p1, p2);
+    };
+
     session.OnStateChanged += stateHandler;
     session.OnReaction += reactionHandler;
+    session.OnChat += chatHandler;
+    session.OnPrediction += predictionHandler;
 
     try
     {
@@ -263,6 +339,8 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
     {
         session.OnStateChanged -= stateHandler;
         session.OnReaction -= reactionHandler;
+        session.OnChat -= chatHandler;
+        session.OnPrediction -= predictionHandler;
         if (isSpectator)
         {
             session.DecrementSpectators();

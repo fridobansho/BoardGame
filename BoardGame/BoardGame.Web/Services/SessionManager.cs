@@ -3,14 +3,49 @@ namespace BoardGame.Web.Services;
 using System.Collections.Concurrent;
 using BoardGame.Web.Models;
 
-public class SessionManager
+public class SessionManager : IDisposable
 {
     private readonly ConcurrentDictionary<string, GameSession> _sessions = new();
     private readonly ConcurrentDictionary<string, string> _roomCodeToSessionId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Timer _timerCheck;
 
-    public GameSession CreateSession(string? gameType, string? mode, string? aiDifficulty, string? p1Name, string? p2Name, bool isPublic = true)
+    public SessionManager()
     {
-        var session = new GameSession(gameType, mode, aiDifficulty, p1Name, p2Name, isPublic: isPublic);
+        _timerCheck = new Timer(_ =>
+        {
+            foreach (var session in _sessions.Values)
+            {
+                if (session.Status == "InProgress" && session.TimerSeconds > 0)
+                {
+                    session.CheckTimerExpired();
+                }
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public GameSession CreateSession(
+        string? gameType,
+        string? mode,
+        string? aiDifficulty,
+        string? p1Name,
+        string? p2Name,
+        bool isPublic = true,
+        int? customWidth = null,
+        int? customHeight = null,
+        int? timerSeconds = null
+    )
+    {
+        var session = new GameSession(
+            gameType,
+            mode,
+            aiDifficulty,
+            p1Name,
+            p2Name,
+            isPublic: isPublic,
+            customWidth: customWidth,
+            customHeight: customHeight,
+            timerSeconds: timerSeconds
+        );
         _sessions[session.Id] = session;
         _roomCodeToSessionId[session.RoomCode] = session.Id;
         return session;
@@ -39,5 +74,10 @@ public class SessionManager
             return GetSession(sessionId);
         }
         return null;
+    }
+
+    public void Dispose()
+    {
+        _timerCheck.Dispose();
     }
 }

@@ -6,7 +6,10 @@ public record CreateSessionRequest(
     string? AiDifficulty,  // "easy", "smart"
     string? Player1Name,
     string? Player2Name,
-    bool? IsPublic = true
+    bool? IsPublic = true,
+    int? CustomWidth = null,
+    int? CustomHeight = null,
+    int? TimerSeconds = 0
 );
 
 public record RoomSummaryDto(
@@ -45,6 +48,24 @@ public record UndoRequest(
     string? PlayerToken
 );
 
+public record ChatRequest(
+    string Text,
+    string? Sender
+);
+
+public record PredictionRequest(
+    int PlayerIndex // 0 for Player 1, 1 for Player 2
+);
+
+public record MoveStepDto(
+    int MoveNumber,
+    string PlayerName,
+    int? X,
+    int? Y,
+    string[][] Grid,
+    string? LastMoveText
+);
+
 public record SessionStateDto(
     string Id,
     string RoomCode,
@@ -69,5 +90,10 @@ public record SessionStateDto(
     int Player2Score = 0,
     int DrawScore = 0,
     int GameNumber = 1,
-    bool CanUndo = false
+    bool CanUndo = false,
+    int TimerSeconds = 0,
+    int? TurnTimeRemaining = null,
+    int Player1Predictions = 0,
+    int Player2Predictions = 0,
+    List<MoveStepDto>? MoveHistory = null
 );

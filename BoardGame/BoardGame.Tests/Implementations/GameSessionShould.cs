@@ -270,4 +270,64 @@ public class GameSessionShould
         session.LastMoveX.ShouldBe(3);
         session.LastMoveY.ShouldBe(5);
     }
+
+    [Test]
+    public void SupportCustomGridSizesAcrossAllGames()
+    {
+        // 4x4 Tic-Tac-Toe
+        var ttt4 = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob", customWidth: 4, customHeight: 4);
+        ttt4.Board.Width.ShouldBe(4);
+        ttt4.Board.Height.ShouldBe(4);
+
+        // 5x5 Tic-Tac-Toe
+        var ttt5 = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob", customWidth: 5, customHeight: 5);
+        ttt5.Board.Width.ShouldBe(5);
+        ttt5.Board.Height.ShouldBe(5);
+
+        // 8x7 Connect Four
+        var c4 = new GameSession("connect4", "pass-and-play", "smart", "Alice", "Bob", customWidth: 8, customHeight: 7);
+        c4.Board.Width.ShouldBe(8);
+        c4.Board.Height.ShouldBe(7);
+
+        // 6x5 Chomp
+        var chomp = new GameSession("chomp", "pass-and-play", "smart", "Alice", "Bob", customWidth: 6, customHeight: 5);
+        chomp.Board.Width.ShouldBe(6);
+        chomp.Board.Height.ShouldBe(5);
+    }
+
+    [Test]
+    public void RecordMoveHistoryStepByStep()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob");
+        session.MoveHistory.Count.ShouldBe(1); // Game start (move 0)
+        session.MoveHistory[0].MoveNumber.ShouldBe(0);
+
+        session.MakeMove(0, 0);
+        session.MoveHistory.Count.ShouldBe(2);
+        session.MoveHistory[1].MoveNumber.ShouldBe(1);
+        session.MoveHistory[1].X.ShouldBe(0);
+        session.MoveHistory[1].Y.ShouldBe(0);
+        session.MoveHistory[1].PlayerName.ShouldBe("Alice");
+
+        session.MakeMove(1, 1);
+        session.MoveHistory.Count.ShouldBe(3);
+        session.MoveHistory[2].MoveNumber.ShouldBe(2);
+        session.MoveHistory[2].PlayerName.ShouldBe("Bob");
+    }
+
+    [Test]
+    public void HandleTurnTimerAndPredictions()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob", timerSeconds: 15);
+        session.TimerSeconds.ShouldBe(15);
+        session.TurnExpiresAt.ShouldNotBeNull();
+
+        // Predictions
+        session.AddPrediction(0);
+        session.AddPrediction(0);
+        session.AddPrediction(1);
+
+        session.Player1Predictions.ShouldBe(2);
+        session.Player2Predictions.ShouldBe(1);
+    }
 }

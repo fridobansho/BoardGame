@@ -20,12 +20,24 @@
   let clientPieceTheme = localStorage.getItem('bg_piece_theme') || 'auto';
   let clientFavGame = localStorage.getItem('bg_fav_game') || 'connect4';
   let clientDefaultRole = localStorage.getItem('bg_default_role') || 'play';
+  let clientSoundPack = localStorage.getItem('bg_sound_pack') || 'arcade';
 
   // Selected config in modal
   let selectedGame = clientFavGame;
   let selectedMode = 'pass-and-play';
   let selectedDiff = 'smart';
+  let selectedGridWidth = 7;
+  let selectedGridHeight = 6;
+  let selectedTimerSeconds = 0;
   let roomAction = 'host';
+
+  // Runtime features state
+  let timerInterval = null;
+  let remainingTimerSeconds = 0;
+  let replayIndex = null;
+  let replayAutoPlayTimer = null;
+  let hasVotedPrediction = false;
+  let confettiAnimId = null;
 
   // DOM Elements
   const gameTitle = document.getElementById('game-title');
@@ -42,6 +54,48 @@
   const reactionWidget = document.getElementById('reaction-widget');
   const reactionPicker = document.getElementById('reaction-picker');
   const btnToggleReactions = document.getElementById('btn-toggle-reactions');
+
+  // Turn Timer DOM
+  const timerBarWrap = document.getElementById('timer-bar-wrap');
+  const timerLabel = document.getElementById('timer-label');
+  const timerCountdown = document.getElementById('timer-countdown');
+  const timerProgressFill = document.getElementById('timer-progress-fill');
+
+  // Crowd Predictions DOM
+  const predictionWrap = document.getElementById('prediction-wrap');
+  const predictionCounts = document.getElementById('prediction-counts');
+  const predictionFillP1 = document.getElementById('prediction-fill-p1');
+  const predictionFillP2 = document.getElementById('prediction-fill-p2');
+  const predictionActions = document.getElementById('prediction-actions');
+  const btnPredictP1 = document.getElementById('btn-predict-p1');
+  const btnPredictP2 = document.getElementById('btn-predict-p2');
+
+  // Replay Scrubber DOM
+  const replayBar = document.getElementById('replay-bar');
+  const replayStepText = document.getElementById('replay-step-text');
+  const btnReplayStart = document.getElementById('btn-replay-start');
+  const btnReplayPrev = document.getElementById('btn-replay-prev');
+  const btnReplayPlay = document.getElementById('btn-replay-play');
+  const btnReplayNext = document.getElementById('btn-replay-next');
+  const btnReplayLive = document.getElementById('btn-replay-live');
+
+  // Confetti Canvas & Speech Bubbles & Quick Chat DOM
+  const confettiCanvas = document.getElementById('confetti-canvas');
+  const speechBubbleContainer = document.getElementById('speech-bubble-container');
+  const chatWidget = document.getElementById('chat-widget');
+  const chatPicker = document.getElementById('chat-picker');
+  const btnToggleChat = document.getElementById('btn-toggle-chat');
+
+  // Modal Setup Sections DOM
+  const groupGridSize = document.getElementById('group-grid-size');
+  const groupTurnTimer = document.getElementById('group-turn-timer');
+
+  // Stats & Trophies DOM
+  const statMatches = document.getElementById('stat-matches');
+  const statWinrate = document.getElementById('stat-winrate');
+  const statStreak = document.getElementById('stat-streak');
+  const trophyGrid = document.getElementById('trophy-grid');
+  const btnResetStats = document.getElementById('btn-reset-stats');
 
   const btnOpenMenu = document.getElementById('btn-open-menu');
   const btnCloseMenu = document.getElementById('btn-close-menu');
@@ -148,7 +202,12 @@
       canUndo: Boolean(s.canUndo !== undefined ? s.canUndo : s.CanUndo),
       player1Name: s.player1Name || s.Player1Name || 'Player 1',
       player2Name: s.player2Name || s.Player2Name || 'Player 2',
-      isAiTurn: s.isAiTurn !== undefined ? s.isAiTurn : (s.IsAiTurn || false)
+      isAiTurn: s.isAiTurn !== undefined ? s.isAiTurn : (s.IsAiTurn || false),
+      timerSeconds: Number(s.timerSeconds !== undefined ? s.timerSeconds : (s.TimerSeconds || 0)),
+      turnTimeRemaining: Number(s.turnTimeRemaining !== undefined ? s.turnTimeRemaining : (s.TurnTimeRemaining || 0)),
+      player1Predictions: Number(s.player1Predictions !== undefined ? s.player1Predictions : (s.Player1Predictions || 0)),
+      player2Predictions: Number(s.player2Predictions !== undefined ? s.player2Predictions : (s.Player2Predictions || 0)),
+      moveHistory: s.moveHistory || s.MoveHistory || []
     };
   }
 
@@ -182,27 +241,110 @@
 
   function playSound(name) {
     if (!soundEnabled) return;
-    switch (name) {
-      case 'tap':
-        playTone(480, 0.08, 'triangle', 0.2);
-        break;
-      case 'drop':
-        playTone(320, 0.12, 'sine', 0.25);
-        setTimeout(() => playTone(240, 0.1, 'sine', 0.2), 60);
-        break;
-      case 'chomp':
-        playTone(180, 0.06, 'square', 0.2);
-        setTimeout(() => playTone(120, 0.08, 'sawtooth', 0.2), 50);
-        break;
-      case 'win':
-        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-          setTimeout(() => playTone(f, 0.25, 'triangle', 0.3), i * 110);
-        });
-        break;
-      case 'draw':
-        playTone(300, 0.15, 'sawtooth', 0.2);
-        setTimeout(() => playTone(220, 0.3, 'sawtooth', 0.2), 150);
-        break;
+    const pack = clientSoundPack || 'arcade';
+
+    if (pack === 'arcade') {
+      // 8-Bit Retro Chiptune
+      switch (name) {
+        case 'tap':
+          playTone(587.33, 0.05, 'square', 0.16);
+          break;
+        case 'drop':
+          playTone(440, 0.06, 'square', 0.2);
+          setTimeout(() => playTone(220, 0.09, 'square', 0.18), 45);
+          break;
+        case 'chomp':
+          playTone(220, 0.05, 'square', 0.22);
+          setTimeout(() => playTone(146.83, 0.07, 'sawtooth', 0.22), 35);
+          break;
+        case 'win':
+          [440, 554.37, 659.25, 880, 1108.73].forEach((f, i) => {
+            setTimeout(() => playTone(f, 0.16, 'square', 0.22), i * 85);
+          });
+          break;
+        case 'draw':
+          playTone(293.66, 0.14, 'sawtooth', 0.2);
+          setTimeout(() => playTone(207.65, 0.24, 'sawtooth', 0.2), 120);
+          break;
+        case 'tick':
+          playTone(784, 0.03, 'square', 0.1);
+          break;
+        case 'warning':
+          playTone(880, 0.09, 'sawtooth', 0.25);
+          break;
+        case 'chat':
+          playTone(523.25, 0.05, 'square', 0.16);
+          setTimeout(() => playTone(783.99, 0.08, 'square', 0.18), 50);
+          break;
+      }
+    } else if (pack === 'marimba') {
+      // Warm Acoustic Marimba
+      switch (name) {
+        case 'tap':
+          playTone(523.25, 0.12, 'sine', 0.25);
+          break;
+        case 'drop':
+          playTone(392, 0.16, 'sine', 0.28);
+          setTimeout(() => playTone(261.63, 0.2, 'sine', 0.22), 55);
+          break;
+        case 'chomp':
+          playTone(246.94, 0.1, 'sine', 0.26);
+          setTimeout(() => playTone(174.61, 0.16, 'triangle', 0.22), 40);
+          break;
+        case 'win':
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+            setTimeout(() => playTone(f, 0.32, 'sine', 0.26), i * 110);
+          });
+          break;
+        case 'draw':
+          playTone(349.23, 0.2, 'triangle', 0.22);
+          setTimeout(() => playTone(261.63, 0.35, 'sine', 0.2), 140);
+          break;
+        case 'tick':
+          playTone(880, 0.04, 'sine', 0.12);
+          break;
+        case 'warning':
+          playTone(698.46, 0.12, 'sine', 0.28);
+          break;
+        case 'chat':
+          playTone(659.25, 0.1, 'sine', 0.2);
+          setTimeout(() => playTone(880, 0.18, 'sine', 0.22), 60);
+          break;
+      }
+    } else {
+      // Tactile Mechanical Clicks
+      switch (name) {
+        case 'tap':
+          playTone(950, 0.025, 'triangle', 0.28);
+          break;
+        case 'drop':
+          playTone(220, 0.04, 'triangle', 0.3);
+          setTimeout(() => playTone(110, 0.06, 'sine', 0.32), 30);
+          break;
+        case 'chomp':
+          playTone(130, 0.04, 'square', 0.28);
+          setTimeout(() => playTone(85, 0.05, 'triangle', 0.28), 25);
+          break;
+        case 'win':
+          [440, 660, 880, 1320].forEach((f, i) => {
+            setTimeout(() => playTone(f, 0.1, 'triangle', 0.26), i * 75);
+          });
+          break;
+        case 'draw':
+          playTone(165, 0.09, 'sawtooth', 0.26);
+          setTimeout(() => playTone(110, 0.14, 'square', 0.22), 90);
+          break;
+        case 'tick':
+          playTone(1200, 0.018, 'triangle', 0.15);
+          break;
+        case 'warning':
+          playTone(493.88, 0.06, 'sawtooth', 0.32);
+          break;
+        case 'chat':
+          playTone(1100, 0.025, 'triangle', 0.22);
+          setTimeout(() => playTone(1650, 0.035, 'triangle', 0.24), 40);
+          break;
+      }
     }
   }
 
@@ -265,6 +407,536 @@
     }
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Lifetime Stats & Trophies System
+  const DEFAULT_STATS = {
+    matches: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    streak: 0,
+    bestStreak: 0,
+    gameWins: { connect4: 0, tictactoe: 0, chomp: 0 },
+    unlockedTrophies: []
+  };
+
+  const TROPHIES = [
+    { id: 'first_win', icon: '🥉', name: 'First Victory', desc: 'Win your first game in any mode' },
+    { id: 'streak_3', icon: '🔥', name: 'On Fire', desc: 'Achieve a 3-match win streak' },
+    { id: 'streak_5', icon: '⚡', name: 'Unstoppable', desc: 'Achieve a 5-match win streak' },
+    { id: 'master_c4', icon: '🔴', name: 'Connect King', desc: 'Win 3 Connect Four games' },
+    { id: 'master_ttt', icon: '❌', name: 'Grid Master', desc: 'Win 3 Tic-Tac-Toe games' },
+    { id: 'master_chomp', icon: '🍫', name: 'Sweet Tooth', desc: 'Win 3 Chomp games' },
+    { id: 'blitz_win', icon: '⏱️', name: 'Blitz Buster', desc: 'Win a game with turn timer enabled' },
+    { id: 'seer', icon: '🔮', name: 'Crowd Oracle', desc: 'Cast a prediction vote as a spectator' }
+  ];
+
+  function getStats() {
+    try {
+      const raw = localStorage.getItem('bg_stats');
+      if (raw) return { ...DEFAULT_STATS, ...JSON.parse(raw) };
+    } catch (e) { }
+    return { ...DEFAULT_STATS };
+  }
+
+  function saveStats(stats) {
+    try {
+      localStorage.setItem('bg_stats', JSON.stringify(stats));
+    } catch (e) { }
+  }
+
+  function recordGameResult(session) {
+    if (!session || isSpectator) return;
+    const stats = getStats();
+    stats.matches++;
+
+    const isP1 = (session.mode === 'vs-ai' || session.mode === 'pass-and-play' || !playerToken || playerToken === 'p1');
+    const myName = isP1 ? session.player1Name : session.player2Name;
+    const isWinner = session.winner && (session.winner === myName || (session.status === 'Finished' && ((isP1 && session.winner === session.player1Name) || (!isP1 && session.winner === session.player2Name))));
+
+    if (session.status === 'Draw') {
+      stats.draws++;
+      stats.streak = 0;
+    } else if (isWinner) {
+      stats.wins++;
+      stats.streak++;
+      if (stats.streak > stats.bestStreak) stats.bestStreak = stats.streak;
+      if (!stats.gameWins) stats.gameWins = { connect4: 0, tictactoe: 0, chomp: 0 };
+      stats.gameWins[session.gameType] = (stats.gameWins[session.gameType] || 0) + 1;
+
+      unlockTrophy(stats, 'first_win');
+      if (stats.streak >= 3) unlockTrophy(stats, 'streak_3');
+      if (stats.streak >= 5) unlockTrophy(stats, 'streak_5');
+      if ((stats.gameWins.connect4 || 0) >= 3) unlockTrophy(stats, 'master_c4');
+      if ((stats.gameWins.tictactoe || 0) >= 3) unlockTrophy(stats, 'master_ttt');
+      if ((stats.gameWins.chomp || 0) >= 3) unlockTrophy(stats, 'master_chomp');
+      if (session.timerSeconds > 0) unlockTrophy(stats, 'blitz_win');
+    } else {
+      stats.losses++;
+      stats.streak = 0;
+    }
+
+    saveStats(stats);
+  }
+
+  function unlockTrophy(stats, trophyId) {
+    if (!stats.unlockedTrophies) stats.unlockedTrophies = [];
+    if (!stats.unlockedTrophies.includes(trophyId)) {
+      stats.unlockedTrophies.push(trophyId);
+      const trophy = TROPHIES.find(t => t.id === trophyId);
+      if (trophy) {
+        showSpeechBubble(`🏆 Trophy Unlocked: ${trophy.name}!`, 'System');
+      }
+    }
+  }
+
+  function renderStatsUI() {
+    const stats = getStats();
+    if (statMatches) statMatches.textContent = stats.matches;
+    const winrate = stats.matches > 0 ? Math.round((stats.wins / stats.matches) * 100) : 0;
+    if (statWinrate) statWinrate.textContent = `${winrate}%`;
+    if (statStreak) statStreak.textContent = `🔥 ${stats.bestStreak}`;
+
+    if (trophyGrid) {
+      trophyGrid.innerHTML = '';
+      const unlockedSet = new Set(stats.unlockedTrophies || []);
+      TROPHIES.forEach(t => {
+        const isUnlocked = unlockedSet.has(t.id);
+        const card = document.createElement('div');
+        card.className = `trophy-card ${isUnlocked ? 'unlocked' : 'locked'}`;
+        card.innerHTML = `
+          <div class="trophy-icon">${t.icon}</div>
+          <div class="trophy-details">
+            <span class="trophy-name">${t.name}</span>
+            <span class="trophy-desc">${t.desc}</span>
+          </div>
+        `;
+        trophyGrid.appendChild(card);
+      });
+    }
+  }
+
+  function resetStats() {
+    if (confirm('Reset all lifetime stats and unlocked trophies?')) {
+      localStorage.removeItem('bg_stats');
+      renderStatsUI();
+      playSound('tap');
+    }
+  }
+
+  // Grid Size Options & Dynamic Pills
+  const GRID_OPTIONS = {
+    connect4: [
+      { label: '7×6 (Standard)', width: 7, height: 6 },
+      { label: '6×5 (Quick)', width: 6, height: 5 },
+      { label: '8×7 (Expanded)', width: 8, height: 7 }
+    ],
+    tictactoe: [
+      { label: '3×3 (Classic)', width: 3, height: 3 },
+      { label: '4×4 (4-in-a-row)', width: 4, height: 4 },
+      { label: '5×5 (Grand)', width: 5, height: 5 }
+    ],
+    chomp: [
+      { label: '5×4 (Standard)', width: 5, height: 4 },
+      { label: '4×3 (Bite-sized)', width: 4, height: 3 },
+      { label: '6×5 (Large)', width: 6, height: 5 },
+      { label: '7×4 (Wide)', width: 7, height: 4 }
+    ]
+  };
+
+  function updateGridSizePills(game) {
+    if (!groupGridSize) return;
+    groupGridSize.innerHTML = '';
+    const opts = GRID_OPTIONS[game] || GRID_OPTIONS.connect4;
+
+    let match = opts.find(o => o.width === selectedGridWidth && o.height === selectedGridHeight);
+    if (!match) {
+      match = opts[0];
+      selectedGridWidth = match.width;
+      selectedGridHeight = match.height;
+    }
+
+    opts.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = `pill-btn ${opt === match ? 'active' : ''}`;
+      btn.type = 'button';
+      btn.innerHTML = `<span>${opt.label}</span>`;
+      btn.addEventListener('click', () => {
+        groupGridSize.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedGridWidth = opt.width;
+        selectedGridHeight = opt.height;
+        playSound('tap');
+      });
+      groupGridSize.appendChild(btn);
+    });
+  }
+
+  // Fullscreen Confetti Particle FX
+  function startConfetti() {
+    if (!confettiCanvas) return;
+    const ctx = confettiCanvas.getContext('2d');
+    if (!ctx) return;
+    confettiCanvas.width = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+
+    const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#38bdf8', '#a855f7', '#fbbf24'];
+    const particles = [];
+    const count = 130;
+
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: confettiCanvas.width * Math.random(),
+        y: confettiCanvas.height * 0.25 + (Math.random() * 20),
+        w: 6 + Math.random() * 8,
+        h: 6 + Math.random() * 8,
+        vx: (Math.random() - 0.5) * 8,
+        vy: -(Math.random() * 9 + 4),
+        color: colors[Math.floor(Math.random() * colors.length)],
+        rotation: Math.random() * 360,
+        rSpeed: (Math.random() - 0.5) * 10,
+        opacity: 1,
+        shape: Math.random() > 0.4 ? 'rect' : 'circle'
+      });
+    }
+
+    if (confettiAnimId) cancelAnimationFrame(confettiAnimId);
+
+    function frame() {
+      ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      let aliveCount = 0;
+
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.26;
+        p.vx *= 0.99;
+        p.rotation += p.rSpeed;
+        if (p.y > confettiCanvas.height * 0.6) {
+          p.opacity -= 0.016;
+        }
+
+        if (p.opacity > 0 && p.y < confettiCanvas.height + 60) {
+          aliveCount++;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rotation * Math.PI) / 180);
+          ctx.globalAlpha = Math.max(0, p.opacity);
+          ctx.fillStyle = p.color;
+
+          if (p.shape === 'circle') {
+            ctx.beginPath();
+            ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          }
+          ctx.restore();
+        }
+      }
+
+      if (aliveCount > 0) {
+        confettiAnimId = requestAnimationFrame(frame);
+      } else {
+        ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        confettiAnimId = null;
+      }
+    }
+
+    confettiAnimId = requestAnimationFrame(frame);
+  }
+
+  // Quick Speech Bubbles & Chat
+  function showSpeechBubble(text, sender) {
+    if (!speechBubbleContainer) return;
+    const bubble = document.createElement('div');
+    bubble.className = 'speech-bubble';
+    bubble.innerHTML = `
+      <span class="speech-bubble-sender">${escapeHtml(sender || 'Player')}</span>
+      <span>${escapeHtml(text)}</span>
+    `;
+    speechBubbleContainer.appendChild(bubble);
+    playSound('chat');
+    setTimeout(() => {
+      bubble.remove();
+    }, 3800);
+  }
+
+  async function sendQuickChat(text) {
+    if (!currentSession || !text) return;
+    try {
+      await fetch(`/api/session/${currentSession.id}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          sender: clientPlayerName
+        })
+      });
+    } catch (e) {
+      console.warn('Chat send failed:', e);
+    }
+  }
+
+  // Spectator Predictions Poll
+  function updatePredictionBar(p1Votes, p2Votes) {
+    if (!predictionWrap) return;
+    const p1 = Number(p1Votes || 0);
+    const p2 = Number(p2Votes || 0);
+    const total = p1 + p2;
+    if (total === 0) {
+      if (predictionFillP1) predictionFillP1.style.width = '50%';
+      if (predictionFillP2) predictionFillP2.style.width = '50%';
+      if (predictionCounts) predictionCounts.textContent = '0 votes';
+    } else {
+      const p1Pct = Math.round((p1 / total) * 100);
+      const p2Pct = 100 - p1Pct;
+      if (predictionFillP1) predictionFillP1.style.width = `${p1Pct}%`;
+      if (predictionFillP2) predictionFillP2.style.width = `${p2Pct}%`;
+      if (predictionCounts) predictionCounts.textContent = `${p1} (${p1Pct}%) vs ${p2} (${p2Pct}%)`;
+    }
+  }
+
+  async function sendPrediction(predictedPlayer) {
+    if (!currentSession) return;
+    try {
+      const res = await fetch(`/api/session/${currentSession.id}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          predictedPlayer: Number(predictedPlayer)
+        })
+      });
+      if (res.ok) {
+        hasVotedPrediction = true;
+        if (btnPredictP1) btnPredictP1.disabled = true;
+        if (btnPredictP2) btnPredictP2.disabled = true;
+        playSound('tap');
+        triggerHaptic(25);
+        const stats = getStats();
+        unlockTrophy(stats, 'seer');
+        saveStats(stats);
+      }
+    } catch (e) {
+      console.warn('Prediction send failed:', e);
+    }
+  }
+
+  // Turn Timer Loop
+  function updateTurnTimer(session) {
+    if (!timerBarWrap) return;
+    if (!session || session.timerSeconds <= 0 || session.status !== 'InProgress') {
+      timerBarWrap.classList.add('hidden');
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      return;
+    }
+
+    timerBarWrap.classList.remove('hidden');
+    remainingTimerSeconds = session.turnTimeRemaining !== undefined ? session.turnTimeRemaining : session.timerSeconds;
+
+    if (timerCountdown) timerCountdown.textContent = `${Math.ceil(remainingTimerSeconds)}s`;
+    const pct = Math.max(0, Math.min(100, (remainingTimerSeconds / session.timerSeconds) * 100));
+    if (timerProgressFill) {
+      timerProgressFill.style.width = `${pct}%`;
+      timerProgressFill.classList.toggle('warning', remainingTimerSeconds <= 5);
+    }
+    if (timerCountdown) {
+      timerCountdown.classList.toggle('warning', remainingTimerSeconds <= 5);
+    }
+
+    if (timerInterval) clearInterval(timerInterval);
+
+    let lastSec = Math.ceil(remainingTimerSeconds);
+    timerInterval = setInterval(() => {
+      remainingTimerSeconds -= 0.25;
+      if (remainingTimerSeconds < 0) remainingTimerSeconds = 0;
+
+      const currentSec = Math.ceil(remainingTimerSeconds);
+      if (timerCountdown) timerCountdown.textContent = `${currentSec}s`;
+      const curPct = Math.max(0, Math.min(100, (remainingTimerSeconds / session.timerSeconds) * 100));
+      if (timerProgressFill) {
+        timerProgressFill.style.width = `${curPct}%`;
+        timerProgressFill.classList.toggle('warning', remainingTimerSeconds <= 5);
+      }
+      if (timerCountdown) {
+        timerCountdown.classList.toggle('warning', remainingTimerSeconds <= 5);
+      }
+
+      if (currentSec !== lastSec) {
+        lastSec = currentSec;
+        if (currentSec <= 5 && currentSec > 0) {
+          playSound('tick');
+          triggerHaptic(15);
+        }
+      }
+
+      if (remainingTimerSeconds <= 0) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        playSound('warning');
+      }
+    }, 250);
+  }
+
+  // Replay Scrubber & Board Simulation
+  function simulateBoardAtStep(session, stepCount) {
+    const width = session.width;
+    const height = session.height;
+    const gameType = session.gameType;
+
+    const grid = [];
+    for (let y = 0; y < height; y++) {
+      grid.push(new Array(width).fill(' '));
+    }
+    if (gameType === 'chomp') {
+      grid[0][0] = 'P';
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (x !== 0 || y !== 0) grid[y][x] = 'C';
+        }
+      }
+    }
+
+    const history = session.moveHistory || [];
+    const limit = Math.min(stepCount, history.length);
+    let lastX = null;
+    let lastY = null;
+
+    for (let i = 0; i < limit; i++) {
+      const step = history[i];
+      const px = Number(step.x !== undefined ? step.x : step.X);
+      const py = Number(step.y !== undefined ? step.y : step.Y);
+      const piece = step.piece || step.Piece || (i % 2 === 0 ? 'R' : 'Y');
+
+      if (gameType === 'connect4') {
+        for (let r = height - 1; r >= 0; r--) {
+          if (grid[r][px] === ' ') {
+            grid[r][px] = (piece === 'R' || piece === 'X' || piece === 'P1') ? 'R' : 'Y';
+            lastX = px;
+            lastY = r;
+            break;
+          }
+        }
+      } else if (gameType === 'tictactoe') {
+        if (py >= 0 && py < height && px >= 0 && px < width) {
+          grid[py][px] = (piece === 'X' || piece === 'R' || piece === 'P1') ? 'X' : 'O';
+          lastX = px;
+          lastY = py;
+        }
+      } else if (gameType === 'chomp') {
+        if (py >= 0 && py < height && px >= 0 && px < width) {
+          for (let r = py; r < height; r++) {
+            for (let c = px; c < width; c++) {
+              grid[r][c] = ' ';
+            }
+          }
+          lastX = px;
+          lastY = py;
+        }
+      }
+    }
+
+    return {
+      ...session,
+      grid: grid,
+      lastMoveX: lastX,
+      lastMoveY: lastY,
+      status: (limit === history.length) ? session.status : 'InProgress',
+      isAiTurn: false
+    };
+  }
+
+  function scrubReplay(action) {
+    if (!currentSession || !currentSession.moveHistory) return;
+    const total = currentSession.moveHistory.length;
+    if (total === 0) return;
+
+    let target = replayIndex !== null ? replayIndex : total;
+
+    if (action === 'start') {
+      target = 0;
+    } else if (action === 'prev') {
+      target = Math.max(0, target - 1);
+    } else if (action === 'next') {
+      target = Math.min(total, target + 1);
+    } else if (typeof action === 'number') {
+      target = Math.max(0, Math.min(total, action));
+    }
+
+    if (target === total) {
+      returnToLive();
+      return;
+    }
+
+    replayIndex = target;
+    if (btnReplayLive) btnReplayLive.classList.remove('hidden');
+    if (replayStepText) replayStepText.textContent = `Replay: Move ${replayIndex} of ${total}`;
+
+    const sim = simulateBoardAtStep(currentSession, replayIndex);
+    renderBoard(sim);
+    playSound('tap');
+  }
+
+  function returnToLive() {
+    replayIndex = null;
+    if (replayAutoPlayTimer) {
+      clearInterval(replayAutoPlayTimer);
+      replayAutoPlayTimer = null;
+      if (btnReplayPlay) btnReplayPlay.textContent = '▶️';
+    }
+    if (btnReplayLive) btnReplayLive.classList.add('hidden');
+    if (currentSession) {
+      const total = currentSession.moveHistory ? currentSession.moveHistory.length : 0;
+      if (replayStepText) replayStepText.textContent = `Live • ${total} moves`;
+      renderBoard(currentSession);
+    }
+  }
+
+  function toggleAutoPlay() {
+    if (replayAutoPlayTimer) {
+      clearInterval(replayAutoPlayTimer);
+      replayAutoPlayTimer = null;
+      if (btnReplayPlay) btnReplayPlay.textContent = '▶️';
+      return;
+    }
+
+    if (!currentSession || !currentSession.moveHistory) return;
+    const total = currentSession.moveHistory.length;
+    if (total === 0) return;
+
+    if (replayIndex === null || replayIndex >= total) {
+      replayIndex = 0;
+      scrubReplay(0);
+    }
+
+    if (btnReplayPlay) btnReplayPlay.textContent = '⏸️';
+
+    replayAutoPlayTimer = setInterval(() => {
+      if (!currentSession || !currentSession.moveHistory) {
+        toggleAutoPlay();
+        return;
+      }
+      const max = currentSession.moveHistory.length;
+      if (replayIndex === null || replayIndex >= max) {
+        returnToLive();
+        return;
+      }
+      scrubReplay('next');
+    }, 750);
+  }
+
   function openSettingsModal() {
     if (!modalSettings) return;
     if (settingPlayerName) settingPlayerName.value = clientPlayerName;
@@ -298,6 +970,13 @@
     document.querySelectorAll('#group-setting-sound .pill-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.sound === (soundEnabled ? 'on' : 'off'));
     });
+
+    // Set sound pack active pill
+    document.querySelectorAll('#group-setting-sound-pack .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.pack === clientSoundPack);
+    });
+
+    renderStatsUI();
 
     modalSettings.classList.remove('hidden');
   }
@@ -339,10 +1018,10 @@
       clientFavGame = fav;
       selectedGame = fav;
       localStorage.setItem('bg_fav_game', fav);
-      // Also update the active game pill in setup modal
       document.querySelectorAll('#group-game .pill-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.game === fav);
       });
+      updateGridSizePills(fav);
     }
 
     const activeRoleBtn = document.querySelector('#group-setting-role .pill-btn.active');
@@ -358,6 +1037,13 @@
       soundEnabled = enable;
       localStorage.setItem('bg_sound', enable);
       updateSoundUI();
+    }
+
+    const activePackBtn = document.querySelector('#group-setting-sound-pack .pill-btn.active');
+    if (activePackBtn) {
+      const pk = activePackBtn.dataset.pack || 'arcade';
+      clientSoundPack = pk;
+      localStorage.setItem('bg_sound_pack', pk);
     }
 
     playSound('tap');
@@ -382,8 +1068,10 @@
   }
 
   // Create new session
-  async function createSession(game, mode, diff, p1, p2, isPublic = true) {
+  async function createSession(game, mode, diff, p1, p2, isPublic = true, customWidth = null, customHeight = null, timerSeconds = 0) {
     isSpectator = false;
+    hasVotedPrediction = false;
+    returnToLive();
     try {
       const res = await fetch('/api/session/new', {
         method: 'POST',
@@ -394,7 +1082,10 @@
           aiDifficulty: diff,
           player1Name: p1,
           player2Name: p2,
-          isPublic: Boolean(isPublic)
+          isPublic: Boolean(isPublic),
+          customWidth: customWidth ? Number(customWidth) : null,
+          customHeight: customHeight ? Number(customHeight) : null,
+          timerSeconds: Number(timerSeconds || 0)
         })
       });
 
@@ -415,7 +1106,10 @@
         gameType: game,
         mode: mode,
         player1Name: p1 || 'Player 1',
-        player2Name: p2 || 'Player 2'
+        player2Name: p2 || 'Player 2',
+        width: customWidth,
+        height: customHeight,
+        timerSeconds: timerSeconds
       });
       onSessionUpdated(fallback);
     }
@@ -680,6 +1374,18 @@
           if (data && data.emoji) showFloatingEmoji(data.emoji);
         } catch (e) { }
       });
+      sseSource.addEventListener('chat', function (event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.text) showSpeechBubble(data.text, data.sender);
+        } catch (e) { }
+      });
+      sseSource.addEventListener('prediction', function (event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data) updatePredictionBar(data.p1, data.p2);
+        } catch (e) { }
+      });
       sseSource.onerror = function () {
         setConnectionStatus('reconnecting');
       };
@@ -797,8 +1503,46 @@
     // Status Banner
     updateStatusBanner(session);
 
-    // Render Board
-    renderBoard(session);
+    // Turn Timer update
+    updateTurnTimer(session);
+
+    // Spectator Prediction Poll
+    if (predictionWrap) {
+      const showPrediction = isSpectator || session.mode === 'room' || session.spectatorCount > 0;
+      predictionWrap.classList.toggle('hidden', !showPrediction);
+      if (showPrediction) {
+        updatePredictionBar(session.player1Predictions, session.player2Predictions);
+        if (predictionActions) {
+          predictionActions.classList.toggle('hidden', !isSpectator || session.status !== 'InProgress');
+          if (btnPredictP1) {
+            btnPredictP1.textContent = `Vote ${session.player1Name}`;
+            btnPredictP1.disabled = hasVotedPrediction;
+          }
+          if (btnPredictP2) {
+            btnPredictP2.textContent = `Vote ${session.player2Name}`;
+            btnPredictP2.disabled = hasVotedPrediction;
+          }
+        }
+      }
+    }
+
+    // Replay Scrubber Bar
+    if (replayBar) {
+      const hasHistory = session.moveHistory && session.moveHistory.length > 0;
+      replayBar.classList.toggle('hidden', !hasHistory);
+      if (hasHistory && replayIndex === null) {
+        if (replayStepText) replayStepText.textContent = `Live • Move ${session.moveHistory.length} of ${session.moveHistory.length}`;
+        if (btnReplayLive) btnReplayLive.classList.add('hidden');
+      }
+    }
+
+    // Render Board (or preserve simulated replay view if currently reviewing)
+    if (replayIndex !== null) {
+      const sim = simulateBoardAtStep(session, replayIndex);
+      renderBoard(sim);
+    } else {
+      renderBoard(session);
+    }
 
     // Sound effect on new move
     if (session.moveCount > prevMoveCount) {
@@ -847,7 +1591,10 @@
   }
 
   function handleGameOver(session) {
+    recordGameResult(session);
+
     if (session.status === 'Finished') {
+      startConfetti();
       playSound('win');
       triggerHaptic([50, 100, 50, 100, 150]);
       gameOverIcon.textContent = '🏆';
@@ -965,6 +1712,11 @@
     grid.className = 'ttt-grid';
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
     grid.style.gridTemplateRows = `repeat(${session.height}, 1fr)`;
+    if (session.width >= 5) {
+      grid.classList.add('ttt-5x5');
+    } else if (session.width >= 4) {
+      grid.classList.add('ttt-4x4');
+    }
 
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
@@ -1246,6 +1998,85 @@
       });
     });
 
+    // Settings Sound Pack pills
+    document.querySelectorAll('#group-setting-sound-pack .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-sound-pack .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        clientSoundPack = btn.dataset.pack || 'arcade';
+        playSound('tap');
+      });
+    });
+
+    // Reset stats button
+    if (btnResetStats) {
+      btnResetStats.addEventListener('click', () => resetStats());
+    }
+
+    // Toggle quick chat picker
+    if (btnToggleChat && chatPicker) {
+      btnToggleChat.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willShow = chatPicker.classList.contains('hidden');
+        chatPicker.classList.toggle('hidden', !willShow);
+        btnToggleChat.classList.toggle('active', willShow);
+      });
+    }
+
+    // Quick chat phrases
+    document.querySelectorAll('.chat-phrase-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const text = btn.dataset.text || btn.textContent.trim();
+        if (text) sendQuickChat(text);
+        if (chatPicker) chatPicker.classList.add('hidden');
+        if (btnToggleChat) btnToggleChat.classList.remove('active');
+      });
+    });
+
+    // Close chat picker when clicking outside
+    document.addEventListener('click', (e) => {
+      if (chatWidget && !chatWidget.contains(e.target)) {
+        if (chatPicker) chatPicker.classList.add('hidden');
+        if (btnToggleChat) btnToggleChat.classList.remove('active');
+      }
+    });
+
+    // Spectator Predictions buttons
+    if (btnPredictP1) {
+      btnPredictP1.addEventListener('click', () => sendPrediction(1));
+    }
+    if (btnPredictP2) {
+      btnPredictP2.addEventListener('click', () => sendPrediction(2));
+    }
+
+    // Replay Scrubber controls
+    if (btnReplayStart) {
+      btnReplayStart.addEventListener('click', () => scrubReplay('start'));
+    }
+    if (btnReplayPrev) {
+      btnReplayPrev.addEventListener('click', () => scrubReplay('prev'));
+    }
+    if (btnReplayNext) {
+      btnReplayNext.addEventListener('click', () => scrubReplay('next'));
+    }
+    if (btnReplayPlay) {
+      btnReplayPlay.addEventListener('click', () => toggleAutoPlay());
+    }
+    if (btnReplayLive) {
+      btnReplayLive.addEventListener('click', () => returnToLive());
+    }
+
+    // Turn timer pills
+    document.querySelectorAll('#group-turn-timer .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-turn-timer .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedTimerSeconds = Number(btn.dataset.timer || 0);
+        playSound('tap');
+      });
+    });
+
     btnChangeGame.addEventListener('click', () => {
       gameOverModal.classList.add('hidden');
       modalMenu.classList.remove('hidden');
@@ -1257,6 +2088,8 @@
         document.querySelectorAll('#group-game .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedGame = btn.dataset.game;
+        updateGridSizePills(selectedGame);
+        playSound('tap');
       });
     });
 
@@ -1333,15 +2166,18 @@
         selectedDiff,
         inputP1.value.trim() || 'Player 1',
         inputP2.value.trim() || 'Player 2',
-        isPublic
+        isPublic,
+        selectedGridWidth,
+        selectedGridHeight,
+        selectedTimerSeconds
       );
     });
 
     // Quick Rules button
     document.getElementById('btn-quick-rules').addEventListener('click', () => {
       const rules = {
-        connect4: '🔴 CONNECT FOUR:\nTake turns dropping discs into the 7 columns.\nFirst player to connect 4 discs horizontally, vertically, or diagonally wins!',
-        tictactoe: '❌ TIC-TAC-TOE:\nTake turns marking squares in the 3x3 grid.\nAlign 3 marks in a row to win!',
+        connect4: '🔴 CONNECT FOUR:\nTake turns dropping discs into columns.\nFirst player to connect 4 discs horizontally, vertically, or diagonally wins!',
+        tictactoe: '❌ TIC-TAC-TOE:\nTake turns marking squares in the grid.\nAlign a full line in a row (or 4 in a row on 4x4/5x5) to win!',
         chomp: '🍫 CHOMP:\nTwo players eat blocks of chocolate. Chomping a block removes everything to its right and below.\nThe top-left block ☠️ is POISON!\nWhoever is forced to eat the poison block loses!'
       };
       alert(rules[currentSession?.gameType || 'connect4']);
@@ -1354,6 +2190,8 @@
     if (inputP1) inputP1.value = clientPlayerName;
     updateSoundUI();
     setupEvents();
+    updateGridSizePills(clientFavGame);
+    renderStatsUI();
 
     // Set initial active game pill to favorite game
     document.querySelectorAll('#group-game .pill-btn').forEach(b => {
@@ -1381,11 +2219,11 @@
       if (!resumed) {
         if (clientDefaultRole === 'spectate') {
           // Open Wi-Fi lobby directly when client prefers spectating by default
-          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2');
+          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
           openLobby();
         } else {
           // Start favorite game by default
-          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2');
+          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
         }
       }
     }

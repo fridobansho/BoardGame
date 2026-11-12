@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/css/style.css?v=9">
+  <link rel="stylesheet" href="/css/style.css?v=11">
 </head>
 <body>
   <div class="app-container">
@@ -65,8 +65,55 @@
       </div>
     </div>
 
+    <!-- Turn Timer Bar -->
+    <div id="timer-bar-wrap" class="timer-bar-wrap hidden">
+      <div class="timer-info-row">
+        <span id="timer-label">⏱️ Turn Timer</span>
+        <span id="timer-countdown">15s</span>
+      </div>
+      <div class="timer-progress-bg">
+        <div id="timer-progress-fill" class="timer-progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Spectator Prediction Bar -->
+    <div id="prediction-wrap" class="prediction-wrap hidden">
+      <div class="prediction-header">
+        <span class="prediction-title">📊 Crowd Prediction</span>
+        <span id="prediction-counts">0 votes</span>
+      </div>
+      <div class="prediction-bar-container">
+        <div id="prediction-fill-p1" class="prediction-fill-p1" style="width: 50%;"></div>
+        <div id="prediction-fill-p2" class="prediction-fill-p2" style="width: 50%;"></div>
+      </div>
+      <div id="prediction-actions" class="prediction-actions hidden">
+        <button id="btn-predict-p1" class="btn btn-xs btn-p1-predict">Vote P1</button>
+        <button id="btn-predict-p2" class="btn btn-xs btn-p2-predict">Vote P2</button>
+      </div>
+    </div>
+
+    <!-- Replay Scrubber Controls -->
+    <div id="replay-bar" class="replay-bar hidden">
+      <div class="replay-step-info">
+        <span id="replay-step-text">Replay: Move 0 of 0</span>
+      </div>
+      <div class="replay-controls">
+        <button id="btn-replay-start" class="btn btn-xs btn-secondary" title="First Move">⏮️</button>
+        <button id="btn-replay-prev" class="btn btn-xs btn-secondary" title="Previous Move">◀</button>
+        <button id="btn-replay-play" class="btn btn-xs btn-secondary" title="Auto Play">▶️</button>
+        <button id="btn-replay-next" class="btn btn-xs btn-secondary" title="Next Move">▶</button>
+        <button id="btn-replay-live" class="btn btn-xs btn-primary" title="Return to Live">⏭️ Live</button>
+      </div>
+    </div>
+
     <!-- Main Game Board Container -->
     <main class="board-viewport">
+      <!-- Fullscreen Victory Confetti Canvas -->
+      <canvas id="confetti-canvas" class="confetti-canvas pointer-events-none"></canvas>
+
+      <!-- Speech Bubbles Container -->
+      <div id="speech-bubble-container" class="speech-bubble-container pointer-events-none"></div>
+
       <!-- Floating Emojis Overlay -->
       <div id="reaction-container" class="reaction-container"></div>
 
@@ -74,19 +121,38 @@
         <!-- Rendered dynamically by JS -->
       </div>
 
-      <!-- Floating Reactions Trigger & Autohiding Picker -->
-      <div id="reaction-widget" class="reaction-widget">
-        <div id="reaction-picker" class="reaction-picker hidden">
-          <button class="reaction-btn" data-emoji="👏" title="Cheer">👏</button>
-          <button class="reaction-btn" data-emoji="🔥" title="Fire">🔥</button>
-          <button class="reaction-btn" data-emoji="😮" title="Wow">😮</button>
-          <button class="reaction-btn" data-emoji="😂" title="Laugh">😂</button>
-          <button class="reaction-btn" data-emoji="🧠" title="Big Brain">🧠</button>
-          <button class="reaction-btn" data-emoji="🤝" title="Good Game">🤝</button>
+      <!-- Floating Widgets (Reactions & Quick Chat) -->
+      <div class="floating-widgets-bar">
+        <!-- Floating Chat Widget -->
+        <div id="chat-widget" class="chat-widget">
+          <div id="chat-picker" class="chat-picker hidden">
+            <button class="chat-phrase-btn" data-text="Nice move! 👏">Nice move! 👏</button>
+            <button class="chat-phrase-btn" data-text="Good game! 🤝">Good game! 🤝</button>
+            <button class="chat-phrase-btn" data-text="Rematch? ⚔️">Rematch? ⚔️</button>
+            <button class="chat-phrase-btn" data-text="Uh oh... 😅">Uh oh... 😅</button>
+            <button class="chat-phrase-btn" data-text="Thinking... 🤔">Thinking... 🤔</button>
+            <button class="chat-phrase-btn" data-text="Watch this! 😎">Watch this! 😎</button>
+            <button class="chat-phrase-btn" data-text="Close one! 🎯">Close one! 🎯</button>
+          </div>
+          <button id="btn-toggle-chat" class="chat-trigger-btn" title="Quick Chat" aria-label="Quick Chat">
+            <span>💬</span>
+          </button>
         </div>
-        <button id="btn-toggle-reactions" class="reaction-trigger-btn" title="React with emoji" aria-label="React with emoji">
-          <span>🎉</span>
-        </button>
+
+        <!-- Floating Reactions Widget -->
+        <div id="reaction-widget" class="reaction-widget">
+          <div id="reaction-picker" class="reaction-picker hidden">
+            <button class="reaction-btn" data-emoji="👏" title="Cheer">👏</button>
+            <button class="reaction-btn" data-emoji="🔥" title="Fire">🔥</button>
+            <button class="reaction-btn" data-emoji="😮" title="Wow">😮</button>
+            <button class="reaction-btn" data-emoji="😂" title="Laugh">😂</button>
+            <button class="reaction-btn" data-emoji="🧠" title="Big Brain">🧠</button>
+            <button class="reaction-btn" data-emoji="🤝" title="Good Game">🤝</button>
+          </div>
+          <button id="btn-toggle-reactions" class="reaction-trigger-btn" title="React with emoji" aria-label="React with emoji">
+            <span>🎉</span>
+          </button>
+        </div>
       </div>
     </main>
 
@@ -192,6 +258,33 @@
             <input type="checkbox" id="chk-share-public" checked>
             <span>📡 Share game to Wi-Fi lobby (spectate / join)</span>
           </label>
+        </div>
+
+        <!-- Board / Grid Size -->
+        <div id="sec-grid-size" class="form-section">
+          <label class="section-label">Board Grid Size</label>
+          <div class="pill-group" id="group-grid-size">
+            <!-- Populated dynamically based on game type -->
+          </div>
+        </div>
+
+        <!-- Turn Timer -->
+        <div id="sec-turn-timer" class="form-section">
+          <label class="section-label">Turn Timer</label>
+          <div class="pill-group" id="group-turn-timer">
+            <button class="pill-btn active" data-timer="0">
+              <span>⏱️ Off</span>
+            </button>
+            <button class="pill-btn" data-timer="15">
+              <span>⚡ 15s</span>
+            </button>
+            <button class="pill-btn" data-timer="30">
+              <span>⏳ 30s</span>
+            </button>
+            <button class="pill-btn" data-timer="60">
+              <span>🕐 60s</span>
+            </button>
+          </div>
         </div>
 
         <!-- Player Names -->
@@ -426,6 +519,51 @@
           </div>
           <small class="setting-hint">Toggle all game audio effects, moves, and victory chimes.</small>
         </div>
+
+        <!-- 8. Sound Pack / Audio Style -->
+        <div class="form-section">
+          <label class="section-label">Audio Style / Pack</label>
+          <div class="pill-group" id="group-setting-sound-pack">
+            <button class="pill-btn active" data-pack="arcade">
+              <span class="pill-icon">👾</span>
+              <span>8-Bit Retro</span>
+            </button>
+            <button class="pill-btn" data-pack="marimba">
+              <span class="pill-icon">🎶</span>
+              <span>Marimba</span>
+            </button>
+            <button class="pill-btn" data-pack="tactile">
+              <span class="pill-icon">⌨️</span>
+              <span>Tactile</span>
+            </button>
+          </div>
+          <small class="setting-hint">Synthesized Web Audio style for drops, moves, and chimes.</small>
+        </div>
+
+        <!-- 9. Lifetime Stats & Trophies -->
+        <div class="form-section">
+          <div class="stats-header-row">
+            <label class="section-label">Lifetime Stats &amp; Trophies</label>
+            <button id="btn-reset-stats" type="button" class="btn btn-xs btn-secondary">Reset Stats</button>
+          </div>
+          <div class="stats-overview-grid">
+            <div class="stat-box">
+              <span class="stat-val" id="stat-matches">0</span>
+              <span class="stat-lbl">Matches</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-val" id="stat-winrate">0%</span>
+              <span class="stat-lbl">Win Rate</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-val" id="stat-streak">🔥 0</span>
+              <span class="stat-lbl">Best Streak</span>
+            </div>
+          </div>
+          <div class="trophy-grid" id="trophy-grid">
+            <!-- Dynamic trophies rendered by JS -->
+          </div>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -434,6 +572,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=9"></script>
+  <script src="/js/app.js?v=11"></script>
 </body>
 </html>
