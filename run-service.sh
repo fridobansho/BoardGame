@@ -25,7 +25,9 @@ PORT="${PORT:-5000}"
 URLS="${URLS:-http://0.0.0.0:${PORT}}"
 
 if [ -f "$SCRIPT_DIR/publish/BoardGame.Web.dll" ]; then
+    cd "$SCRIPT_DIR/publish"
     exec "$DOTNET_BIN" "$SCRIPT_DIR/publish/BoardGame.Web.dll" --urls "$URLS" "$@"
 else
+    cd "$SCRIPT_DIR/BoardGame/BoardGame.Web"
     exec "$DOTNET_BIN" run --project "$SCRIPT_DIR/BoardGame/BoardGame.Web/BoardGame.Web.csproj" --no-restore --urls "$URLS" "$@"
 fi

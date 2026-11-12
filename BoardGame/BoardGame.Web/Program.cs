@@ -4,7 +4,32 @@ using System.Text.Json;
 using BoardGame.Web.Models;
 using BoardGame.Web.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// Dynamically locate content root directory containing wwwroot
+string? contentRoot = null;
+var candidates = new[]
+{
+    AppContext.BaseDirectory,
+    Directory.GetCurrentDirectory(),
+    Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+    Path.Combine(Directory.GetCurrentDirectory(), "publish"),
+    Path.Combine(Directory.GetCurrentDirectory(), "BoardGame", "BoardGame.Web"),
+    Path.Combine(AppContext.BaseDirectory, "..", "..", "..")
+};
+
+foreach (var dir in candidates)
+{
+    if (Directory.Exists(Path.Combine(dir, "wwwroot")))
+    {
+        contentRoot = Path.GetFullPath(dir);
+        break;
+    }
+}
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = contentRoot ?? Directory.GetCurrentDirectory()
+});
 
 // Native systemd service integration (sd_notify, lifecycle, journal logging)
 builder.Host.UseSystemd();
@@ -195,5 +220,7 @@ app.MapGet("/api/info", () =>
         localIps = ips
     });
 });
+
+app.MapFallbackToFile("index.html");
 
 app.Run();
