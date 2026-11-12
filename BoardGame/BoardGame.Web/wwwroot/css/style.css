@@ -31,6 +31,61 @@
   --touch-target: 48px;
 }
 
+/* Theme Overrides */
+[data-theme="oled"] {
+  --bg-primary: #000000;
+  --bg-secondary: #0c0c0c;
+  --bg-card: rgba(18, 18, 18, 0.95);
+  --border-color: rgba(255, 255, 255, 0.14);
+  --border-glow: rgba(99, 102, 241, 0.4);
+}
+
+[data-theme="oled"] .app-container {
+  background: #000000 !important;
+}
+
+[data-theme="oled"] .modal-content {
+  background: #0d0d0d !important;
+}
+
+[data-theme="emerald"] {
+  --bg-primary: #04140e;
+  --bg-secondary: #09261a;
+  --bg-card: rgba(14, 46, 32, 0.8);
+  --border-color: rgba(52, 211, 153, 0.18);
+  --border-glow: rgba(52, 211, 153, 0.4);
+  --accent-blue: #10b981;
+  --accent-indigo: #059669;
+  --accent-purple: #10b981;
+}
+
+[data-theme="emerald"] .app-container {
+  background: radial-gradient(circle at 50% 0%, #0d3d29 0%, #04140e 65%) !important;
+}
+
+[data-theme="emerald"] .modal-content {
+  background: #0b251a !important;
+}
+
+[data-theme="sunset"] {
+  --bg-primary: #15081b;
+  --bg-secondary: #260b30;
+  --bg-card: rgba(48, 16, 61, 0.8);
+  --border-color: rgba(244, 63, 94, 0.22);
+  --border-glow: rgba(244, 63, 94, 0.4);
+  --accent-blue: #f43f5e;
+  --accent-indigo: #e11d48;
+  --accent-purple: #be185d;
+}
+
+[data-theme="sunset"] .app-container {
+  background: radial-gradient(circle at 50% 0%, #480a3c 0%, #15081b 65%) !important;
+}
+
+[data-theme="sunset"] .modal-content {
+  background: #230b2d !important;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -776,6 +831,67 @@ html, body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+
+.pill-group.two-col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+#group-setting-theme {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.theme-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: block;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.theme-swatch.nebula {
+  background: linear-gradient(135deg, #1e1b4b, #3b82f6);
+}
+
+.theme-swatch.oled {
+  background: linear-gradient(135deg, #000000, #333333);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.theme-swatch.emerald {
+  background: linear-gradient(135deg, #064e3b, #10b981);
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.theme-swatch.sunset {
+  background: linear-gradient(135deg, #831843, #f43f5e);
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+.setting-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.setting-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.setting-input:focus {
+  border-color: var(--accent-indigo);
 }
 
 .pill-btn {

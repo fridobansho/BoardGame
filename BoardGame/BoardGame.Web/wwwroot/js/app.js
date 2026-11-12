@@ -13,8 +13,14 @@
   let soundEnabled = localStorage.getItem('bg_sound') !== 'false';
   let audioCtx = null;
 
+  // Client Preferences (Persisted in localStorage)
+  let clientPlayerName = localStorage.getItem('bg_player_name') || 'Player 1';
+  let clientTheme = localStorage.getItem('bg_theme') || 'nebula';
+  let clientFavGame = localStorage.getItem('bg_fav_game') || 'connect4';
+  let clientDefaultRole = localStorage.getItem('bg_default_role') || 'play';
+
   // Selected config in modal
-  let selectedGame = 'connect4';
+  let selectedGame = clientFavGame;
   let selectedMode = 'pass-and-play';
   let selectedDiff = 'smart';
   let roomAction = 'host';
@@ -38,6 +44,13 @@
   const btnOpenMenu = document.getElementById('btn-open-menu');
   const btnCloseMenu = document.getElementById('btn-close-menu');
   const modalMenu = document.getElementById('modal-menu');
+
+  const btnSettings = document.getElementById('btn-settings');
+  const modalSettings = document.getElementById('modal-settings');
+  const btnCloseSettings = document.getElementById('btn-close-settings');
+  const btnOpenSettingsMenu = document.getElementById('btn-open-settings-menu');
+  const settingPlayerName = document.getElementById('setting-player-name');
+  const btnSaveSettings = document.getElementById('btn-save-settings');
 
   const btnShare = document.getElementById('btn-share');
   const btnCloseShare = document.getElementById('btn-close-share');
@@ -206,6 +219,88 @@
       iconSoundOn.classList.add('hidden');
       iconSoundOff.classList.remove('hidden');
     }
+  }
+
+  // Client Preferences / Theme application
+  function applyTheme(theme) {
+    clientTheme = theme || 'nebula';
+    if (clientTheme === 'nebula') {
+      delete document.documentElement.dataset.theme;
+    } else {
+      document.documentElement.dataset.theme = clientTheme;
+    }
+    const themeColors = {
+      nebula: '#0f172a',
+      oled: '#000000',
+      emerald: '#04140e',
+      sunset: '#15081b'
+    };
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme && themeColors[clientTheme]) {
+      metaTheme.content = themeColors[clientTheme];
+    }
+  }
+
+  function openSettingsModal() {
+    if (!modalSettings) return;
+    if (settingPlayerName) settingPlayerName.value = clientPlayerName;
+
+    // Set theme active pill
+    document.querySelectorAll('#group-setting-theme .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.theme === clientTheme);
+    });
+
+    // Set favorite game active pill
+    document.querySelectorAll('#group-setting-fav .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.fav === clientFavGame);
+    });
+
+    // Set default role active pill
+    document.querySelectorAll('#group-setting-role .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.role === clientDefaultRole);
+    });
+
+    modalSettings.classList.remove('hidden');
+  }
+
+  function saveSettings() {
+    if (settingPlayerName) {
+      const name = settingPlayerName.value.trim() || 'Player 1';
+      clientPlayerName = name;
+      localStorage.setItem('bg_player_name', name);
+      if (inputP1) inputP1.value = name;
+    }
+
+    const activeThemeBtn = document.querySelector('#group-setting-theme .pill-btn.active');
+    if (activeThemeBtn) {
+      const th = activeThemeBtn.dataset.theme || 'nebula';
+      clientTheme = th;
+      localStorage.setItem('bg_theme', th);
+      applyTheme(th);
+    }
+
+    const activeFavBtn = document.querySelector('#group-setting-fav .pill-btn.active');
+    if (activeFavBtn) {
+      const fav = activeFavBtn.dataset.fav || 'connect4';
+      clientFavGame = fav;
+      selectedGame = fav;
+      localStorage.setItem('bg_fav_game', fav);
+      // Also update the active game pill in setup modal
+      document.querySelectorAll('#group-game .pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.game === fav);
+      });
+    }
+
+    const activeRoleBtn = document.querySelector('#group-setting-role .pill-btn.active');
+    if (activeRoleBtn) {
+      const role = activeRoleBtn.dataset.role || 'play';
+      clientDefaultRole = role;
+      localStorage.setItem('bg_default_role', role);
+    }
+
+    playSound('tap');
+    triggerHaptic(20);
+    if (modalSettings) modalSettings.classList.add('hidden');
   }
 
   // Check URL parameters for direct room joining or spectating
@@ -396,7 +491,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roomCode: cleanCode,
-          playerName: 'Guest'
+          playerName: clientPlayerName || 'Guest'
         })
       });
 
@@ -1016,6 +1111,48 @@
       }
     });
 
+    // Settings modal events
+    if (btnSettings) {
+      btnSettings.addEventListener('click', () => openSettingsModal());
+    }
+    if (btnCloseSettings) {
+      btnCloseSettings.addEventListener('click', () => modalSettings.classList.add('hidden'));
+    }
+    if (btnOpenSettingsMenu) {
+      btnOpenSettingsMenu.addEventListener('click', () => {
+        modalMenu.classList.add('hidden');
+        openSettingsModal();
+      });
+    }
+    if (btnSaveSettings) {
+      btnSaveSettings.addEventListener('click', () => saveSettings());
+    }
+
+    // Settings Theme pills
+    document.querySelectorAll('#group-setting-theme .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-theme .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyTheme(btn.dataset.theme); // Real-time preview
+      });
+    });
+
+    // Settings Fav Game pills
+    document.querySelectorAll('#group-setting-fav .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-fav .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Settings Default Role pills
+    document.querySelectorAll('#group-setting-role .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-role .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
     btnChangeGame.addEventListener('click', () => {
       gameOverModal.classList.add('hidden');
       modalMenu.classList.remove('hidden');
@@ -1120,8 +1257,15 @@
 
   // App Initialization
   async function init() {
+    applyTheme(clientTheme);
+    if (inputP1) inputP1.value = clientPlayerName;
     updateSoundUI();
     setupEvents();
+
+    // Set initial active game pill to favorite game
+    document.querySelectorAll('#group-game .pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.game === clientFavGame);
+    });
 
     const joinedFromUrl = parseUrlParams();
     if (!joinedFromUrl) {
@@ -1142,8 +1286,14 @@
       }
 
       if (!resumed) {
-        // Start default Connect Four pass-and-play session
-        await createSession('connect4', 'pass-and-play', 'smart', 'Player 1', 'Player 2');
+        if (clientDefaultRole === 'spectate') {
+          // Open Wi-Fi lobby directly when client prefers spectating by default
+          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2');
+          openLobby();
+        } else {
+          // Start favorite game by default
+          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2');
+        }
       }
     }
   }

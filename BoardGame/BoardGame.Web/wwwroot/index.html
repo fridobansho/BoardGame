@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/css/style.css?v=6">
+  <link rel="stylesheet" href="/css/style.css?v=7">
 </head>
 <body>
   <div class="app-container">
@@ -41,6 +41,9 @@
         <button id="btn-sound" class="icon-btn" title="Toggle Sound" aria-label="Toggle Sound">
           <svg id="icon-sound-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
           <svg id="icon-sound-off" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+        </button>
+        <button id="btn-settings" class="icon-btn" title="Client Settings" aria-label="Client Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
         <button id="btn-reset" class="icon-btn" title="Restart Game" aria-label="Restart">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
@@ -201,6 +204,7 @@
         </div>
 
         <div class="form-section menu-secondary-actions">
+          <button id="btn-open-settings-menu" type="button" class="btn btn-sm btn-secondary btn-block">⚙️ Client Settings &amp; Preferences</button>
           <button id="btn-reset-series" type="button" class="btn btn-sm btn-secondary btn-block">Reset Match Series Scores</button>
         </div>
       </div>
@@ -249,6 +253,89 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=6"></script>
+  <!-- Client Settings Modal -->
+  <div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Client Preferences</h2>
+        <button class="modal-close" id="btn-close-settings">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- 1. Display Name -->
+        <div class="form-section">
+          <label class="section-label">Your Display Name</label>
+          <input type="text" id="setting-player-name" placeholder="Enter your name" maxlength="16" class="setting-input">
+          <small class="setting-hint">Persisted and used automatically when hosting, joining, or playing.</small>
+        </div>
+
+        <!-- 2. Color Theme -->
+        <div class="form-section">
+          <label class="section-label">Color Theme</label>
+          <div class="pill-group" id="group-setting-theme">
+            <button class="pill-btn active" data-theme="nebula">
+              <span class="theme-swatch nebula"></span>
+              <span>Nebula</span>
+            </button>
+            <button class="pill-btn" data-theme="oled">
+              <span class="theme-swatch oled"></span>
+              <span>OLED Black</span>
+            </button>
+            <button class="pill-btn" data-theme="emerald">
+              <span class="theme-swatch emerald"></span>
+              <span>Emerald</span>
+            </button>
+            <button class="pill-btn" data-theme="sunset">
+              <span class="theme-swatch sunset"></span>
+              <span>Sunset</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Default Game -->
+        <div class="form-section">
+          <label class="section-label">Favorite / Default Game</label>
+          <div class="pill-group" id="group-setting-fav">
+            <button class="pill-btn active" data-fav="connect4">
+              <span class="pill-icon">🔴</span>
+              <span>Connect 4</span>
+            </button>
+            <button class="pill-btn" data-fav="tictactoe">
+              <span class="pill-icon">❌</span>
+              <span>Tic-Tac-Toe</span>
+            </button>
+            <button class="pill-btn" data-fav="chomp">
+              <span class="pill-icon">🍫</span>
+              <span>Chomp</span>
+            </button>
+          </div>
+          <small class="setting-hint">Game loaded on startup or quick play.</small>
+        </div>
+
+        <!-- 4. Default Role -->
+        <div class="form-section">
+          <label class="section-label">Default Role on Launch</label>
+          <div class="pill-group two-col" id="group-setting-role">
+            <button class="pill-btn active" data-role="play">
+              <span class="pill-icon">🎮</span>
+              <span>Play by Default</span>
+            </button>
+            <button class="pill-btn" data-role="spectate">
+              <span class="pill-icon">👀</span>
+              <span>Spectate by Default</span>
+            </button>
+          </div>
+          <small class="setting-hint">Spectating by default immediately opens the Wi-Fi Lobby to discover and watch live games.</small>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-save-settings" class="btn btn-primary btn-block">Save Preferences</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=7"></script>
 </body>
 </html>
