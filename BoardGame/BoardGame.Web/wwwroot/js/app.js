@@ -16,6 +16,8 @@
   // Client Preferences (Persisted in localStorage)
   let clientPlayerName = localStorage.getItem('bg_player_name') || 'Player 1';
   let clientTheme = localStorage.getItem('bg_theme') || 'nebula';
+  let clientBoardTheme = localStorage.getItem('bg_board_theme') || 'auto';
+  let clientPieceTheme = localStorage.getItem('bg_piece_theme') || 'auto';
   let clientFavGame = localStorage.getItem('bg_fav_game') || 'connect4';
   let clientDefaultRole = localStorage.getItem('bg_default_role') || 'play';
 
@@ -222,13 +224,32 @@
   }
 
   // Client Preferences / Theme application
-  function applyTheme(theme) {
-    clientTheme = theme || 'nebula';
+  function applyTheme(theme, boardTheme, pieceTheme) {
+    if (theme !== undefined) clientTheme = theme || 'nebula';
+    if (boardTheme !== undefined) clientBoardTheme = boardTheme || 'auto';
+    if (pieceTheme !== undefined) clientPieceTheme = pieceTheme || 'auto';
+
+    // UI Color Theme
     if (clientTheme === 'nebula') {
       delete document.documentElement.dataset.theme;
     } else {
       document.documentElement.dataset.theme = clientTheme;
     }
+
+    // Board Style Override
+    if (clientBoardTheme === 'auto') {
+      delete document.documentElement.dataset.boardTheme;
+    } else {
+      document.documentElement.dataset.boardTheme = clientBoardTheme;
+    }
+
+    // Piece & Chip Style Override
+    if (clientPieceTheme === 'auto') {
+      delete document.documentElement.dataset.pieceTheme;
+    } else {
+      document.documentElement.dataset.pieceTheme = clientPieceTheme;
+    }
+
     const themeColors = {
       nebula: '#0f172a',
       oled: '#000000',
@@ -248,6 +269,16 @@
     // Set theme active pill
     document.querySelectorAll('#group-setting-theme .pill-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.theme === clientTheme);
+    });
+
+    // Set board theme active pill
+    document.querySelectorAll('#group-setting-board .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.board === clientBoardTheme);
+    });
+
+    // Set piece theme active pill
+    document.querySelectorAll('#group-setting-piece .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.piece === clientPieceTheme);
     });
 
     // Set favorite game active pill
@@ -276,8 +307,23 @@
       const th = activeThemeBtn.dataset.theme || 'nebula';
       clientTheme = th;
       localStorage.setItem('bg_theme', th);
-      applyTheme(th);
     }
+
+    const activeBoardBtn = document.querySelector('#group-setting-board .pill-btn.active');
+    if (activeBoardBtn) {
+      const bd = activeBoardBtn.dataset.board || 'auto';
+      clientBoardTheme = bd;
+      localStorage.setItem('bg_board_theme', bd);
+    }
+
+    const activePieceBtn = document.querySelector('#group-setting-piece .pill-btn.active');
+    if (activePieceBtn) {
+      const pc = activePieceBtn.dataset.piece || 'auto';
+      clientPieceTheme = pc;
+      localStorage.setItem('bg_piece_theme', pc);
+    }
+
+    applyTheme(clientTheme, clientBoardTheme, clientPieceTheme);
 
     const activeFavBtn = document.querySelector('#group-setting-fav .pill-btn.active');
     if (activeFavBtn) {
@@ -1133,7 +1179,25 @@
       btn.addEventListener('click', () => {
         document.querySelectorAll('#group-setting-theme .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        applyTheme(btn.dataset.theme); // Real-time preview
+        applyTheme(btn.dataset.theme, clientBoardTheme, clientPieceTheme); // Real-time preview
+      });
+    });
+
+    // Settings Board pills
+    document.querySelectorAll('#group-setting-board .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-board .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyTheme(clientTheme, btn.dataset.board, clientPieceTheme); // Real-time preview
+      });
+    });
+
+    // Settings Piece pills
+    document.querySelectorAll('#group-setting-piece .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-piece .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyTheme(clientTheme, clientBoardTheme, btn.dataset.piece); // Real-time preview
       });
     });
 
@@ -1257,7 +1321,7 @@
 
   // App Initialization
   async function init() {
-    applyTheme(clientTheme);
+    applyTheme(clientTheme, clientBoardTheme, clientPieceTheme);
     if (inputP1) inputP1.value = clientPlayerName;
     updateSoundUI();
     setupEvents();

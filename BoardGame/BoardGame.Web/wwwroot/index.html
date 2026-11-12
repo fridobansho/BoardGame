@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/css/style.css?v=7">
+  <link rel="stylesheet" href="/css/style.css?v=8">
 </head>
 <body>
   <div class="app-container">
@@ -293,7 +293,89 @@
           </div>
         </div>
 
-        <!-- 3. Default Game -->
+        <!-- 3. Board Style -->
+        <div class="form-section">
+          <label class="section-label">Board Style</label>
+          <div class="pill-group" id="group-setting-board">
+            <button class="pill-btn active" data-board="auto">
+              <span class="board-swatch auto"></span>
+              <span>Auto (Theme)</span>
+            </button>
+            <button class="pill-btn" data-board="blue">
+              <span class="board-swatch blue"></span>
+              <span>Royal Blue</span>
+            </button>
+            <button class="pill-btn" data-board="black">
+              <span class="board-swatch black"></span>
+              <span>Jet Black</span>
+            </button>
+            <button class="pill-btn" data-board="emerald">
+              <span class="board-swatch emerald"></span>
+              <span>Jade Forest</span>
+            </button>
+            <button class="pill-btn" data-board="sunset">
+              <span class="board-swatch sunset"></span>
+              <span>Neon Rose</span>
+            </button>
+            <button class="pill-btn" data-board="wood">
+              <span class="board-swatch wood"></span>
+              <span>Warm Wood</span>
+            </button>
+          </div>
+          <small class="setting-hint">Customizes Connect 4 rack, Tic-Tac-Toe grid, and Chomp tray.</small>
+        </div>
+
+        <!-- 4. Piece Style -->
+        <div class="form-section">
+          <label class="section-label">Piece &amp; Chip Colors</label>
+          <div class="pill-group" id="group-setting-piece">
+            <button class="pill-btn active" data-piece="auto">
+              <span class="piece-swatch auto">
+                <span class="swatch-dot dot-p1"></span>
+                <span class="swatch-dot dot-p2"></span>
+              </span>
+              <span>Auto (Theme)</span>
+            </button>
+            <button class="pill-btn" data-piece="classic">
+              <span class="piece-swatch classic">
+                <span class="swatch-dot dot-p1"></span>
+                <span class="swatch-dot dot-p2"></span>
+              </span>
+              <span>Classic</span>
+            </button>
+            <button class="pill-btn" data-piece="neon">
+              <span class="piece-swatch neon">
+                <span class="swatch-dot dot-p1"></span>
+                <span class="swatch-dot dot-p2"></span>
+              </span>
+              <span>Cyberpunk</span>
+            </button>
+            <button class="pill-btn" data-piece="mono">
+              <span class="piece-swatch mono">
+                <span class="swatch-dot dot-p1"></span>
+                <span class="swatch-dot dot-p2"></span>
+              </span>
+              <span>Monochrome</span>
+            </button>
+            <button class="pill-btn" data-piece="solar">
+              <span class="piece-swatch solar">
+                <span class="swatch-dot dot-p1"></span>
+                <span class="swatch-dot dot-p2"></span>
+              </span>
+              <span>Solar Flame</span>
+            </button>
+            <button class="pill-btn" data-piece="arcade">
+              <span class="piece-swatch arcade">
+                <span class="swatch-dot dot-p1"></span>
+                <span class="swatch-dot dot-p2"></span>
+              </span>
+              <span>Arcade Mint</span>
+            </button>
+          </div>
+          <small class="setting-hint">Customizes game discs, X &amp; O marks, and status turn dots.</small>
+        </div>
+
+        <!-- 5. Default Game -->
         <div class="form-section">
           <label class="section-label">Favorite / Default Game</label>
           <div class="pill-group" id="group-setting-fav">
@@ -336,6 +418,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=7"></script>
+  <script src="/js/app.js?v=8"></script>
 </body>
 </html>
