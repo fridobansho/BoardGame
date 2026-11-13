@@ -330,4 +330,78 @@ public class GameSessionShould
         session.Player1Predictions.ShouldBe(2);
         session.Player2Predictions.ShouldBe(1);
     }
+
+    [Test]
+    public void AllowBothHostAndGuestToMakeMovesInRoom()
+    {
+        var sm = new SessionManager();
+        var session = sm.CreateSession("tictactoe", "room", "smart", "Host", null);
+
+        var joined = session.JoinRoomAsGuest("GuestFriend", out var guestToken);
+        joined.ShouldBeTrue();
+
+        var (p1Ok, p1Err) = session.MakeMove(0, 0, session.Player1Token);
+        p1Ok.ShouldBeTrue();
+        p1Err.ShouldBeNull();
+        session.Board.PieceAt(0, 0).Value.ShouldBe("X");
+
+        var (p2Ok, p2Err) = session.MakeMove(1, 1, guestToken);
+        p2Ok.ShouldBeTrue();
+        p2Err.ShouldBeNull();
+        session.Board.PieceAt(1, 1).Value.ShouldBe("O");
+    }
+
+    [Test]
+    public void DetectDrawInTicTacToe()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob");
+
+        // X | O | X
+        // X | O | O
+        // O | X | X
+        session.MakeMove(0, 0); // X
+        session.MakeMove(1, 0); // O
+        session.MakeMove(2, 0); // X
+        session.MakeMove(1, 1); // O
+        session.MakeMove(0, 1); // X
+        session.MakeMove(2, 1); // O
+        session.MakeMove(1, 2); // X
+        session.MakeMove(0, 2); // O
+        session.MakeMove(2, 2); // X -> Draw!
+
+        session.Status.ShouldBe("Draw");
+        session.Winner.ShouldBeNull();
+        session.DrawScore.ShouldBe(1);
+        session.Player1Score.ShouldBe(0);
+        session.Player2Score.ShouldBe(0);
+    }
+
+    [Test]
+    public void ResetAndUndoChompAfterPoisonEaten()
+    {
+        var session = new GameSession("chomp", "pass-and-play", "smart", "Alice", "Bob");
+
+        // Alice eats poison -> Bob wins
+        session.MakeMove(0, 0);
+        session.Status.ShouldBe("Finished");
+
+        // Undo poison move and play non-poison move -> game stays InProgress
+        var (undoOk, _) = session.Undo();
+        undoOk.ShouldBeTrue();
+        session.Status.ShouldBe("InProgress");
+        var (afterUndoOk, _) = session.MakeMove(1, 1);
+        afterUndoOk.ShouldBeTrue();
+        session.Status.ShouldBe("InProgress");
+
+        // Alice eats poison again -> game finishes
+        session.MakeMove(0, 0);
+        session.Status.ShouldBe("Finished");
+
+        // Rematch reset -> non-poison move keeps game InProgress
+        session.Reset(isRematch: true);
+        session.Status.ShouldBe("InProgress");
+        var (rematchMoveOk, _) = session.MakeMove(1, 1);
+        rematchMoveOk.ShouldBeTrue();
+        session.Status.ShouldBe("InProgress");
+    }
 }

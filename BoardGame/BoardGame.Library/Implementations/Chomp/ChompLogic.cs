@@ -40,6 +40,9 @@ namespace BoardGame.Library.Implementations.Chomp
         {
             if (board == null) throw new ArgumentNullException(nameof(board));
 
+            PoisonEaten = false;
+            LastPlayerWhoMoved = null;
+
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -75,10 +78,7 @@ namespace BoardGame.Library.Implementations.Chomp
 
             LastPlayerWhoMoved = player;
 
-            if (location.X == 0 && location.Y == 0)
-            {
-                PoisonEaten = true;
-            }
+            PoisonEaten = (location.X == 0 && location.Y == 0) || board.PieceAt(0, 0)?.Value == BlankPiece.BlankValue;
 
             // Chomp: eating at (X, Y) removes all blocks at (x' >= X, y' >= Y)
             for (int x = location.X; x < board.Width; x++)
@@ -105,7 +105,9 @@ namespace BoardGame.Library.Implementations.Chomp
         {
             ValidatePlayers(players);
 
-            if (PoisonEaten && LastPlayerWhoMoved != null)
+            var topLeft = board?.PieceAt(0, 0);
+            bool poisonMissing = topLeft == null || topLeft.Value == BlankPiece.BlankValue;
+            if (PoisonEaten && poisonMissing && LastPlayerWhoMoved != null)
             {
                 // The player forced to eat (0, 0) loses; the other player wins!
                 var winner = players.First(p => !ReferenceEquals(p, LastPlayerWhoMoved));

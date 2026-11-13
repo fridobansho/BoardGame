@@ -706,14 +706,14 @@
     }
   }
 
-  async function sendPrediction(predictedPlayer) {
+  async function sendPrediction(playerIndex) {
     if (!currentSession) return;
     try {
       const res = await fetch(`/api/session/${currentSession.id}/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          predictedPlayer: Number(predictedPlayer)
+          playerIndex: Number(playerIndex)
         })
       });
       if (res.ok) {
@@ -791,7 +791,25 @@
   }
 
   // Replay Scrubber & Board Simulation
-  function simulateBoardAtStep(session, stepCount) {
+  function simulateBoardAtStep(session, stepIndex) {
+    const history = session.moveHistory || [];
+    if (stepIndex >= 0 && stepIndex < history.length) {
+      const step = history[stepIndex];
+      const stepGrid = step.grid || step.Grid;
+      if (Array.isArray(stepGrid) && stepGrid.length >= session.height) {
+        const lx = step.x !== undefined ? step.x : step.X;
+        const ly = step.y !== undefined ? step.y : step.Y;
+        return {
+          ...session,
+          grid: stepGrid,
+          lastMoveX: lx !== undefined ? lx : null,
+          lastMoveY: ly !== undefined ? ly : null,
+          status: (stepIndex === history.length - 1) ? session.status : 'InProgress',
+          isAiTurn: false
+        };
+      }
+    }
+
     const width = session.width;
     const height = session.height;
     const gameType = session.gameType;
@@ -809,16 +827,20 @@
       }
     }
 
-    const history = session.moveHistory || [];
-    const limit = Math.min(stepCount, history.length);
+    const limit = Math.min(stepIndex, history.length - 1);
     let lastX = null;
     let lastY = null;
 
-    for (let i = 0; i < limit; i++) {
+    for (let i = 0; i <= limit; i++) {
       const step = history[i];
-      const px = Number(step.x !== undefined ? step.x : step.X);
-      const py = Number(step.y !== undefined ? step.y : step.Y);
-      const piece = step.piece || step.Piece || (i % 2 === 0 ? 'R' : 'Y');
+      const rawX = step.x !== undefined ? step.x : step.X;
+      const rawY = step.y !== undefined ? step.y : step.Y;
+      const moveNum = step.moveNumber !== undefined ? step.moveNumber : step.MoveNumber;
+      if (rawX === null || rawX === undefined || moveNum === 0) continue;
+
+      const px = Number(rawX);
+      const py = Number(rawY);
+      const piece = step.piece || step.Piece || (moveNum % 2 === 1 ? 'R' : 'Y');
 
       if (gameType === 'connect4') {
         for (let r = height - 1; r >= 0; r--) {
@@ -853,36 +875,36 @@
       grid: grid,
       lastMoveX: lastX,
       lastMoveY: lastY,
-      status: (limit === history.length) ? session.status : 'InProgress',
+      status: (limit === history.length - 1) ? session.status : 'InProgress',
       isAiTurn: false
     };
   }
 
   function scrubReplay(action) {
     if (!currentSession || !currentSession.moveHistory) return;
-    const total = currentSession.moveHistory.length;
-    if (total === 0) return;
+    const maxStep = Math.max(0, currentSession.moveHistory.length - 1);
+    if (maxStep === 0) return;
 
-    let target = replayIndex !== null ? replayIndex : total;
+    let target = replayIndex !== null ? replayIndex : maxStep;
 
     if (action === 'start') {
       target = 0;
     } else if (action === 'prev') {
       target = Math.max(0, target - 1);
     } else if (action === 'next') {
-      target = Math.min(total, target + 1);
+      target = Math.min(maxStep, target + 1);
     } else if (typeof action === 'number') {
-      target = Math.max(0, Math.min(total, action));
+      target = Math.max(0, Math.min(maxStep, action));
     }
 
-    if (target === total) {
+    if (target === maxStep) {
       returnToLive();
       return;
     }
 
     replayIndex = target;
     if (btnReplayLive) btnReplayLive.classList.remove('hidden');
-    if (replayStepText) replayStepText.textContent = `Replay: Move ${replayIndex} of ${total}`;
+    if (replayStepText) replayStepText.textContent = `Replay: Move ${replayIndex} of ${maxStep}`;
 
     const sim = simulateBoardAtStep(currentSession, replayIndex);
     renderBoard(sim);
@@ -898,8 +920,8 @@
     }
     if (btnReplayLive) btnReplayLive.classList.add('hidden');
     if (currentSession) {
-      const total = currentSession.moveHistory ? currentSession.moveHistory.length : 0;
-      if (replayStepText) replayStepText.textContent = `Live • ${total} moves`;
+      const maxStep = currentSession.moveHistory ? Math.max(0, currentSession.moveHistory.length - 1) : 0;
+      if (replayStepText) replayStepText.textContent = `Live • Move ${maxStep} of ${maxStep}`;
       renderBoard(currentSession);
     }
   }
@@ -913,10 +935,10 @@
     }
 
     if (!currentSession || !currentSession.moveHistory) return;
-    const total = currentSession.moveHistory.length;
-    if (total === 0) return;
+    const maxStep = Math.max(0, currentSession.moveHistory.length - 1);
+    if (maxStep === 0) return;
 
-    if (replayIndex === null || replayIndex >= total) {
+    if (replayIndex === null || replayIndex >= maxStep) {
       replayIndex = 0;
       scrubReplay(0);
     }
@@ -928,7 +950,7 @@
         toggleAutoPlay();
         return;
       }
-      const max = currentSession.moveHistory.length;
+      const max = Math.max(0, currentSession.moveHistory.length - 1);
       if (replayIndex === null || replayIndex >= max) {
         returnToLive();
         return;
@@ -1161,15 +1183,15 @@
 
       let codeBadgeHtml = '';
       if (mode === 'room' && code) {
-        codeBadgeHtml = `<span class="lobby-code-badge">${code}</span>`;
+        codeBadgeHtml = `<span class="lobby-code-badge">${escapeHtml(code)}</span>`;
       }
 
       card.innerHTML = `
         <div class="lobby-card-left">
           <span class="lobby-card-icon">${icons[game] || '🎲'}</span>
           <div class="lobby-card-info">
-            <h4>${names[game] || game} <span class="lobby-mode-badge ${modeClass}">${modeLabels[mode] || mode}</span> ${codeBadgeHtml}</h4>
-            <div class="lobby-card-meta">Host: ${host} • ${time} <span class="lobby-status-badge ${statusClass}">${statusLabel}</span></div>
+            <h4>${escapeHtml(names[game] || game)} <span class="lobby-mode-badge ${modeClass}">${escapeHtml(modeLabels[mode] || mode)}</span> ${codeBadgeHtml}</h4>
+            <div class="lobby-card-meta">Host: ${escapeHtml(host)} • ${escapeHtml(time)} <span class="lobby-status-badge ${statusClass}">${statusLabel}</span></div>
           </div>
         </div>
       `;
@@ -1451,6 +1473,10 @@
     const prevMoveCount = currentSession ? currentSession.moveCount : 0;
     currentSession = session;
 
+    if (session.moveCount === 0 && session.player1Predictions === 0 && session.player2Predictions === 0) {
+      hasVotedPrediction = false;
+    }
+
     // Persist active session to localStorage for auto-reconnect
     try {
       localStorage.setItem('bg_session_id', session.id);
@@ -1528,10 +1554,11 @@
 
     // Replay Scrubber Bar
     if (replayBar) {
-      const hasHistory = session.moveHistory && session.moveHistory.length > 0;
+      const maxStep = session.moveHistory ? Math.max(0, session.moveHistory.length - 1) : 0;
+      const hasHistory = maxStep > 0;
       replayBar.classList.toggle('hidden', !hasHistory);
       if (hasHistory && replayIndex === null) {
-        if (replayStepText) replayStepText.textContent = `Live • Move ${session.moveHistory.length} of ${session.moveHistory.length}`;
+        if (replayStepText) replayStepText.textContent = `Live • Move ${maxStep} of ${maxStep}`;
         if (btnReplayLive) btnReplayLive.classList.add('hidden');
       }
     }
@@ -2044,10 +2071,10 @@
 
     // Spectator Predictions buttons
     if (btnPredictP1) {
-      btnPredictP1.addEventListener('click', () => sendPrediction(1));
+      btnPredictP1.addEventListener('click', () => sendPrediction(0));
     }
     if (btnPredictP2) {
-      btnPredictP2.addEventListener('click', () => sendPrediction(2));
+      btnPredictP2.addEventListener('click', () => sendPrediction(1));
     }
 
     // Replay Scrubber controls

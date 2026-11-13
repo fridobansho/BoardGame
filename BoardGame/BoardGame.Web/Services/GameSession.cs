@@ -215,7 +215,16 @@ public class GameSession
             }
 
             string cleanName = !string.IsNullOrWhiteSpace(guestName) ? guestName.Trim() : "Player 2";
-            Players[1] = new WebHumanPlayer(cleanName, Player2Token);
+            if (Players[1] is WebHumanPlayer existingGuest)
+            {
+                existingGuest.Name = cleanName;
+            }
+            else
+            {
+                Players[1] = new WebHumanPlayer(cleanName, Player2Token);
+                GameLogic.PlayerPieces.Clear();
+                GameLogic.MapPieces(Players);
+            }
             Status = "InProgress";
             playerToken = Player2Token;
             ResetTurnTimer();
@@ -602,7 +611,7 @@ public class GameSession
     private void CheckGameState(IPlayer lastPlayer)
     {
         var winners = GameLogic.GetWinners(Board, Players).ToList();
-        if (winners.Count > 0)
+        if (winners.Count == 1)
         {
             Winner = winners[0].Name;
             Status = "Finished";
@@ -612,8 +621,9 @@ public class GameSession
             return;
         }
 
-        if (IsDraw())
+        if (winners.Count > 1 || IsDraw())
         {
+            Winner = null;
             Status = "Draw";
             DrawScore++;
             TurnExpiresAt = null;
@@ -786,7 +796,7 @@ public class GameSession
 
 public class WebHumanPlayer : IPlayer
 {
-    public string Name { get; }
+    public string Name { get; set; }
     public string Token { get; }
 
     public WebHumanPlayer(string name, string? token = null)
