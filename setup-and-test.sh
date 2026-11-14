@@ -7,6 +7,13 @@ TARGET_DIR="${TARGET_DIR:-BoardGame-workspace}"
 BRANCH="${BRANCH:-}"
 DOTNET_CHANNEL="${DOTNET_CHANNEL:-8.0}"
 DOTNET_DIR="${DOTNET_DIR:-$HOME/.dotnet}"
+PUBLISH=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --publish) PUBLISH=true ;;
+    esac
+done
 
 # Speed up dotnet CLI on Linux: disable telemetry, first-time greeting, and workload update checks
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
@@ -97,6 +104,14 @@ echo ">> Building solution..."
 # 4. Run test suite
 echo ">> Running unit test suite..."
 "$DOTNET_BIN" test "$SLN_PATH" --configuration Release --no-build --logger "console;verbosity=detailed"
+
+# 5. Optional publish
+if [ "$PUBLISH" = true ]; then
+    WEB_CSPROJ="$(dirname "$SLN_PATH")/BoardGame.Web/BoardGame.Web.csproj"
+    PUBLISH_DIR="$(cd "$(dirname "$SLN_PATH")/.." && pwd)/publish"
+    echo ">> Publishing BoardGame.Web to $PUBLISH_DIR..."
+    "$DOTNET_BIN" publish "$WEB_CSPROJ" --configuration Release --output "$PUBLISH_DIR"
+fi
 
 echo "=========================================================="
 echo " All tests passed successfully!"

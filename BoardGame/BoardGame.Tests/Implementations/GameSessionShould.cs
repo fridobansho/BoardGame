@@ -116,10 +116,16 @@ public class GameSessionShould
         session.CurrentTurnIndex.ShouldBe(0); // Returned to human
     }
 
+    private static SessionManager CreateIsolatedSessionManager()
+    {
+        var dbPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"boardgame_test_{System.Guid.NewGuid():N}.db");
+        return new SessionManager(dbPath);
+    }
+
     [Test]
     public void ManageRoomsCorrectly()
     {
-        var sm = new SessionManager();
+        using var sm = CreateIsolatedSessionManager();
         var session = sm.CreateSession("connect4", "room", "smart", "Host", null);
 
         session.Status.ShouldBe("WaitingForPlayer");
@@ -139,7 +145,7 @@ public class GameSessionShould
     [Test]
     public void ListAvailablePublicRooms()
     {
-        var sm = new SessionManager();
+        using var sm = CreateIsolatedSessionManager();
         var publicRoom = sm.CreateSession("connect4", "room", "smart", "HostAlice", null, isPublic: true);
         var privateRoom = sm.CreateSession("tictactoe", "room", "smart", "HostBob", null, isPublic: false);
         var soloSession = sm.CreateSession("chomp", "pass-and-play", "smart", "Solo", null, isPublic: true);
@@ -173,7 +179,7 @@ public class GameSessionShould
     [Test]
     public void RejectSpectatorMoves()
     {
-        var sm = new SessionManager();
+        using var sm = CreateIsolatedSessionManager();
         var session = sm.CreateSession("connect4", "room", "smart", "Host", null, isPublic: true);
         session.JoinRoomAsGuest("Guest", out var guestToken);
 
@@ -334,7 +340,7 @@ public class GameSessionShould
     [Test]
     public void AllowBothHostAndGuestToMakeMovesInRoom()
     {
-        var sm = new SessionManager();
+        using var sm = CreateIsolatedSessionManager();
         var session = sm.CreateSession("tictactoe", "room", "smart", "Host", null);
 
         var joined = session.JoinRoomAsGuest("GuestFriend", out var guestToken);

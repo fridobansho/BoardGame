@@ -19,12 +19,13 @@
   let clientBoardTheme = localStorage.getItem('bg_board_theme') || 'auto';
   let clientPieceTheme = localStorage.getItem('bg_piece_theme') || 'auto';
   let clientFavGame = localStorage.getItem('bg_fav_game') || 'connect4';
+  let clientDefaultMode = localStorage.getItem('bg_default_mode') || 'pass-and-play';
   let clientDefaultRole = localStorage.getItem('bg_default_role') || 'play';
   let clientSoundPack = localStorage.getItem('bg_sound_pack') || 'arcade';
 
   // Selected config in modal
   let selectedGame = clientFavGame;
-  let selectedMode = 'pass-and-play';
+  let selectedMode = clientDefaultMode;
   let selectedDiff = 'smart';
   let selectedGridWidth = 7;
   let selectedGridHeight = 6;
@@ -983,6 +984,11 @@
       btn.classList.toggle('active', btn.dataset.fav === clientFavGame);
     });
 
+    // Set default play mode active pill
+    document.querySelectorAll('#group-setting-mode .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === clientDefaultMode);
+    });
+
     // Set default role active pill
     document.querySelectorAll('#group-setting-role .pill-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.role === clientDefaultRole);
@@ -1044,6 +1050,19 @@
         b.classList.toggle('active', b.dataset.game === fav);
       });
       updateGridSizePills(fav);
+    }
+
+    const activeModeBtn = document.querySelector('#group-setting-mode .pill-btn.active');
+    if (activeModeBtn) {
+      const mode = activeModeBtn.dataset.mode || 'pass-and-play';
+      clientDefaultMode = mode;
+      selectedMode = mode;
+      localStorage.setItem('bg_default_mode', mode);
+      document.querySelectorAll('#group-mode .pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+      if (secAiDiff) secAiDiff.classList.toggle('hidden', mode !== 'vs-ai');
+      if (secRoom) secRoom.classList.toggle('hidden', mode !== 'room');
     }
 
     const activeRoleBtn = document.querySelector('#group-setting-role .pill-btn.active');
@@ -2013,6 +2032,14 @@
       });
     });
 
+    // Settings Default Play Mode pills
+    document.querySelectorAll('#group-setting-mode .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#group-setting-mode .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
     // Settings Default Role pills
     document.querySelectorAll('#group-setting-role .pill-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2234,6 +2261,13 @@
       b.classList.toggle('active', b.dataset.game === clientFavGame);
     });
 
+    // Set initial active mode pill to default play mode
+    document.querySelectorAll('#group-mode .pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === clientDefaultMode);
+    });
+    if (secAiDiff) secAiDiff.classList.toggle('hidden', clientDefaultMode !== 'vs-ai');
+    if (secRoom) secRoom.classList.toggle('hidden', clientDefaultMode !== 'room');
+
     const joinedFromUrl = parseUrlParams();
     if (!joinedFromUrl) {
       let resumed = false;
@@ -2258,8 +2292,8 @@
           await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
           openLobby();
         } else {
-          // Start favorite game by default
-          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
+          // Start favorite game in default play mode
+          await createSession(clientFavGame, clientDefaultMode, 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
         }
       }
     }

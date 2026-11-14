@@ -13,9 +13,9 @@ public class SessionManager : IDisposable
     private readonly string _connectionString;
     private readonly object _dbLock = new();
 
-    public SessionManager()
+    public SessionManager(string? dbPath = null)
     {
-        var dbPath = Path.Combine(AppContext.BaseDirectory, "boardgame.db");
+        dbPath ??= Path.Combine(AppContext.BaseDirectory, "boardgame.db");
         _connectionString = $"Data Source={dbPath}";
         InitializeDatabase();
         LoadSessions();
