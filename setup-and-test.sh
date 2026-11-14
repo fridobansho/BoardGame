@@ -53,6 +53,10 @@ fi
 echo ">> Using .NET SDK: $("$DOTNET_BIN" --version)"
 
 # 2. Clone or update repository (rerunnable)
+if [ -d ".git" ] && { [ -f "BoardGame/BoardGame.sln" ] || [ -f "BoardGame.sln" ]; }; then
+    TARGET_DIR="."
+fi
+
 if [ ! -d "$TARGET_DIR/.git" ]; then
     echo ">> Cloning $REPO_URL into $TARGET_DIR..."
     if [ -n "$BRANCH" ]; then

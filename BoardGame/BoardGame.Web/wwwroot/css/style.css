@@ -1099,14 +1099,16 @@ html, body {
 
 .modal-content {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 500px;
   background: #151d32;
   border: 1px solid var(--border-color);
   border-radius: 24px 24px 0 0;
   padding: 24px;
-  max-height: 85dvh;
-  overflow-y: auto;
+  max-height: 85vh;
+  overflow: hidden;
   box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1133,6 +1135,21 @@ html, body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border-color);
 }
 
 .modal-close {

@@ -1534,7 +1534,8 @@
 
     // Spectator Prediction Poll
     if (predictionWrap) {
-      const showPrediction = isSpectator || session.mode === 'room' || session.spectatorCount > 0;
+      const totalVotes = (session.player1Predictions || 0) + (session.player2Predictions || 0);
+      const showPrediction = isSpectator || totalVotes > 0;
       predictionWrap.classList.toggle('hidden', !showPrediction);
       if (showPrediction) {
         updatePredictionBar(session.player1Predictions, session.player2Predictions);
@@ -1879,7 +1880,7 @@
           const ips = info.localIps || info.LocalIps;
           if (ips && ips.length > 0) {
             const port = window.location.port ? `:${window.location.port}` : '';
-            url = `http://${ips[0]}${port}`;
+            url = `${window.location.protocol}//${ips[0]}${port}`;
           }
         }
       } catch (e) { }
@@ -1897,6 +1898,14 @@
     });
 
     btnCloseShare.addEventListener('click', () => modalShare.classList.add('hidden'));
+
+    const btnShareP2 = document.getElementById('btn-share-p2');
+    if (btnShareP2 && btnShare) {
+      btnShareP2.addEventListener('click', () => {
+        modalMenu.classList.add('hidden');
+        btnShare.click();
+      });
+    }
 
     btnCopyUrl.addEventListener('click', async () => {
       const url = shareUrlText.textContent;

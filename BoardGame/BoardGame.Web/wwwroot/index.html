@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/css/style.css?v=12">
+  <link rel="stylesheet" href="/css/style.css?v=16">
 </head>
 <body>
   <div class="app-container">
@@ -293,6 +293,7 @@
           <div class="input-row">
             <input type="text" id="input-p1" placeholder="Player 1" value="Player 1" maxlength="16">
             <input type="text" id="input-p2" placeholder="Player 2" value="Player 2" maxlength="16">
+            <button id="btn-share-p2" type="button" class="btn btn-sm btn-secondary" title="Share Game Link" aria-label="Share Game Link" style="flex: 0 0 auto; padding: 0 12px;">🔗</button>
           </div>
         </div>
 
@@ -572,6 +573,11 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=12"></script>
+  <script src="/js/app.js?v=15"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>

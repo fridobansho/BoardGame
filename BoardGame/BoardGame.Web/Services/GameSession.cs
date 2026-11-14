@@ -11,7 +11,7 @@ public class GameSession
 {
     private readonly object _lock = new();
 
-    public string Id { get; } = Guid.NewGuid().ToString("N");
+    public string Id { get; private set; } = Guid.NewGuid().ToString("N");
     public string RoomCode { get; }
     public string GameType { get; }
     public string Mode { get; }
@@ -21,8 +21,8 @@ public class GameSession
     public IGameLogic GameLogic { get; }
     public List<IPlayer> Players { get; } = new();
 
-    public string Player1Token { get; } = Guid.NewGuid().ToString("N");
-    public string Player2Token { get; } = Guid.NewGuid().ToString("N");
+    public string Player1Token { get; private set; } = Guid.NewGuid().ToString("N");
+    public string Player2Token { get; private set; } = Guid.NewGuid().ToString("N");
 
     public int CurrentTurnIndex { get; private set; } = 0;
     public string Status { get; private set; } = "InProgress";
@@ -51,7 +51,7 @@ public class GameSession
     public event Action<int, int>? OnPrediction;
 
     public bool IsPublic { get; set; } = true;
-    public DateTime CreatedAt { get; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
 
     private readonly Stack<GameSnapshot> _history = new();
 
@@ -65,6 +65,141 @@ public class GameSession
         int? LastMoveX,
         int? LastMoveY
     );
+
+    public record PersistedSession(
+        string Id,
+        string RoomCode,
+        string GameType,
+        string Mode,
+        string AiDifficulty,
+        string Player1Name,
+        string Player2Name,
+        string Player1Token,
+        string Player2Token,
+        int Width,
+        int Height,
+        string[][] Grid,
+        int CurrentTurnIndex,
+        string Status,
+        string? Winner,
+        string? LastMoveText,
+        int? LastMoveX,
+        int? LastMoveY,
+        int MoveCount,
+        int Player1Score,
+        int Player2Score,
+        int DrawScore,
+        int GameNumber,
+        int StartingPlayerIndex,
+        int TimerSeconds,
+        DateTime? TurnExpiresAt,
+        int Player1Predictions,
+        int Player2Predictions,
+        bool IsPublic,
+        DateTime CreatedAt,
+        List<MoveStepDto> MoveHistory
+    );
+
+    public PersistedSession ExportPersistedState()
+    {
+        lock (_lock)
+        {
+            var grid = new string[Board.Height][];
+            for (int y = 0; y < Board.Height; y++)
+            {
+                grid[y] = new string[Board.Width];
+                for (int x = 0; x < Board.Width; x++)
+                {
+                    grid[y][x] = Board.PieceAt(x, y).Value;
+                }
+            }
+
+            return new PersistedSession(
+                Id,
+                RoomCode,
+                GameType,
+                Mode,
+                AiDifficulty,
+                Players[0].Name,
+                Players[1].Name,
+                Player1Token,
+                Player2Token,
+                Board.Width,
+                Board.Height,
+                grid,
+                CurrentTurnIndex,
+                Status,
+                Winner,
+                LastMoveText,
+                LastMoveX,
+                LastMoveY,
+                MoveCount,
+                Player1Score,
+                Player2Score,
+                DrawScore,
+                GameNumber,
+                StartingPlayerIndex,
+                TimerSeconds,
+                TurnExpiresAt,
+                Player1Predictions,
+                Player2Predictions,
+                IsPublic,
+                CreatedAt,
+                MoveHistory.ToList()
+            );
+        }
+    }
+
+    public static GameSession FromPersistedState(PersistedSession state)
+    {
+        var session = new GameSession(
+            state.GameType,
+            state.Mode,
+            state.AiDifficulty,
+            state.Player1Name,
+            state.Player2Name,
+            customRoomCode: state.RoomCode,
+            isPublic: state.IsPublic,
+            customWidth: state.Width,
+            customHeight: state.Height,
+            timerSeconds: state.TimerSeconds
+        );
+
+        session.Id = state.Id;
+        session.Player1Token = state.Player1Token;
+        session.Player2Token = state.Player2Token;
+        session.CurrentTurnIndex = state.CurrentTurnIndex;
+        session.Status = state.Status;
+        session.Winner = state.Winner;
+        session.LastMoveText = state.LastMoveText;
+        session.LastMoveX = state.LastMoveX;
+        session.LastMoveY = state.LastMoveY;
+        session.MoveCount = state.MoveCount;
+        session.Player1Score = state.Player1Score;
+        session.Player2Score = state.Player2Score;
+        session.DrawScore = state.DrawScore;
+        session.GameNumber = state.GameNumber;
+        session.StartingPlayerIndex = state.StartingPlayerIndex;
+        session.TurnExpiresAt = state.TurnExpiresAt;
+        session.Player1Predictions = state.Player1Predictions;
+        session.Player2Predictions = state.Player2Predictions;
+        session.CreatedAt = state.CreatedAt;
+        if (state.MoveHistory != null)
+        {
+            session.MoveHistory.AddRange(state.MoveHistory);
+        }
+
+        for (int y = 0; y < state.Height && y < session.Board.Height; y++)
+        {
+            for (int x = 0; x < state.Width && x < session.Board.Width; x++)
+            {
+                var val = state.Grid[y][x];
+                session.Board.PieceAt(x, y, val == BlankPiece.BlankValue ? BlankPiece.Blank : new Piece(val));
+            }
+        }
+
+        return session;
+    }
 
     public GameSession(
         string? gameType,

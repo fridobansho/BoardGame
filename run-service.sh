@@ -22,7 +22,16 @@ export DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1
 export DOTNET_SYSTEM_NET_DISABLEIPV6=1
 
 PORT="${PORT:-5000}"
-URLS="${URLS:-http://0.0.0.0:${PORT}}"
+HTTPS_PORT="${HTTPS_PORT:-5001}"
+CERT_PATH="$SCRIPT_DIR/certs/boardgame.pfx"
+
+if [ -f "$CERT_PATH" ]; then
+    export ASPNETCORE_Kestrel__Certificates__Default__Path="$CERT_PATH"
+    export ASPNETCORE_Kestrel__Certificates__Default__Password="boardgame"
+    URLS="${URLS:-http://0.0.0.0:${PORT};https://0.0.0.0:${HTTPS_PORT}}"
+else
+    URLS="${URLS:-http://0.0.0.0:${PORT}}"
+fi
 
 if [ -f "$SCRIPT_DIR/publish/BoardGame.Web.dll" ]; then
     cd "$SCRIPT_DIR/publish"
