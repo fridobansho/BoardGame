@@ -33,5 +33,6 @@ else
     URLS="${URLS:-http://0.0.0.0:${PORT}}"
 fi
 
+export ASPNETCORE_URLS="$URLS"
 cd "$SCRIPT_DIR/BoardGame/BoardGame.Web"
-exec "$DOTNET_BIN" watch --non-interactive run --project "$SCRIPT_DIR/BoardGame/BoardGame.Web/BoardGame.Web.csproj" --no-restore --urls "$URLS" "$@"
+exec "$DOTNET_BIN" watch --non-interactive run --no-launch-profile --project "$SCRIPT_DIR/BoardGame/BoardGame.Web/BoardGame.Web.csproj" --no-restore "$@"
