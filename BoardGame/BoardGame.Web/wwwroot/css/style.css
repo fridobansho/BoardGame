@@ -2066,3 +2066,156 @@ html, body {
 .hidden {
   display: none !important;
 }
+
+/* Gomoku Board */
+.gomoku-grid {
+  display: grid;
+  gap: 2px;
+  background: #c89b54;
+  border: 3px solid #8b6327;
+  border-radius: 10px;
+  padding: 6px;
+  width: min(92vw, 440px);
+  aspect-ratio: 1 / 1;
+}
+
+.gomoku-cell {
+  background: #e2b872;
+  border: 1px solid rgba(110, 74, 24, 0.35);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.gomoku-cell:hover:not(:disabled) {
+  background: #ecc786;
+}
+
+.gomoku-cell.last-move {
+  box-shadow: inset 0 0 0 2px #facc15;
+}
+
+.gomoku-stone-b,
+.gomoku-stone-w {
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  display: block;
+}
+
+.gomoku-stone-b {
+  background: radial-gradient(circle at 30% 30%, #4b5563, #111827);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+
+.gomoku-stone-w {
+  background: radial-gradient(circle at 30% 30%, #ffffff, #d1d5db);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Othello Board */
+.othello-grid {
+  display: grid;
+  gap: 3px;
+  background: #064e3b;
+  border: 3px solid #047857;
+  border-radius: 10px;
+  padding: 6px;
+  width: min(92vw, 420px);
+  aspect-ratio: 1 / 1;
+}
+
+.othello-cell {
+  background: #059669;
+  border: none;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.othello-cell:hover:not(:disabled) {
+  background: #10b981;
+}
+
+.othello-cell.last-move {
+  box-shadow: inset 0 0 0 2px #facc15;
+}
+
+/* Nim Board */
+.nim-grid {
+  display: grid;
+  gap: 8px;
+  background: #1e293b;
+  border: 3px solid #334155;
+  border-radius: 12px;
+  padding: 14px;
+  width: min(92vw, 420px);
+}
+
+.nim-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 2px solid #475569;
+  background: radial-gradient(circle at 30% 30%, #94a3b8, #475569);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.nim-cell:hover:not(:disabled) {
+  transform: scale(1.08);
+  border-color: #facc15;
+}
+
+.nim-cell.nim-empty {
+  background: transparent;
+  border: 1px dashed rgba(148, 163, 184, 0.2);
+  cursor: default;
+}
+
+/* Hex Board */
+.hex-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #1e293b;
+  border: 3px solid #334155;
+  border-radius: 12px;
+  overflow-x: auto;
+  max-width: 95vw;
+}
+
+.hex-row {
+  display: flex;
+  gap: 4px;
+}
+
+.hex-cell {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.hex-cell:hover:not(:disabled) {
+  background: #475569;
+}
+
+.hex-cell.last-move {
+  box-shadow: inset 0 0 0 2px #facc15;
+}

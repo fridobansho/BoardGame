@@ -156,10 +156,14 @@
     const gl = String(rawGame).toLowerCase();
     if (gl.includes('tic') || gl.includes('ttt')) gameType = 'tictactoe';
     else if (gl.includes('chomp')) gameType = 'chomp';
+    else if (gl.includes('gomoku')) gameType = 'gomoku';
+    else if (gl.includes('othello')) gameType = 'othello';
+    else if (gl.includes('nim')) gameType = 'nim';
+    else if (gl.includes('hex')) gameType = 'hex';
     else gameType = 'connect4';
 
-    const width = Number(s.width || s.Width || (gameType === 'tictactoe' ? 3 : (gameType === 'chomp' ? 5 : 7)));
-    const height = Number(s.height || s.Height || (gameType === 'tictactoe' ? 3 : (gameType === 'chomp' ? 4 : 6)));
+    const width = Number(s.width || s.Width || (gameType === 'tictactoe' ? 3 : (gameType === 'chomp' ? 5 : (gameType === 'gomoku' ? 15 : (gameType === 'othello' ? 8 : (gameType === 'nim' ? 7 : (gameType === 'hex' ? 7 : 7)))))));
+    const height = Number(s.height || s.Height || (gameType === 'tictactoe' ? 3 : (gameType === 'chomp' ? 4 : (gameType === 'gomoku' ? 15 : (gameType === 'othello' ? 8 : (gameType === 'nim' ? 4 : (gameType === 'hex' ? 7 : 6)))))));
     const rawGrid = s.grid || s.Grid;
     let grid = [];
     if (Array.isArray(rawGrid) && rawGrid.length >= height) {
@@ -551,13 +555,31 @@
       { label: '4×3 (Bite-sized)', width: 4, height: 3 },
       { label: '6×5 (Large)', width: 6, height: 5 },
       { label: '7×4 (Wide)', width: 7, height: 4 }
+    ],
+    gomoku: [
+      { label: '15×15 (Standard)', width: 15, height: 15 },
+      { label: '9×9 (Quick)', width: 9, height: 9 },
+      { label: '19×19 (Pro)', width: 19, height: 19 }
+    ],
+    hex: [
+      { label: '7×7 (Standard)', width: 7, height: 7 },
+      { label: '5×5 (Quick)', width: 5, height: 5 },
+      { label: '11×11 (Pro)', width: 11, height: 11 }
     ]
   };
 
   function updateGridSizePills(game) {
+    const secGridSize = document.getElementById('sec-grid-size');
     if (!groupGridSize) return;
+    const opts = GRID_OPTIONS[game];
+    if (!opts) {
+      if (secGridSize) secGridSize.style.display = 'none';
+      selectedGridWidth = null;
+      selectedGridHeight = null;
+      return;
+    }
+    if (secGridSize) secGridSize.style.display = '';
     groupGridSize.innerHTML = '';
-    const opts = GRID_OPTIONS[game] || GRID_OPTIONS.connect4;
 
     let match = opts.find(o => o.width === selectedGridWidth && o.height === selectedGridHeight);
     if (!match) {
@@ -1178,8 +1200,8 @@
     }
 
     lobbyRoomList.innerHTML = '';
-    const icons = { connect4: '🔴', tictactoe: '❌', chomp: '🍫' };
-    const names = { connect4: 'Connect 4', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp' };
+    const icons = { connect4: '🔴', tictactoe: '❌', chomp: '🍫', gomoku: '⚫', othello: '⚪', nim: '🪨', hex: '⬡' };
+    const names = { connect4: 'Connect 4', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp', gomoku: 'Gomoku', othello: 'Othello', nim: 'Nim', hex: 'Hex' };
     const modeLabels = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Room' };
 
     rooms.forEach(r => {
@@ -1503,7 +1525,7 @@
     } catch (e) { }
 
     // Header info
-    const gameNames = { connect4: 'Connect Four', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp' };
+    const gameNames = { connect4: 'Connect Four', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp', gomoku: 'Gomoku', othello: 'Othello', nim: 'Nim', hex: 'Hex' };
     const modeNames = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Wi-Fi Room' };
     gameTitle.textContent = gameNames[session.gameType] || 'Board Game';
     if (isSpectator) {
@@ -1687,10 +1709,167 @@
       case 'chomp':
         renderChomp(session);
         break;
+      case 'gomoku':
+        renderGomoku(session);
+        break;
+      case 'othello':
+        renderOthello(session);
+        break;
+      case 'nim':
+        renderNim(session);
+        break;
+      case 'hex':
+        renderHex(session);
+        break;
       default:
         renderConnectFour(session);
         break;
     }
+  }
+
+  function renderGomoku(session) {
+    const grid = document.createElement('div');
+    grid.className = 'gomoku-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    const lastMove = session.lastMove;
+    const canPlay = !isSpectator;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
+        const isLastMove = lastMove && lastMove.x === x && lastMove.y === y;
+        const cell = document.createElement('button');
+        cell.className = 'gomoku-cell' + (isLastMove ? ' last-move' : '');
+        cell.disabled = !canPlay || (val !== '' && val !== ' ');
+        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
+
+        if (val === 'B') {
+          const stone = document.createElement('span');
+          stone.className = 'gomoku-stone-b';
+          cell.appendChild(stone);
+        } else if (val === 'W') {
+          const stone = document.createElement('span');
+          stone.className = 'gomoku-stone-w';
+          cell.appendChild(stone);
+        }
+
+        if (canPlay && (val === '' || val === ' ')) {
+          cell.addEventListener('click', () => submitMove(x, y));
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    boardContainer.appendChild(grid);
+  }
+
+  function renderOthello(session) {
+    const grid = document.createElement('div');
+    grid.className = 'othello-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    const lastMove = session.lastMove;
+    const canPlay = !isSpectator;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
+        const isLastMove = lastMove && lastMove.x === x && lastMove.y === y;
+        const cell = document.createElement('button');
+        cell.className = 'othello-cell' + (isLastMove ? ' last-move' : '');
+        cell.disabled = !canPlay || (val !== '' && val !== ' ');
+        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
+
+        if (val === 'B') {
+          const disc = document.createElement('span');
+          disc.className = 'gomoku-stone-b';
+          cell.appendChild(disc);
+        } else if (val === 'W') {
+          const disc = document.createElement('span');
+          disc.className = 'gomoku-stone-w';
+          cell.appendChild(disc);
+        }
+
+        if (canPlay && (val === '' || val === ' ')) {
+          cell.addEventListener('click', () => submitMove(x, y));
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    boardContainer.appendChild(grid);
+  }
+
+  function renderNim(session) {
+    const grid = document.createElement('div');
+    grid.className = 'nim-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    const canPlay = !isSpectator;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
+        const hasStone = val === 'S';
+        const cell = document.createElement('button');
+        cell.className = 'nim-cell' + (hasStone ? '' : ' nim-empty');
+        cell.disabled = !canPlay || !hasStone;
+        cell.setAttribute('aria-label', `Row ${y + 1}, Stone ${x + 1}`);
+
+        if (canPlay && hasStone) {
+          cell.addEventListener('click', () => submitMove(x, y));
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    boardContainer.appendChild(grid);
+  }
+
+  function renderHex(session) {
+    const grid = document.createElement('div');
+    grid.className = 'hex-grid';
+
+    const lastMove = session.lastMove;
+    const canPlay = !isSpectator;
+
+    for (let y = 0; y < session.height; y++) {
+      const row = document.createElement('div');
+      row.className = 'hex-row';
+      row.style.marginLeft = `${y * 16}px`;
+
+      for (let x = 0; x < session.width; x++) {
+        const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
+        const isLastMove = lastMove && lastMove.x === x && lastMove.y === y;
+        const cell = document.createElement('button');
+        cell.className = 'hex-cell' + (isLastMove ? ' last-move' : '');
+        cell.disabled = !canPlay || (val !== '' && val !== ' ');
+        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
+
+        if (val === 'B') {
+          const stone = document.createElement('span');
+          stone.className = 'gomoku-stone-b';
+          cell.appendChild(stone);
+        } else if (val === 'W') {
+          const stone = document.createElement('span');
+          stone.className = 'gomoku-stone-w';
+          cell.appendChild(stone);
+        }
+
+        if (canPlay && (val === '' || val === ' ')) {
+          cell.addEventListener('click', () => submitMove(x, y));
+        }
+
+        row.appendChild(cell);
+      }
+      grid.appendChild(row);
+    }
+
+    boardContainer.appendChild(grid);
   }
 
   function renderConnectFour(session) {
@@ -2241,7 +2420,11 @@
       const rules = {
         connect4: '🔴 CONNECT FOUR:\nTake turns dropping discs into columns.\nFirst player to connect 4 discs horizontally, vertically, or diagonally wins!',
         tictactoe: '❌ TIC-TAC-TOE:\nTake turns marking squares in the grid.\nAlign a full line in a row (or 4 in a row on 4x4/5x5) to win!',
-        chomp: '🍫 CHOMP:\nTwo players eat blocks of chocolate. Chomping a block removes everything to its right and below.\nThe top-left block ☠️ is POISON!\nWhoever is forced to eat the poison block loses!'
+        chomp: '🍫 CHOMP:\nTwo players eat blocks of chocolate. Chomping a block removes everything to its right and below.\nThe top-left block ☠️ is POISON!\nWhoever is forced to eat the poison block loses!',
+        gomoku: '⚫ GOMOKU (5-in-a-Row):\nTwo players alternate placing black and white stones on a 15×15 board.\nFirst player to form an unbroken line of 5 stones horizontally, vertically, or diagonally wins!',
+        othello: '⚪ OTHELLO (Reversi):\nTwo players place black and white discs on an 8×8 board.\nOutflank opponent discs in any direction to flip them to your color. Most discs when no moves remain wins!',
+        nim: '🪨 NIM:\nFour rows of stones (1, 3, 5, 7).\nOn your turn, click any stone to remove it and all stones to its right in that row.\nThe player who takes the LAST stone wins!',
+        hex: '⬡ HEX:\nBlack connects Top-to-Bottom; White connects Left-to-Right.\nTake turns placing stones on the skewed hex grid. First player to form an unbroken chain wins!'
       };
       alert(rules[currentSession?.gameType || 'connect4']);
     });

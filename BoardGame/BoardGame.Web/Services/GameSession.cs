@@ -3,6 +3,10 @@ namespace BoardGame.Web.Services;
 using BoardGame.Library.Implementations;
 using BoardGame.Library.Implementations.Chomp;
 using BoardGame.Library.Implementations.ConnectFour;
+using BoardGame.Library.Implementations.Gomoku;
+using BoardGame.Library.Implementations.Hex;
+using BoardGame.Library.Implementations.Nim;
+using BoardGame.Library.Implementations.Othello;
 using BoardGame.Library.Implementations.TicTacToe;
 using BoardGame.Library.Interfaces;
 using BoardGame.Web.Models;
@@ -239,6 +243,24 @@ public class GameSession
                 Board = new Board(chompWidth, chompHeight);
                 GameLogic = new ChompLogic();
                 break;
+            case "gomoku":
+                int gomokuSize = customWidth.HasValue && customWidth.Value >= 9 && customWidth.Value <= 19 ? customWidth.Value : 15;
+                Board = new Board(gomokuSize, gomokuSize);
+                GameLogic = new GomokuLogic();
+                break;
+            case "othello":
+                Board = new Board(8, 8);
+                GameLogic = new OthelloLogic();
+                break;
+            case "nim":
+                Board = new Board(7, 4);
+                GameLogic = new NimLogic();
+                break;
+            case "hex":
+                int hexSize = customWidth.HasValue && customWidth.Value >= 5 && customWidth.Value <= 11 ? customWidth.Value : 7;
+                Board = new Board(hexSize, hexSize);
+                GameLogic = new HexLogic();
+                break;
             case "tictactoe":
             default:
                 GameType = "tictactoe";
@@ -287,6 +309,10 @@ public class GameSession
         {
             "connect4" => difficulty == "smart" ? new ConnectFourPlayer(name) : new RandomConnectFourPlayer(name),
             "chomp" => difficulty == "smart" ? new SmartChompPlayer(name) : new ChompPlayer(name),
+            "gomoku" => difficulty == "smart" ? new SmartGomokuPlayer(name) : new RandomGomokuPlayer(name),
+            "othello" => difficulty == "smart" ? new SmartOthelloPlayer(name) : new RandomOthelloPlayer(name),
+            "nim" => difficulty == "smart" ? new SmartNimPlayer(name) : new RandomNimPlayer(name),
+            "hex" => difficulty == "smart" ? new SmartHexPlayer(name) : new RandomHexPlayer(name),
             "tictactoe" => difficulty == "smart"
                 ? (boardWidth == 3 ? new MinimaxPlayer(name) : new SmartNxNTicTacToePlayer(name))
                 : new SimplePlayer(name),
