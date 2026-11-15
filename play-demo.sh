@@ -25,7 +25,7 @@ PROJECT_PATH="$SCRIPT_DIR/BoardGame/BoardGame/BoardGame.csproj"
 echo "=========================================================="
 echo " BoardGame Automated TUI Demo"
 echo " Playing in-place (no scrolling) with turn-by-turn animation"
-echo " Usage: ./play-demo.sh [connect4|tictactoe|chomp|all] [--delay <ms>] [--alt|--no-alt]"
+echo " Usage: ./play-demo.sh [connect4|tictactoe|chomp|gomoku|othello|nim|hex|all] [--delay <ms>] [--in-place|--stream] [--alt|--no-alt] [-i|--interactive]"
 echo "=========================================================="
 
 dotnet run --project "$PROJECT_PATH" --no-restore --configuration Release -- --in-place "$@"

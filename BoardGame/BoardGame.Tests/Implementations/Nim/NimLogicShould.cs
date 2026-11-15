@@ -81,5 +81,36 @@ namespace BoardGame.Tests.Implementations.Nim
             Assert.That(move.X, Is.EqualTo(0));
             Assert.That(move.Y, Is.EqualTo(3));
         }
+
+        [Test]
+        public void RejectMoveOnEmptyCell()
+        {
+            Assert.That(_logic.IsValidMove(_board, new Location(6, 0)), Is.False);
+            Assert.That(_logic.ApplyMove(_board, _p1, new Location(6, 0)), Is.False);
+        }
+
+        [Test]
+        public void CompleteFullAiVsAiPlaythrough()
+        {
+            var board = new Board(7, 4);
+            var smart = new SmartNimPlayer("Smart");
+            var random = new RandomNimPlayer("Random");
+            var players = new IPlayer[] { smart, random };
+            _logic.MapPieces(players);
+            _logic.InitializeBoard(board);
+
+            int turn = 0;
+            while (!_logic.GetWinners(board, players).Any() && turn < 20)
+            {
+                var current = players[turn % 2];
+                var move = current.GetMove(board);
+                Assert.That(move, Is.Not.Null);
+                Assert.That(_logic.ApplyMove(board, current, move), Is.True);
+                turn++;
+            }
+
+            var winners = _logic.GetWinners(board, players).ToList();
+            Assert.That(winners, Has.Count.EqualTo(1));
+        }
     }
 }

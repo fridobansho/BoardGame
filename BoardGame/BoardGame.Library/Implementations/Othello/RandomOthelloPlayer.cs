@@ -8,17 +8,19 @@ namespace BoardGame.Library.Implementations.Othello
     public class RandomOthelloPlayer : IPlayer
     {
         private readonly Random _random = new Random();
+        private readonly string _symbol;
 
         public string Name { get; }
 
-        public RandomOthelloPlayer(string name = "Othello Bot (Easy)")
+        public RandomOthelloPlayer(string name = "Othello Bot (Easy)", string symbol = null)
         {
             Name = name;
+            _symbol = symbol;
         }
 
         public ILocation GetMove(IBoard board)
         {
-            var mySymbol = InferMySymbol(board);
+            var mySymbol = _symbol ?? InferMySymbol(board);
             var validMoves = new List<ILocation>();
 
             for (int x = 0; x < board.Width; x++)

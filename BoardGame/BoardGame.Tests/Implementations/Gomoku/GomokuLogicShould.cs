@@ -94,5 +94,42 @@ namespace BoardGame.Tests.Implementations.Gomoku
             Assert.That(move.Y, Is.EqualTo(7));
             Assert.That(move.X == 3 || move.X == 8, Is.True);
         }
+
+        [Test]
+        public void DetectAntiDiagonalFiveInARowWin()
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                _logic.ApplyMove(_board, _p1, new Location(6 - i, 2 + i));
+            }
+
+            var winners = _logic.GetWinners(_board, new[] { _p1, _p2 }).ToList();
+            Assert.That(winners, Has.Count.EqualTo(1));
+            Assert.That(winners[0], Is.EqualTo(_p1));
+        }
+
+        [Test]
+        public void CompleteFullAiVsAiPlaythrough()
+        {
+            var board = new Board(9, 9);
+            var smart = new SmartGomokuPlayer("Smart");
+            var random = new RandomGomokuPlayer("Random");
+            var players = new IPlayer[] { smart, random };
+            _logic.MapPieces(players);
+            _logic.InitializeBoard(board);
+
+            int turn = 0;
+            while (!_logic.GetWinners(board, players).Any() && turn < 81)
+            {
+                var current = players[turn % 2];
+                var move = current.GetMove(board);
+                Assert.That(move, Is.Not.Null);
+                Assert.That(_logic.ApplyMove(board, current, move), Is.True);
+                turn++;
+            }
+
+            var winners = _logic.GetWinners(board, players).ToList();
+            Assert.That(winners, Is.Not.Empty);
+        }
     }
 }

@@ -62,5 +62,34 @@ namespace BoardGame.Tests.Implementations.Othello
             Assert.That(move, Is.Not.Null);
             Assert.That(_logic.IsValidMove(_board, _p1, move), Is.True);
         }
+
+        [Test]
+        public void CompleteFullAiVsAiPlaythroughWithTurnSkipping()
+        {
+            var board = new Board(8, 8);
+            var smart = new SmartOthelloPlayer("Smart", BlackPiece.Black.Value);
+            var random = new RandomOthelloPlayer("Random", WhitePiece.White.Value);
+            var players = new IPlayer[] { smart, random };
+            _logic.MapPieces(players);
+            _logic.InitializeBoard(board);
+
+            int turn = 0;
+            int safety = 0;
+            while (!_logic.GetWinners(board, players).Any() && safety < 100)
+            {
+                var current = players[turn % 2];
+                if (_logic.HasValidMoves(board, current))
+                {
+                    var move = current.GetMove(board);
+                    Assert.That(move, Is.Not.Null);
+                    Assert.That(_logic.ApplyMove(board, current, move), Is.True);
+                }
+                turn++;
+                safety++;
+            }
+
+            var winners = _logic.GetWinners(board, players).ToList();
+            Assert.That(winners, Is.Not.Empty);
+        }
     }
 }

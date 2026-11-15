@@ -20,17 +20,19 @@ namespace BoardGame.Library.Implementations.Othello
         };
 
         private readonly Random _random = new Random();
+        private readonly string _symbol;
 
         public string Name { get; }
 
-        public SmartOthelloPlayer(string name = "Othello Bot (Smart)")
+        public SmartOthelloPlayer(string name = "Othello Bot (Smart)", string symbol = null)
         {
             Name = name;
+            _symbol = symbol;
         }
 
         public ILocation GetMove(IBoard board)
         {
-            var mySymbol = RandomOthelloPlayer.InferMySymbol(board);
+            var mySymbol = _symbol ?? RandomOthelloPlayer.InferMySymbol(board);
             ILocation bestMove = null;
             int bestScore = int.MinValue;
 
