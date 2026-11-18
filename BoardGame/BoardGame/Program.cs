@@ -1,12 +1,15 @@
 namespace BoardGame
 {
     using Library.Implementations;
+    using Library.Implementations.Checkers;
     using Library.Implementations.Chomp;
     using Library.Implementations.ConnectFour;
     using Library.Implementations.Gomoku;
     using Library.Implementations.Hex;
     using Library.Implementations.Nim;
     using Library.Implementations.Othello;
+    using Library.Implementations.Scrabble;
+    using Library.Implementations.Sudoku;
     using Library.Implementations.TicTacToe;
     using Library.Interfaces;
     using System;
@@ -49,7 +52,8 @@ namespace BoardGame
                 }
                 else if (arg == "all" || arg == "connect4" || arg == "c4" || arg == "connectfour" ||
                          arg == "tictactoe" || arg == "ttt" || arg == "chomp" ||
-                         arg == "gomoku" || arg == "othello" || arg == "nim" || arg == "hex")
+                         arg == "gomoku" || arg == "othello" || arg == "nim" || arg == "hex" ||
+                         arg == "checkers" || arg == "draughts" || arg == "scrabble" || arg == "sudoku")
                 {
                     requestedGame = arg;
                 }
@@ -156,6 +160,33 @@ namespace BoardGame
                              new IPlayer[] { new SmartHexPlayer("Black (Smart)"), new RandomHexPlayer("White (Random)") },
                              new HexLogic(), renderer, turnDelayMs);
                 }
+
+                if (requestedGame == "checkers" || requestedGame == "draughts")
+                {
+                    if (useAlt) Console.Clear();
+                    Console.WriteLine("\n=== Checkers (Smart AI vs Random AI) ===");
+                    PlayGame(new Board(8, 8),
+                             new IPlayer[] { new SmartCheckersPlayer("Red (Smart)"), new RandomCheckersPlayer("Black (Random)") },
+                             new CheckersLogic(), renderer, turnDelayMs);
+                }
+
+                if (requestedGame == "scrabble")
+                {
+                    if (useAlt) Console.Clear();
+                    Console.WriteLine("\n=== Scrabble (Smart AI vs Random AI) ===");
+                    PlayGame(new Board(15, 15),
+                             new IPlayer[] { new SmartScrabblePlayer("SmartBot"), new RandomScrabblePlayer("RandomBot") },
+                             new ScrabbleLogic(), renderer, turnDelayMs);
+                }
+
+                if (requestedGame == "sudoku")
+                {
+                    if (useAlt) Console.Clear();
+                    Console.WriteLine("\n=== Sudoku (Smart AI vs Random AI) ===");
+                    PlayGame(new Board(9, 9),
+                             new IPlayer[] { new SmartSudokuPlayer("SmartBot"), new RandomSudokuPlayer("RandomBot") },
+                             new SudokuLogic(), renderer, turnDelayMs);
+                }
             }
             finally
             {
@@ -171,7 +202,7 @@ namespace BoardGame
             Console.WriteLine("  dotnet run --project BoardGame/BoardGame/BoardGame.csproj -- [options] [game]");
             Console.WriteLine();
             Console.WriteLine("Games:");
-            Console.WriteLine("  tictactoe (ttt), connect4 (c4), chomp, gomoku, othello, nim, hex, all");
+            Console.WriteLine("  tictactoe (ttt), connect4 (c4), chomp, gomoku, othello, nim, hex, checkers, scrabble, sudoku, all");
             Console.WriteLine();
             Console.WriteLine("Options:");
             Console.WriteLine("  -i, --interactive   Launch the interactive game & settings menu");
@@ -202,6 +233,9 @@ namespace BoardGame
                 Console.WriteLine("5. Othello (Reversi)");
                 Console.WriteLine("6. Nim");
                 Console.WriteLine("7. Hex");
+                Console.WriteLine("8. Checkers (Draughts)");
+                Console.WriteLine("9. Scrabble");
+                Console.WriteLine("10. Sudoku");
                 Console.WriteLine("0. Exit");
                 Console.Write("Select a game: ");
 
@@ -220,6 +254,9 @@ namespace BoardGame
                     "5" => "othello",
                     "6" => "nim",
                     "7" => "hex",
+                    "8" => "checkers",
+                    "9" => "scrabble",
+                    "10" => "sudoku",
                     _ => null
                 };
 
@@ -259,6 +296,9 @@ namespace BoardGame
                     "othello" => new OthelloLogic(),
                     "nim" => new NimLogic(),
                     "hex" => new HexLogic(),
+                    "checkers" => new CheckersLogic(),
+                    "scrabble" => new ScrabbleLogic(),
+                    "sudoku" => new SudokuLogic(),
                     _ => new TicTacToeLogic()
                 };
 
@@ -295,6 +335,9 @@ namespace BoardGame
                 "hex" => PromptChoice("Board Size: 1) 7x7  2) 5x5  3) 11x11", new[] { (7, 7), (5, 5), (11, 11) }),
                 "othello" => (8, 8),
                 "nim" => (7, 4),
+                "checkers" => (8, 8),
+                "scrabble" => (15, 15),
+                "sudoku" => (9, 9),
                 _ => (3, 3)
             };
         }
@@ -324,6 +367,11 @@ namespace BoardGame
                     : new RandomOthelloPlayer(name, isFirst ? BlackPiece.Black.Value : WhitePiece.White.Value),
                 "nim" => smart ? new SmartNimPlayer(name) : new RandomNimPlayer(name),
                 "hex" => smart ? new SmartHexPlayer(name) : new RandomHexPlayer(name),
+                "checkers" => smart
+                    ? new SmartCheckersPlayer(name, isFirst ? RedCheckerPiece.Red.Value : BlackCheckerPiece.Black.Value)
+                    : new RandomCheckersPlayer(name, isFirst ? RedCheckerPiece.Red.Value : BlackCheckerPiece.Black.Value),
+                "scrabble" => smart ? new SmartScrabblePlayer(name) : new RandomScrabblePlayer(name),
+                "sudoku" => smart ? new SmartSudokuPlayer(name) : new RandomSudokuPlayer(name),
                 _ => new SimplePlayer(name)
             };
         }
