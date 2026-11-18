@@ -9,6 +9,8 @@ namespace BoardGame.Library.Implementations.Gomoku
     {
         public const int WinLength = 5;
 
+        public bool ExactFiveOnly { get; set; } = false;
+
         private static readonly (int dx, int dy)[] Directions =
         {
             (1, 0),  // Horizontal
@@ -124,7 +126,7 @@ namespace BoardGame.Library.Implementations.Gomoku
             return Enumerable.Empty<IPlayer>();
         }
 
-        private static bool HasFiveInARow(IBoard board, int startX, int startY, int dx, int dy, string value)
+        private bool HasFiveInARow(IBoard board, int startX, int startY, int dx, int dy, string value)
         {
             int endX = startX + (WinLength - 1) * dx;
             int endY = startY + (WinLength - 1) * dy;
@@ -137,6 +139,23 @@ namespace BoardGame.Library.Implementations.Gomoku
             {
                 var next = board.PieceAt(startX + step * dx, startY + step * dy);
                 if (next == null || next.Value != value)
+                {
+                    return false;
+                }
+            }
+
+            if (ExactFiveOnly)
+            {
+                int prevX = startX - dx;
+                int prevY = startY - dy;
+                if (board.CheckBounds(prevX, prevY) && board.PieceAt(prevX, prevY)?.Value == value)
+                {
+                    return false;
+                }
+
+                int afterX = startX + WinLength * dx;
+                int afterY = startY + WinLength * dy;
+                if (board.CheckBounds(afterX, afterY) && board.PieceAt(afterX, afterY)?.Value == value)
                 {
                     return false;
                 }

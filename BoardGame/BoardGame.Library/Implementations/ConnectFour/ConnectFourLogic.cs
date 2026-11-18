@@ -10,6 +10,8 @@ namespace BoardGame.Library.Implementations.ConnectFour
         public const int DefaultWidth = 7;
         public const int DefaultHeight = 6;
 
+        public int TargetLength { get; set; } = 4;
+
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public ConnectFourLogic()
@@ -86,7 +88,10 @@ namespace BoardGame.Library.Implementations.ConnectFour
         {
             ValidatePlayers(players);
 
-            // Check for 4 in a row across the board
+            // Check for TargetLength in a row across the board
+            int target = Math.Max(2, TargetLength);
+            (int dx, int dy)[] directions = { (1, 0), (0, 1), (1, 1), (1, -1) };
+
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -94,40 +99,26 @@ namespace BoardGame.Library.Implementations.ConnectFour
                     var piece = board.PieceAt(x, y);
                     if (piece == null || piece.Value == BlankPiece.BlankValue) continue;
 
-                    // 1. Horizontal right (x, x+1, x+2, x+3)
-                    if (x + 3 < board.Width &&
-                        piece.Value == board.PieceAt(x + 1, y).Value &&
-                        piece.Value == board.PieceAt(x + 2, y).Value &&
-                        piece.Value == board.PieceAt(x + 3, y).Value)
+                    foreach (var (dx, dy) in directions)
                     {
-                        return new[] { players.First(p => PlayerPieces[p].Value == piece.Value) };
-                    }
+                        int endX = x + (target - 1) * dx;
+                        int endY = y + (target - 1) * dy;
+                        if (!board.CheckBounds(endX, endY)) continue;
 
-                    // 2. Vertical down (y, y+1, y+2, y+3)
-                    if (y + 3 < board.Height &&
-                        piece.Value == board.PieceAt(x, y + 1).Value &&
-                        piece.Value == board.PieceAt(x, y + 2).Value &&
-                        piece.Value == board.PieceAt(x, y + 3).Value)
-                    {
-                        return new[] { players.First(p => PlayerPieces[p].Value == piece.Value) };
-                    }
+                        bool match = true;
+                        for (int step = 1; step < target; step++)
+                        {
+                            if (board.PieceAt(x + step * dx, y + step * dy)?.Value != piece.Value)
+                            {
+                                match = false;
+                                break;
+                            }
+                        }
 
-                    // 3. Diagonal down-right (x+i, y+i)
-                    if (x + 3 < board.Width && y + 3 < board.Height &&
-                        piece.Value == board.PieceAt(x + 1, y + 1).Value &&
-                        piece.Value == board.PieceAt(x + 2, y + 2).Value &&
-                        piece.Value == board.PieceAt(x + 3, y + 3).Value)
-                    {
-                        return new[] { players.First(p => PlayerPieces[p].Value == piece.Value) };
-                    }
-
-                    // 4. Diagonal up-right (x+i, y-i)
-                    if (x + 3 < board.Width && y - 3 >= 0 &&
-                        piece.Value == board.PieceAt(x + 1, y - 1).Value &&
-                        piece.Value == board.PieceAt(x + 2, y - 2).Value &&
-                        piece.Value == board.PieceAt(x + 3, y - 3).Value)
-                    {
-                        return new[] { players.First(p => PlayerPieces[p].Value == piece.Value) };
+                        if (match)
+                        {
+                            return new[] { players.First(p => PlayerPieces[p].Value == piece.Value) };
+                        }
                     }
                 }
             }

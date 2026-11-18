@@ -15,6 +15,8 @@ namespace BoardGame.Library.Implementations.Othello
             (-1,  1), (0,  1), (1,  1)
         };
 
+        public bool FewerDiscsWins { get; set; } = false;
+
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public OthelloLogic()
@@ -148,6 +150,13 @@ namespace BoardGame.Library.Implementations.Othello
                     if (val == p1Val) p1Count++;
                     else if (val == p2Val) p2Count++;
                 }
+            }
+
+            if (FewerDiscsWins)
+            {
+                if (p1Count < p2Count) return new[] { p1 };
+                if (p2Count < p1Count) return new[] { p2 };
+                return players;
             }
 
             if (p1Count > p2Count) return new[] { p1 };

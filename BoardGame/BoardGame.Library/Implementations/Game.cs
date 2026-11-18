@@ -37,9 +37,20 @@ namespace BoardGame.Library.Implementations
             {
                 var location = player.GetMove(Board);
 
-                if(GameLogic.IsValidMove(Board, location))
+                bool isValid = GameLogic is IMoveGameLogic moveLogic
+                    ? moveLogic.IsValidMove(Board, player, location)
+                    : GameLogic.IsValidMove(Board, location);
+
+                if (isValid)
                 {
-                    GameLogic.ApplyMove(Board, player, location);
+                    if (GameLogic is IMoveGameLogic applyMoveLogic)
+                    {
+                        applyMoveLogic.ApplyMove(Board, player, location);
+                    }
+                    else
+                    {
+                        GameLogic.ApplyMove(Board, player, location);
+                    }
                     validMoves = true;
                 }
                 if (GetWinners().Any())

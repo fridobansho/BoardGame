@@ -9,6 +9,8 @@ namespace BoardGame.Library.Implementations.Nim
     {
         private IPlayer _lastPlayer;
 
+        public bool IsMisere { get; set; } = false;
+
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public NimLogic()
@@ -96,7 +98,12 @@ namespace BoardGame.Library.Implementations.Nim
                 }
             }
 
-            return _lastPlayer != null ? new[] { _lastPlayer } : Enumerable.Empty<IPlayer>();
+            if (_lastPlayer == null) return Enumerable.Empty<IPlayer>();
+            if (IsMisere)
+            {
+                return players.Where(p => !ReferenceEquals(p, _lastPlayer));
+            }
+            return new[] { _lastPlayer };
         }
     }
 }
