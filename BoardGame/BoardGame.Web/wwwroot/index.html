@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/css/style.css?v=16">
+  <link rel="stylesheet" href="/css/style.css?v=19">
 </head>
 <body>
   <div class="app-container">
@@ -34,6 +34,9 @@
       <div class="header-right">
         <button id="btn-undo" class="icon-btn hidden" title="Undo Last Move" aria-label="Undo Move">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        </button>
+        <button id="btn-leaderboard" class="icon-btn" title="Leaderboards &amp; Daily Puzzle" aria-label="Leaderboards">
+          <span style="font-size: 1.1rem; line-height: 1;">🏆</span>
         </button>
         <button id="btn-share" class="icon-btn" title="Share with Mobile / QR" aria-label="Share">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
@@ -180,36 +183,81 @@
       </div>
 
       <div class="modal-body">
+        <!-- Game Category Selection -->
+        <label class="section-label">Game Category</label>
+        <div class="pill-group" id="group-game-category">
+          <button class="pill-btn active" data-category="alignment" type="button">
+            <span class="pill-icon">🎯</span>
+            <span>Line &amp; Connection</span>
+          </button>
+          <button class="pill-btn" data-category="strategy" type="button">
+            <span class="pill-icon">♟️</span>
+            <span>Strategy &amp; Capture</span>
+          </button>
+          <button class="pill-btn" data-category="puzzles" type="button">
+            <span class="pill-icon">🧩</span>
+            <span>Word &amp; Puzzles</span>
+          </button>
+        </div>
+
         <!-- Game Selection -->
         <label class="section-label">Select Game</label>
         <div class="pill-group" id="group-game">
-          <button class="pill-btn active" data-game="connect4">
+          <button class="pill-btn active" data-game="connect4" data-category="alignment">
             <span class="pill-icon">🔴</span>
             <span>Connect 4</span>
           </button>
-          <button class="pill-btn" data-game="tictactoe">
+          <button class="pill-btn" data-game="tictactoe" data-category="alignment">
             <span class="pill-icon">❌</span>
             <span>Tic-Tac-Toe</span>
           </button>
-          <button class="pill-btn" data-game="chomp">
+          <button class="pill-btn" data-game="chomp" data-category="strategy">
             <span class="pill-icon">🍫</span>
             <span>Chomp</span>
           </button>
-          <button class="pill-btn" data-game="gomoku">
+          <button class="pill-btn" data-game="gomoku" data-category="alignment">
             <span class="pill-icon">⚫</span>
             <span>Gomoku</span>
           </button>
-          <button class="pill-btn" data-game="othello">
+          <button class="pill-btn" data-game="othello" data-category="strategy">
             <span class="pill-icon">⚪</span>
             <span>Othello</span>
           </button>
-          <button class="pill-btn" data-game="nim">
+          <button class="pill-btn" data-game="nim" data-category="strategy">
             <span class="pill-icon">🪨</span>
             <span>Nim</span>
           </button>
-          <button class="pill-btn" data-game="hex">
+          <button class="pill-btn" data-game="hex" data-category="alignment">
             <span class="pill-icon">⬡</span>
             <span>Hex</span>
+          </button>
+          <button class="pill-btn" data-game="checkers" data-category="strategy">
+            <span class="pill-icon">👑</span>
+            <span>Checkers</span>
+          </button>
+          <button class="pill-btn" data-game="breakthrough" data-category="strategy">
+            <span class="pill-icon">🛡️</span>
+            <span>Breakthrough</span>
+          </button>
+          <button class="pill-btn" data-game="mancala" data-category="strategy">
+            <span class="pill-icon">🫘</span>
+            <span>Mancala</span>
+          </button>
+          <button class="pill-btn" data-game="scrabble" data-category="puzzles">
+            <span class="pill-icon">🔤</span>
+            <span>Scrabble</span>
+          </button>
+          <button class="pill-btn" data-game="sudoku" data-category="puzzles">
+            <span class="pill-icon">🔢</span>
+            <span>Sudoku</span>
+          </button>
+          <button class="pill-btn" data-game="wordle" data-category="puzzles">
+            <span class="pill-icon">🟩</span>
+            <span>Wordle</span>
+          </button>
+          <button class="pill-btn" data-game="minesweeper" data-category="puzzles">
+            <span class="pill-icon">💣</span>
+            <span>Minesweeper</span>
           </button>
         </div>
 
@@ -228,6 +276,27 @@
             <span class="pill-icon">🌐</span>
             <span>Wi-Fi Room</span>
           </button>
+          <button class="pill-btn" data-mode="ai-vs-ai">
+            <span class="pill-icon">⚔️</span>
+            <span>AI vs AI</span>
+          </button>
+          <button class="pill-btn" data-mode="solo">
+            <span class="pill-icon">👤</span>
+            <span>Solo</span>
+          </button>
+          <button class="pill-btn" data-mode="daily">
+            <span class="pill-icon">📅</span>
+            <span>Daily Puzzle</span>
+          </button>
+        </div>
+
+        <!-- Game Variant / Alternative Rules -->
+        <div id="sec-variant" class="form-section">
+          <label class="section-label">Game Variant &amp; Rules</label>
+          <div class="pill-group" id="group-variant">
+            <!-- Populated dynamically based on game type -->
+          </div>
+          <small id="variant-desc-hint" class="setting-hint">Standard rules.</small>
         </div>
 
         <!-- AI Difficulty (shown when vs-ai is selected) -->
@@ -314,6 +383,7 @@
         </div>
 
         <div class="form-section menu-secondary-actions">
+          <button id="btn-share-shortcut" type="button" class="btn btn-sm btn-secondary btn-block">🔗 Share Direct Link to Selected Game</button>
           <button id="btn-open-settings-menu" type="button" class="btn btn-sm btn-secondary btn-block">⚙️ Client Settings &amp; Preferences</button>
           <button id="btn-reset-series" type="button" class="btn btn-sm btn-secondary btn-block">Reset Match Series Scores</button>
         </div>
@@ -330,11 +400,15 @@
     <div class="modal-backdrop"></div>
     <div class="modal-content text-center">
       <div class="modal-header">
-        <h2>Play on Phone</h2>
+        <h2 id="share-modal-title">Play on Phone</h2>
         <button class="modal-close" id="btn-close-share">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="subtitle">Scan this code with any phone connected to the same Wi-Fi network:</p>
+        <div class="room-action-tabs" style="margin-bottom: 12px;">
+          <button id="tab-share-shortcut" class="tab-btn active" type="button">🚀 Game Shortcut</button>
+          <button id="tab-share-session" class="tab-btn" type="button">📡 Live Match</button>
+        </div>
+        <p id="share-modal-subtitle" class="subtitle">Scan or copy this link to jump straight into a new game:</p>
         
         <div class="qr-wrapper">
           <div id="qr-container"></div>
@@ -488,34 +562,76 @@
         <!-- 5. Default Game -->
         <div class="form-section">
           <label class="section-label">Favorite / Default Game</label>
+          <div class="pill-group" id="group-setting-fav-category" style="margin-bottom: 8px;">
+            <button class="pill-btn active" data-category="alignment" type="button">
+              <span class="pill-icon">🎯</span>
+              <span>Line &amp; Connection</span>
+            </button>
+            <button class="pill-btn" data-category="strategy" type="button">
+              <span class="pill-icon">♟️</span>
+              <span>Strategy &amp; Capture</span>
+            </button>
+            <button class="pill-btn" data-category="puzzles" type="button">
+              <span class="pill-icon">🧩</span>
+              <span>Word &amp; Puzzles</span>
+            </button>
+          </div>
           <div class="pill-group" id="group-setting-fav">
-            <button class="pill-btn active" data-fav="connect4">
+            <button class="pill-btn active" data-fav="connect4" data-category="alignment">
               <span class="pill-icon">🔴</span>
               <span>Connect 4</span>
             </button>
-            <button class="pill-btn" data-fav="tictactoe">
+            <button class="pill-btn" data-fav="tictactoe" data-category="alignment">
               <span class="pill-icon">❌</span>
               <span>Tic-Tac-Toe</span>
             </button>
-            <button class="pill-btn" data-fav="chomp">
+            <button class="pill-btn" data-fav="chomp" data-category="strategy">
               <span class="pill-icon">🍫</span>
               <span>Chomp</span>
             </button>
-            <button class="pill-btn" data-fav="gomoku">
+            <button class="pill-btn" data-fav="gomoku" data-category="alignment">
               <span class="pill-icon">⚫</span>
               <span>Gomoku</span>
             </button>
-            <button class="pill-btn" data-fav="othello">
+            <button class="pill-btn" data-fav="othello" data-category="strategy">
               <span class="pill-icon">⚪</span>
               <span>Othello</span>
             </button>
-            <button class="pill-btn" data-fav="nim">
+            <button class="pill-btn" data-fav="nim" data-category="strategy">
               <span class="pill-icon">🪨</span>
               <span>Nim</span>
             </button>
-            <button class="pill-btn" data-fav="hex">
+            <button class="pill-btn" data-fav="hex" data-category="alignment">
               <span class="pill-icon">⬡</span>
               <span>Hex</span>
+            </button>
+            <button class="pill-btn" data-fav="checkers" data-category="strategy">
+              <span class="pill-icon">👑</span>
+              <span>Checkers</span>
+            </button>
+            <button class="pill-btn" data-fav="breakthrough" data-category="strategy">
+              <span class="pill-icon">🛡️</span>
+              <span>Breakthrough</span>
+            </button>
+            <button class="pill-btn" data-fav="mancala" data-category="strategy">
+              <span class="pill-icon">🫘</span>
+              <span>Mancala</span>
+            </button>
+            <button class="pill-btn" data-fav="scrabble" data-category="puzzles">
+              <span class="pill-icon">🔤</span>
+              <span>Scrabble</span>
+            </button>
+            <button class="pill-btn" data-fav="sudoku" data-category="puzzles">
+              <span class="pill-icon">🔢</span>
+              <span>Sudoku</span>
+            </button>
+            <button class="pill-btn" data-fav="wordle" data-category="puzzles">
+              <span class="pill-icon">🟩</span>
+              <span>Wordle</span>
+            </button>
+            <button class="pill-btn" data-fav="minesweeper" data-category="puzzles">
+              <span class="pill-icon">💣</span>
+              <span>Minesweeper</span>
             </button>
           </div>
           <small class="setting-hint">Game loaded on startup or quick play.</small>
@@ -537,8 +653,100 @@
               <span class="pill-icon">🌐</span>
               <span>Wi-Fi Room</span>
             </button>
+            <button class="pill-btn" data-mode="ai-vs-ai">
+              <span class="pill-icon">⚔️</span>
+              <span>AI vs AI</span>
+            </button>
+            <button class="pill-btn" data-mode="solo">
+              <span class="pill-icon">👤</span>
+              <span>Solo</span>
+            </button>
+            <button class="pill-btn" data-mode="daily">
+              <span class="pill-icon">📅</span>
+              <span>Daily Puzzle</span>
+            </button>
           </div>
           <small class="setting-hint">Play mode selected on startup and in the New Game menu.</small>
+        </div>
+
+        <!-- 6b. Default Variant / Alternative Rules -->
+        <div class="form-section">
+          <label class="section-label">Default Rules / Variant Preference</label>
+          <div class="pill-group" id="group-setting-variant">
+            <button class="pill-btn active" data-variant="standard">
+              <span class="pill-icon">⚖️</span>
+              <span>Standard</span>
+            </button>
+            <button class="pill-btn" data-variant="misere">
+              <span class="pill-icon">🔄</span>
+              <span>Misère / Reverse</span>
+            </button>
+            <button class="pill-btn" data-variant="casual">
+              <span class="pill-icon">⚡</span>
+              <span>Casual / Quick</span>
+            </button>
+          </div>
+          <small class="setting-hint">Preferred ruleset pre-selected when switching games.</small>
+        </div>
+
+        <!-- 6c. Default AI Difficulty -->
+        <div class="form-section">
+          <label class="section-label">Default AI Difficulty</label>
+          <div class="pill-group two-col" id="group-setting-diff">
+            <button class="pill-btn" data-diff="easy">
+              <span class="pill-icon">🌱</span>
+              <span>Casual (Easy)</span>
+            </button>
+            <button class="pill-btn active" data-diff="smart">
+              <span class="pill-icon">🧠</span>
+              <span>Master (Smart)</span>
+            </button>
+          </div>
+          <small class="setting-hint">AI skill level pre-selected for vs AI matches.</small>
+        </div>
+
+        <!-- 6d. Default Board Size -->
+        <div class="form-section">
+          <label class="section-label">Default Board Size</label>
+          <div class="pill-group" id="group-setting-size">
+            <button class="pill-btn active" data-size="standard">
+              <span class="pill-icon">📐</span>
+              <span>Standard</span>
+            </button>
+            <button class="pill-btn" data-size="compact">
+              <span class="pill-icon">⚡</span>
+              <span>Compact / Quick</span>
+            </button>
+            <button class="pill-btn" data-size="large">
+              <span class="pill-icon">🏟️</span>
+              <span>Expanded / Large</span>
+            </button>
+          </div>
+          <small class="setting-hint">Preferred grid size when a game offers multiple sizes.</small>
+        </div>
+
+        <!-- 6e. Default Turn Timer -->
+        <div class="form-section">
+          <label class="section-label">Default Turn Timer</label>
+          <div class="pill-group" id="group-setting-timer">
+            <button class="pill-btn active" data-timer="0">
+              <span class="pill-icon">⏱️</span>
+              <span>Off</span>
+            </button>
+            <button class="pill-btn" data-timer="15">
+              <span class="pill-icon">⚡</span>
+              <span>15s</span>
+            </button>
+            <button class="pill-btn" data-timer="30">
+              <span class="pill-icon">⏳</span>
+              <span>30s</span>
+            </button>
+            <button class="pill-btn" data-timer="60">
+              <span class="pill-icon">🕐</span>
+              <span>60s</span>
+            </button>
+          </div>
+          <small class="setting-hint">Default turn clock duration for new games.</small>
         </div>
 
         <!-- 6. Default Role -->
@@ -625,7 +833,63 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=15"></script>
+  <!-- Leaderboards & Daily Puzzle Modal -->
+  <div id="modal-leaderboard" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🏆 Leaderboards</h2>
+        <button class="modal-close" id="btn-close-leaderboard">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="lb-daily-banner" class="lb-daily-banner">
+          <div>
+            <strong>📅 Today's Daily Sudoku</strong>
+            <div id="lb-daily-date" class="lb-daily-sub">Same puzzle for everyone today</div>
+          </div>
+          <button id="btn-play-daily-sudoku" type="button" class="btn btn-sm btn-primary">Play Daily</button>
+        </div>
+
+        <label class="section-label">Filter by Game</label>
+        <div class="pill-group lb-filter-group" id="group-lb-filter">
+          <button class="pill-btn active" data-lb-game="all" data-lb-mode="all">All Games</button>
+          <button class="pill-btn" data-lb-game="sudoku" data-lb-mode="daily">📅 Daily Sudoku</button>
+          <button class="pill-btn" data-lb-game="sudoku" data-lb-mode="all">🔢 Sudoku</button>
+          <button class="pill-btn" data-lb-game="wordle" data-lb-mode="daily">🟩 Daily Wordle</button>
+          <button class="pill-btn" data-lb-game="wordle" data-lb-mode="all">🟩 Wordle</button>
+          <button class="pill-btn" data-lb-game="minesweeper" data-lb-mode="daily">💣 Daily Mines</button>
+          <button class="pill-btn" data-lb-game="minesweeper" data-lb-mode="all">💣 Minesweeper</button>
+          <button class="pill-btn" data-lb-game="scrabble" data-lb-mode="all">🔤 Scrabble</button>
+          <button class="pill-btn" data-lb-game="checkers" data-lb-mode="all">👑 Checkers</button>
+          <button class="pill-btn" data-lb-game="breakthrough" data-lb-mode="all">🛡️ Breakthrough</button>
+          <button class="pill-btn" data-lb-game="mancala" data-lb-mode="all">🫘 Mancala</button>
+          <button class="pill-btn" data-lb-game="connect4" data-lb-mode="all">🔴 Connect 4</button>
+          <button class="pill-btn" data-lb-game="tictactoe" data-lb-mode="all">❌ Tic-Tac-Toe</button>
+          <button class="pill-btn" data-lb-game="gomoku" data-lb-mode="all">⚫ Gomoku</button>
+          <button class="pill-btn" data-lb-game="othello" data-lb-mode="all">⚪ Othello</button>
+          <button class="pill-btn" data-lb-game="chomp" data-lb-mode="all">🍫 Chomp</button>
+          <button class="pill-btn" data-lb-game="nim" data-lb-mode="all">🪨 Nim</button>
+          <button class="pill-btn" data-lb-game="hex" data-lb-mode="all">⬡ Hex</button>
+        </div>
+
+        <div class="room-action-tabs" style="margin-top: 12px;">
+          <button id="tab-lb-scores" class="tab-btn active" type="button">🏆 High Scores</button>
+          <button id="tab-lb-players" class="tab-btn" type="button">👑 Top Players</button>
+        </div>
+
+        <div id="leaderboard-list" class="leaderboard-list">
+          <div class="lobby-empty">Loading leaderboard...</div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-refresh-leaderboard" type="button" class="btn btn-secondary btn-block">↻ Refresh Leaderboard</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=23"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});

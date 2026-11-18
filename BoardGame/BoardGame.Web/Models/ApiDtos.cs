@@ -9,7 +9,8 @@ public record CreateSessionRequest(
     bool? IsPublic = true,
     int? CustomWidth = null,
     int? CustomHeight = null,
-    int? TimerSeconds = 0
+    int? TimerSeconds = 0,
+    string? Variant = "standard"
 );
 
 public record RoomSummaryDto(
@@ -25,10 +26,43 @@ public record RoomSummaryDto(
     string TimeAgo
 );
 
+public record TilePlacementDto(
+    int X,
+    int Y,
+    string Letter
+);
+
 public record MoveRequest(
     int X,
     int Y,
-    string? PlayerToken
+    string? PlayerToken,
+    int? ToX = null,
+    int? ToY = null,
+    List<TilePlacementDto>? Placements = null,
+    bool? IsPass = false,
+    int? Digit = null
+);
+
+public record LeaderboardEntryDto(
+    int Rank,
+    string PlayerName,
+    string GameType,
+    string Mode,
+    int Score,
+    int DurationSeconds,
+    int Moves,
+    string PuzzleDate,
+    string TimeAgo
+);
+
+public record PlayerStandingDto(
+    int Rank,
+    string PlayerName,
+    int Wins,
+    int GamesPlayed,
+    int BestScore,
+    int TotalScore,
+    int FastestWinSeconds
 );
 
 public record JoinRoomRequest(
@@ -95,5 +129,13 @@ public record SessionStateDto(
     int? TurnTimeRemaining = null,
     int Player1Predictions = 0,
     int Player2Predictions = 0,
-    List<MoveStepDto>? MoveHistory = null
+    List<MoveStepDto>? MoveHistory = null,
+    int Player1GamePoints = 0,
+    int Player2GamePoints = 0,
+    List<string>? CurrentPlayerRack = null,
+    List<string>? Player1Rack = null,
+    List<string>? Player2Rack = null,
+    int TileBagCount = 0,
+    string[][]? BonusGrid = null,
+    string Variant = "standard"
 );

@@ -22,14 +22,19 @@
   let clientDefaultMode = localStorage.getItem('bg_default_mode') || 'pass-and-play';
   let clientDefaultRole = localStorage.getItem('bg_default_role') || 'play';
   let clientSoundPack = localStorage.getItem('bg_sound_pack') || 'arcade';
+  let clientDefaultVariant = localStorage.getItem('bg_default_variant') || 'standard';
+  let clientDefaultDiff = localStorage.getItem('bg_default_diff') || 'smart';
+  let clientDefaultSize = localStorage.getItem('bg_default_size') || 'standard';
+  let clientDefaultTimer = Number(localStorage.getItem('bg_default_timer') || 0);
 
   // Selected config in modal
   let selectedGame = clientFavGame;
   let selectedMode = clientDefaultMode;
-  let selectedDiff = 'smart';
+  let selectedDiff = clientDefaultDiff;
+  let selectedVariant = 'standard';
   let selectedGridWidth = 7;
   let selectedGridHeight = 6;
-  let selectedTimerSeconds = 0;
+  let selectedTimerSeconds = clientDefaultTimer;
   let roomAction = 'host';
 
   // Runtime features state
@@ -39,6 +44,19 @@
   let replayAutoPlayTimer = null;
   let hasVotedPrediction = false;
   let confettiAnimId = null;
+  let selectedChecker = null;
+  let selectedBreakthroughPiece = null;
+  let wordleCurrentGuess = '';
+  let minesweeperFlagMode = false;
+  let aiExhibitionTimer = null;
+  let aiExhibitionPaused = false;
+  let selectedScrabbleTileIndex = null;
+  let pendingScrabblePlacements = [];
+  let selectedSudokuCell = null;
+  let highlightedSudokuDigit = null;
+  let lbFilterGame = 'all';
+  let lbFilterMode = 'all';
+  let lbActiveTab = 'scores';
 
   // DOM Elements
   const gameTitle = document.getElementById('game-title');
@@ -90,6 +108,8 @@
   // Modal Setup Sections DOM
   const groupGridSize = document.getElementById('group-grid-size');
   const groupTurnTimer = document.getElementById('group-turn-timer');
+  const groupVariant = document.getElementById('group-variant');
+  const variantDescHint = document.getElementById('variant-desc-hint');
 
   // Stats & Trophies DOM
   const statMatches = document.getElementById('stat-matches');
@@ -112,6 +132,10 @@
   const btnShare = document.getElementById('btn-share');
   const btnCloseShare = document.getElementById('btn-close-share');
   const modalShare = document.getElementById('modal-share');
+  const shareModalTitle = document.getElementById('share-modal-title');
+  const shareModalSubtitle = document.getElementById('share-modal-subtitle');
+  const tabShareShortcut = document.getElementById('tab-share-shortcut');
+  const tabShareSession = document.getElementById('tab-share-session');
   const shareUrlText = document.getElementById('share-url-text');
   const btnCopyUrl = document.getElementById('btn-copy-url');
   const copyFeedback = document.getElementById('copy-feedback');
@@ -122,6 +146,15 @@
   const iconSoundOff = document.getElementById('icon-sound-off');
 
   const btnUndo = document.getElementById('btn-undo');
+  const btnLeaderboard = document.getElementById('btn-leaderboard');
+  const modalLeaderboard = document.getElementById('modal-leaderboard');
+  const btnCloseLeaderboard = document.getElementById('btn-close-leaderboard');
+  const btnPlayDailySudoku = document.getElementById('btn-play-daily-sudoku');
+  const btnRefreshLeaderboard = document.getElementById('btn-refresh-leaderboard');
+  const tabLbScores = document.getElementById('tab-lb-scores');
+  const tabLbPlayers = document.getElementById('tab-lb-players');
+  const leaderboardList = document.getElementById('leaderboard-list');
+  const lbDailyDate = document.getElementById('lb-daily-date');
   const btnReset = document.getElementById('btn-reset');
   const btnNewGame = document.getElementById('btn-new-game');
   const btnOpenLobby = document.getElementById('btn-open-lobby');
@@ -152,18 +185,11 @@
   function normalizeSession(s) {
     if (!s) return null;
     const rawGame = s.gameType || s.GameType || 'connect4';
-    let gameType = 'connect4';
-    const gl = String(rawGame).toLowerCase();
-    if (gl.includes('tic') || gl.includes('ttt')) gameType = 'tictactoe';
-    else if (gl.includes('chomp')) gameType = 'chomp';
-    else if (gl.includes('gomoku')) gameType = 'gomoku';
-    else if (gl.includes('othello')) gameType = 'othello';
-    else if (gl.includes('nim')) gameType = 'nim';
-    else if (gl.includes('hex')) gameType = 'hex';
-    else gameType = 'connect4';
+    const gameType = resolveGameId(rawGame) || 'connect4';
+    const meta = GAME_REGISTRY[gameType] || GAME_REGISTRY.connect4;
 
-    const width = Number(s.width || s.Width || (gameType === 'tictactoe' ? 3 : (gameType === 'chomp' ? 5 : (gameType === 'gomoku' ? 15 : (gameType === 'othello' ? 8 : (gameType === 'nim' ? 7 : (gameType === 'hex' ? 7 : 7)))))));
-    const height = Number(s.height || s.Height || (gameType === 'tictactoe' ? 3 : (gameType === 'chomp' ? 4 : (gameType === 'gomoku' ? 15 : (gameType === 'othello' ? 8 : (gameType === 'nim' ? 4 : (gameType === 'hex' ? 7 : 6)))))));
+    const width = Number(s.width || s.Width || meta.defaultWidth);
+    const height = Number(s.height || s.Height || meta.defaultHeight);
     const rawGrid = s.grid || s.Grid;
     let grid = [];
     if (Array.isArray(rawGrid) && rawGrid.length >= height) {
@@ -178,6 +204,17 @@
         for (let y = 0; y < height; y++) {
           for (let x = 0; x < width; x++) {
             if (x !== 0 || y !== 0) grid[y][x] = 'C';
+          }
+        }
+      } else if (gameType === 'checkers') {
+        for (let y = 0; y < 3 && y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            if ((x + y) % 2 === 1) grid[y][x] = 'B';
+          }
+        }
+        for (let y = Math.max(0, height - 3); y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            if ((x + y) % 2 === 1) grid[y][x] = 'R';
           }
         }
       }
@@ -212,7 +249,15 @@
       turnTimeRemaining: Number(s.turnTimeRemaining !== undefined ? s.turnTimeRemaining : (s.TurnTimeRemaining || 0)),
       player1Predictions: Number(s.player1Predictions !== undefined ? s.player1Predictions : (s.Player1Predictions || 0)),
       player2Predictions: Number(s.player2Predictions !== undefined ? s.player2Predictions : (s.Player2Predictions || 0)),
-      moveHistory: s.moveHistory || s.MoveHistory || []
+      moveHistory: s.moveHistory || s.MoveHistory || [],
+      player1GamePoints: Number(s.player1GamePoints !== undefined ? s.player1GamePoints : (s.Player1GamePoints || 0)),
+      player2GamePoints: Number(s.player2GamePoints !== undefined ? s.player2GamePoints : (s.Player2GamePoints || 0)),
+      currentPlayerRack: s.currentPlayerRack || s.CurrentPlayerRack || [],
+      player1Rack: s.player1Rack || s.Player1Rack || [],
+      player2Rack: s.player2Rack || s.Player2Rack || [],
+      tileBagCount: Number(s.tileBagCount !== undefined ? s.tileBagCount : (s.TileBagCount || 0)),
+      bonusGrid: s.bonusGrid || s.BonusGrid || null,
+      variant: (s.variant || s.Variant || 'standard').toLowerCase()
     };
   }
 
@@ -464,7 +509,7 @@
     const stats = getStats();
     stats.matches++;
 
-    const isP1 = (session.mode === 'vs-ai' || session.mode === 'pass-and-play' || !playerToken || playerToken === 'p1');
+    const isP1 = (session.mode === 'vs-ai' || session.mode === 'pass-and-play' || session.mode === 'daily' || session.mode === 'solo' || !playerToken || playerToken === 'p1');
     const myName = isP1 ? session.player1Name : session.player2Name;
     const isWinner = session.winner && (session.winner === myName || (session.status === 'Finished' && ((isP1 && session.winner === session.player1Name) || (!isP1 && session.winner === session.player2Name))));
 
@@ -538,35 +583,563 @@
     }
   }
 
-  // Grid Size Options & Dynamic Pills
-  const GRID_OPTIONS = {
-    connect4: [
-      { label: '7×6 (Standard)', width: 7, height: 6 },
-      { label: '6×5 (Quick)', width: 6, height: 5 },
-      { label: '8×7 (Expanded)', width: 8, height: 7 }
-    ],
-    tictactoe: [
-      { label: '3×3 (Classic)', width: 3, height: 3 },
-      { label: '4×4 (4-in-a-row)', width: 4, height: 4 },
-      { label: '5×5 (Grand)', width: 5, height: 5 }
-    ],
-    chomp: [
-      { label: '5×4 (Standard)', width: 5, height: 4 },
-      { label: '4×3 (Bite-sized)', width: 4, height: 3 },
-      { label: '6×5 (Large)', width: 6, height: 5 },
-      { label: '7×4 (Wide)', width: 7, height: 4 }
-    ],
-    gomoku: [
-      { label: '15×15 (Standard)', width: 15, height: 15 },
-      { label: '9×9 (Quick)', width: 9, height: 9 },
-      { label: '19×19 (Pro)', width: 19, height: 19 }
-    ],
-    hex: [
-      { label: '7×7 (Standard)', width: 7, height: 7 },
-      { label: '5×5 (Quick)', width: 5, height: 5 },
-      { label: '11×11 (Pro)', width: 11, height: 11 }
-    ]
+  // Unified Game Metadata Registry (single source of truth for categories, modes, variants, grids & rules)
+  const GAME_REGISTRY = {
+    connect4: {
+      id: 'connect4',
+      name: 'Connect Four',
+      shortName: 'Connect 4',
+      icon: '🔴',
+      category: 'alignment',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 7,
+      defaultHeight: 6,
+      aliases: ['connectfour', 'connect-four', 'connect-4', 'c4'],
+      variants: [
+        { id: 'standard', icon: '🔴', label: 'Standard (4)', desc: 'Connect 4 discs horizontally, vertically, or diagonally.' },
+        { id: 'connect5', icon: '5️⃣', label: 'Connect 5', desc: 'Align 5 discs in a row to win (great on 7×6 or 8×7).' },
+        { id: 'misere', icon: '🔄', label: 'Misère', desc: 'Avoid 4-in-a-row! First player to align 4 loses.' }
+      ],
+      gridOptions: [
+        { label: '7×6 (Standard)', width: 7, height: 6 },
+        { label: '6×5 (Quick)', width: 6, height: 5 },
+        { label: '8×7 (Expanded)', width: 8, height: 7 }
+      ],
+      rules: '🔴 CONNECT FOUR:\nTake turns dropping discs into columns.\nFirst player to connect 4 discs horizontally, vertically, or diagonally wins!'
+    },
+    tictactoe: {
+      id: 'tictactoe',
+      name: 'Tic-Tac-Toe',
+      shortName: 'Tic-Tac-Toe',
+      icon: '❌',
+      category: 'alignment',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 3,
+      defaultHeight: 3,
+      aliases: ['ttt', 'tic-tac-toe', 'tic'],
+      variants: [
+        { id: 'standard', icon: '❌', label: 'Classic', desc: 'First player to complete a line wins.' },
+        { id: 'misere', icon: '🔄', label: 'Misère', desc: 'Reverse rules: completing a full line loses!' }
+      ],
+      gridOptions: [
+        { label: '3×3 (Classic)', width: 3, height: 3 },
+        { label: '4×4 (4-in-a-row)', width: 4, height: 4 },
+        { label: '5×5 (Grand)', width: 5, height: 5 }
+      ],
+      rules: '❌ TIC-TAC-TOE:\nTake turns marking squares in the grid.\nAlign a full line in a row (or 4 in a row on 4x4/5x5) to win!'
+    },
+    chomp: {
+      id: 'chomp',
+      name: 'Chomp',
+      shortName: 'Chomp',
+      icon: '🍫',
+      category: 'strategy',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 5,
+      defaultHeight: 4,
+      aliases: [],
+      variants: [
+        { id: 'standard', icon: '☠️', label: 'Misère (Poison)', desc: 'Standard Chomp: eating the top-left poison block loses.' },
+        { id: 'normal', icon: '🍫', label: 'Normal (Last)', desc: 'Alternative rules: eating the top-left block wins!' }
+      ],
+      gridOptions: [
+        { label: '5×4 (Standard)', width: 5, height: 4 },
+        { label: '4×3 (Bite-sized)', width: 4, height: 3 },
+        { label: '6×5 (Large)', width: 6, height: 5 },
+        { label: '7×4 (Wide)', width: 7, height: 4 }
+      ],
+      rules: '🍫 CHOMP:\nTwo players eat blocks of chocolate. Chomping a block removes everything to its right and below.\nThe top-left block ☠️ is POISON!\nWhoever is forced to eat the poison block loses!'
+    },
+    gomoku: {
+      id: 'gomoku',
+      name: 'Gomoku',
+      shortName: 'Gomoku',
+      icon: '⚫',
+      category: 'alignment',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 15,
+      defaultHeight: 15,
+      aliases: ['five-in-a-row'],
+      variants: [
+        { id: 'standard', icon: '⚫', label: 'Freestyle (5+)', desc: 'Five or more stones in a row wins.' },
+        { id: 'exact5', icon: '🎯', label: 'Exact 5 Only', desc: 'Exactly 5 in a row wins; 6+ overlines do not count.' },
+        { id: 'misere', icon: '🔄', label: 'Misère', desc: 'Avoid 5-in-a-row! Forming 5 stones loses.' }
+      ],
+      gridOptions: [
+        { label: '15×15 (Standard)', width: 15, height: 15 },
+        { label: '9×9 (Quick)', width: 9, height: 9 },
+        { label: '19×19 (Pro)', width: 19, height: 19 }
+      ],
+      rules: '⚫ GOMOKU (5-in-a-Row):\nTwo players alternate placing black and white stones on a 15×15 board.\nFirst player to form an unbroken line of 5 stones horizontally, vertically, or diagonally wins!'
+    },
+    othello: {
+      id: 'othello',
+      name: 'Othello',
+      shortName: 'Othello',
+      icon: '⚪',
+      category: 'strategy',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 8,
+      defaultHeight: 8,
+      aliases: ['reversi'],
+      variants: [
+        { id: 'standard', icon: '⚪', label: 'Classic (Most)', desc: 'Player with the most discs when no moves remain wins.' },
+        { id: 'reversed', icon: '🔄', label: 'Anti-Reversi', desc: 'Reverse Othello: fewest discs at the end wins!' }
+      ],
+      gridOptions: null,
+      rules: '⚪ OTHELLO (Reversi):\nTwo players place black and white discs on an 8×8 board.\nOutflank opponent discs in any direction to flip them to your color. Most discs when no moves remain wins!'
+    },
+    nim: {
+      id: 'nim',
+      name: 'Nim',
+      shortName: 'Nim',
+      icon: '🪨',
+      category: 'strategy',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 7,
+      defaultHeight: 4,
+      aliases: [],
+      variants: [
+        { id: 'standard', icon: '🪨', label: 'Normal Play', desc: 'Player who takes the LAST stone wins.' },
+        { id: 'misere', icon: '🔄', label: 'Misère Nim', desc: 'Classic Misère: player forced to take the LAST stone loses!' }
+      ],
+      gridOptions: null,
+      rules: '🪨 NIM:\nFour rows of stones (1, 3, 5, 7).\nOn your turn, click any stone to remove it and all stones to its right in that row.\nThe player who takes the LAST stone wins!'
+    },
+    hex: {
+      id: 'hex',
+      name: 'Hex',
+      shortName: 'Hex',
+      icon: '⬡',
+      category: 'alignment',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 7,
+      defaultHeight: 7,
+      aliases: [],
+      variants: [
+        { id: 'standard', icon: '⬡', label: 'Standard', desc: 'First player to connect their two opposite sides wins.' },
+        { id: 'misere', icon: '🔄', label: 'Misère', desc: 'Avoid connecting your sides—completing a path loses!' }
+      ],
+      gridOptions: [
+        { label: '7×7 (Standard)', width: 7, height: 7 },
+        { label: '5×5 (Quick)', width: 5, height: 5 },
+        { label: '11×11 (Pro)', width: 11, height: 11 }
+      ],
+      rules: '⬡ HEX:\nBlack connects Top-to-Bottom; White connects Left-to-Right.\nTake turns placing stones on the skewed hex grid. First player to form an unbroken chain wins!'
+    },
+    checkers: {
+      id: 'checkers',
+      name: 'Checkers',
+      shortName: 'Checkers',
+      icon: '👑',
+      category: 'strategy',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 8,
+      defaultHeight: 8,
+      aliases: ['draughts', 'checker'],
+      variants: [
+        { id: 'standard', icon: '👑', label: 'Standard', desc: 'Mandatory captures with multi-jump chains and King promotion.' },
+        { id: 'casual', icon: '⚡', label: 'Casual', desc: 'Optional captures—choose any legal diagonal move.' },
+        { id: 'giveaway', icon: '🔄', label: 'Giveaway', desc: 'Lose all your pieces or get blocked to win!' }
+      ],
+      gridOptions: null,
+      rules: '👑 CHECKERS (Draughts):\nMove diagonally forward on dark squares. Captures by jumping over opponent pieces are mandatory (multi-jumps chain automatically).\nReach the opposite row to promote to a King 👑, which can move & jump in all 4 diagonal directions!'
+    },
+    scrabble: {
+      id: 'scrabble',
+      name: 'Scrabble',
+      shortName: 'Scrabble',
+      icon: '🔤',
+      category: 'puzzles',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 15,
+      defaultHeight: 15,
+      aliases: [],
+      variants: [
+        { id: 'standard', icon: '🔤', label: 'Standard', desc: 'Classic 98-tile bag and standard bonus multipliers.' },
+        { id: 'blitz', icon: '⚡', label: 'Blitz (36 Tiles)', desc: 'Shortened tile bag for fast, quick-finish matches.' },
+        { id: 'double_bonus', icon: '💎', label: 'Super Bonus', desc: 'Boosted DL/TL/DW/TW multipliers (×3/×4/×5)!' }
+      ],
+      gridOptions: null,
+      rules: '🔤 SCRABBLE:\nSelect tiles from your 7-tile rack and place them in a line on the 15×15 board.\nThe first word must cover the center ★ (DW). All subsequent words must connect to existing tiles and form valid dictionary words.\nScore bonus squares (DL, TL, DW, TW) to outscore your opponent!'
+    },
+    sudoku: {
+      id: 'sudoku',
+      name: 'Sudoku',
+      shortName: 'Sudoku',
+      icon: '🔢',
+      category: 'puzzles',
+      supportsDaily: true,
+      supportsSolo: true,
+      supportsAiVsAi: false,
+      defaultWidth: 9,
+      defaultHeight: 9,
+      aliases: [],
+      variants: [
+        { id: 'standard', icon: '🔢', label: 'Classic (40)', desc: 'Balanced 9×9 Sudoku puzzle (40 blank cells).' },
+        { id: 'easy_puzzle', icon: '⚡', label: 'Casual (28)', desc: 'More starting clues for a faster, lighter solve.' },
+        { id: 'hard_puzzle', icon: '🔥', label: 'Master (50)', desc: 'Fewer starting clues for a tougher challenge.' }
+      ],
+      gridOptions: null,
+      rules: '🔢 SUDOKU:\nFill every row, column, and 3×3 box with digits 1–9 without repeats.\nTap an empty cell, then tap a digit on the number pad (or press 1–9 on your keyboard).\nEarn +10 pts per digit and +20 bonus pts for completing a row, column, or 3×3 box!\nPlay 👤 Solo or 📅 Daily Puzzle to compete on the leaderboard.'
+    },
+    breakthrough: {
+      id: 'breakthrough',
+      name: 'Breakthrough',
+      shortName: 'Breakthrough',
+      icon: '🛡️',
+      category: 'strategy',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 8,
+      defaultHeight: 8,
+      aliases: ['bt'],
+      variants: [
+        { id: 'standard', icon: '🛡️', label: 'Standard', desc: 'First pawn to reach the opponent\'s back rank wins!' },
+        { id: 'misere', icon: '🔄', label: 'Misère', desc: 'Avoid reaching the back rank or capturing all enemies!' }
+      ],
+      gridOptions: [
+        { label: '8×8 (Standard)', width: 8, height: 8 },
+        { label: '6×6 (Quick)', width: 6, height: 6 }
+      ],
+      rules: '🛡️ BREAKTHROUGH:\nPawns move 1 square straight forward (to empty) or diagonally forward (empty or capture).\nFirst player to reach the opposite home row—or capture all enemy pawns—wins!'
+    },
+    mancala: {
+      id: 'mancala',
+      name: 'Mancala',
+      shortName: 'Mancala',
+      icon: '🫘',
+      category: 'strategy',
+      supportsDaily: false,
+      supportsSolo: false,
+      defaultWidth: 6,
+      defaultHeight: 2,
+      aliases: ['kalah'],
+      variants: [
+        { id: 'standard', icon: '🫘', label: 'Classic (4)', desc: '4 stones per pit. Land in your store for an extra turn; empty own pit captures opposite!' },
+        { id: 'quick', icon: '⚡', label: 'Quick (3)', desc: '3 stones per pit for faster rounds.' },
+        { id: 'misere', icon: '🔄', label: 'Anti-Mancala', desc: 'Reverse rules: fewest stones in your store wins!' }
+      ],
+      gridOptions: null,
+      rules: '🫘 MANCALA (Kalah):\nTap any non-empty pit on your bottom row to sow stones counter-clockwise.\nLand your last stone in your Store for a FREE EXTRA TURN!\nLand in an empty pit on your side to capture the opposite pit\'s stones.'
+    },
+    wordle: {
+      id: 'wordle',
+      name: 'Wordle',
+      shortName: 'Wordle',
+      icon: '🟩',
+      category: 'puzzles',
+      supportsDaily: true,
+      supportsSolo: true,
+      supportsAiVsAi: false,
+      defaultWidth: 5,
+      defaultHeight: 6,
+      aliases: ['wordguess'],
+      variants: [
+        { id: 'standard', icon: '🟩', label: 'Dictionary', desc: 'Valid 5-letter English dictionary words only (6 guesses).' },
+        { id: 'any_word', icon: '⚡', label: 'Free Guess', desc: 'Allow any 5-letter combination to probe letters.' }
+      ],
+      gridOptions: null,
+      rules: '🟩 WORDLE:\nGuess the secret 5-letter word in 6 tries!\n🟩 Green = right letter & spot • 🟨 Yellow = right letter, wrong spot • ⬛ Gray = not in word.\nPlay 📅 Daily Puzzle to compete on today\'s shared word!'
+    },
+    minesweeper: {
+      id: 'minesweeper',
+      name: 'Minesweeper',
+      shortName: 'Minesweeper',
+      icon: '💣',
+      category: 'puzzles',
+      supportsDaily: true,
+      supportsSolo: true,
+      supportsAiVsAi: false,
+      defaultWidth: 9,
+      defaultHeight: 9,
+      aliases: ['mines'],
+      variants: [
+        { id: 'standard', icon: '💣', label: 'Standard', desc: 'Balanced minefield density.' },
+        { id: 'easy_puzzle', icon: '⚡', label: 'Light Mines', desc: 'Half as many mines for a relaxed clear.' },
+        { id: 'hard_puzzle', icon: '🔥', label: 'Dense Mines', desc: '50% more mines for an intense challenge!' }
+      ],
+      gridOptions: [
+        { label: '9×9 (Standard)', width: 9, height: 9 },
+        { label: '6×6 (Quick)', width: 6, height: 6 },
+        { label: '12×12 (Large)', width: 12, height: 12 }
+      ],
+      rules: '💣 MINESWEEPER:\nTap squares to reveal safe cells and clear the board without hitting a mine.\nNumbers show how many mines touch that square. Use Flag Mode (or right-click) to mark mines!'
+    }
   };
+
+  function resolveGameId(raw) {
+    if (!raw) return null;
+    const key = String(raw).trim().toLowerCase();
+    if (GAME_REGISTRY[key]) return key;
+    for (const g of Object.values(GAME_REGISTRY)) {
+      if (g.aliases && g.aliases.includes(key)) return g.id;
+    }
+    for (const g of Object.values(GAME_REGISTRY)) {
+      if (key.includes(g.id) || (g.aliases && g.aliases.some(a => key.includes(a)))) return g.id;
+    }
+    return null;
+  }
+
+  function getGameMeta(game) {
+    return GAME_REGISTRY[resolveGameId(game) || 'connect4'] || GAME_REGISTRY.connect4;
+  }
+
+  const VARIANT_OPTIONS = Object.fromEntries(Object.values(GAME_REGISTRY).map(g => [g.id, g.variants]));
+  const GAME_CATEGORY_MAP = Object.fromEntries(Object.values(GAME_REGISTRY).map(g => [g.id, g.category]));
+  const DAILY_PUZZLE_GAMES = new Set(Object.values(GAME_REGISTRY).filter(g => g.supportsDaily).map(g => g.id));
+  const SOLO_GAMES = new Set(Object.values(GAME_REGISTRY).filter(g => g.supportsSolo).map(g => g.id));
+  const AI_VS_AI_GAMES = new Set(Object.values(GAME_REGISTRY).filter(g => g.supportsAiVsAi !== false).map(g => g.id));
+  const GRID_OPTIONS = Object.fromEntries(Object.values(GAME_REGISTRY).filter(g => g.gridOptions).map(g => [g.id, g.gridOptions]));
+
+  function resolvePreferredVariant(opts) {
+    if (!opts || opts.length === 0) return 'standard';
+    if (clientDefaultVariant === 'misere') {
+      const m = opts.find(o => o.id === 'misere' || o.id === 'reversed' || o.id === 'giveaway' || o.id === 'normal');
+      if (m) return m.id;
+    } else if (clientDefaultVariant === 'casual') {
+      const c = opts.find(o => o.id === 'casual' || o.id === 'blitz' || o.id === 'easy_puzzle' || o.id === 'connect5' || o.id === 'exact5');
+      if (c) return c.id;
+    }
+    return opts[0].id;
+  }
+
+  function updateVariantPills(game, preserveCurrent = false) {
+    if (!groupVariant) return;
+    const opts = VARIANT_OPTIONS[game] || VARIANT_OPTIONS.connect4;
+    if (!preserveCurrent || !opts.some(o => o.id === selectedVariant)) {
+      selectedVariant = resolvePreferredVariant(opts);
+    }
+
+    groupVariant.innerHTML = '';
+    opts.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `pill-btn ${opt.id === selectedVariant ? 'active' : ''}`;
+      btn.dataset.variant = opt.id;
+      btn.innerHTML = `<span class="pill-icon">${opt.icon}</span><span>${opt.label}</span>`;
+      btn.addEventListener('click', () => {
+        groupVariant.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedVariant = opt.id;
+        if (variantDescHint) variantDescHint.textContent = opt.desc;
+        syncPillGroupSelect(groupVariant);
+        playSound('tap');
+      });
+      groupVariant.appendChild(btn);
+    });
+
+    const activeOpt = opts.find(o => o.id === selectedVariant) || opts[0];
+    if (variantDescHint && activeOpt) {
+      variantDescHint.textContent = activeOpt.desc;
+    }
+    syncPillGroupSelect(groupVariant);
+  }
+
+  // Game Category Filtering
+  let selectedCategory = GAME_CATEGORY_MAP[selectedGame] || 'alignment';
+
+  function getCategoryForGame(game) {
+    return GAME_CATEGORY_MAP[resolveGameId(game) || 'connect4'] || 'alignment';
+  }
+
+  function applyGameCategoryFilter(category, selectFirstIfOutside = true) {
+    selectedCategory = category || 'alignment';
+    const catGroup = document.getElementById('group-game-category');
+    if (catGroup) {
+      catGroup.querySelectorAll('.pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.category === selectedCategory);
+      });
+      syncPillGroupSelect(catGroup);
+    }
+
+    const gameGroup = document.getElementById('group-game');
+    if (!gameGroup) return;
+
+    const buttons = Array.from(gameGroup.querySelectorAll('.pill-btn'));
+    buttons.forEach(btn => {
+      const cat = btn.dataset.category || getCategoryForGame(btn.dataset.game);
+      btn.classList.toggle('hidden', cat !== selectedCategory);
+    });
+
+    if (selectFirstIfOutside && getCategoryForGame(selectedGame) !== selectedCategory) {
+      const favInCat = buttons.find(b => !b.classList.contains('hidden') && b.dataset.game === clientFavGame);
+      const nextBtn = favInCat || buttons.find(b => !b.classList.contains('hidden'));
+      if (nextBtn) {
+        selectedGame = nextBtn.dataset.game;
+        buttons.forEach(b => b.classList.toggle('active', b === nextBtn));
+        updateModeOptionsForGame(selectedGame);
+        updateVariantPills(selectedGame);
+        updateGridSizePills(selectedGame);
+      }
+    } else {
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.game === selectedGame));
+    }
+
+    syncPillGroupSelect(gameGroup);
+  }
+
+  function applySettingFavCategoryFilter(category, selectFirstIfOutside = false) {
+    const cat = category || 'alignment';
+    const catGroup = document.getElementById('group-setting-fav-category');
+    if (catGroup) {
+      catGroup.querySelectorAll('.pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.category === cat);
+      });
+      syncPillGroupSelect(catGroup);
+    }
+
+    const favGroup = document.getElementById('group-setting-fav');
+    if (!favGroup) return;
+
+    const buttons = Array.from(favGroup.querySelectorAll('.pill-btn'));
+    buttons.forEach(btn => {
+      const btnCat = btn.dataset.category || getCategoryForGame(btn.dataset.fav);
+      btn.classList.toggle('hidden', btnCat !== cat);
+    });
+
+    if (selectFirstIfOutside) {
+      const activeVisible = buttons.find(b => b.classList.contains('active') && !b.classList.contains('hidden'));
+      if (!activeVisible) {
+        const firstVisible = buttons.find(b => !b.classList.contains('hidden'));
+        if (firstVisible) {
+          buttons.forEach(b => b.classList.toggle('active', b === firstVisible));
+          updateSettingModeOptionsForGame(firstVisible.dataset.fav);
+        }
+      }
+    }
+
+    syncPillGroupSelect(favGroup);
+  }
+
+  // Mode capabilities derived from GAME_REGISTRY
+  function supportsDailyMode(game) {
+    return DAILY_PUZZLE_GAMES.has(game);
+  }
+
+  function supportsSoloMode(game) {
+    return SOLO_GAMES.has(game);
+  }
+
+  function supportsAiVsAiMode(game) {
+    return AI_VS_AI_GAMES.has(game);
+  }
+
+  function updateModeOptionsForGame(game) {
+    const modeGroup = document.getElementById('group-mode');
+    if (!modeGroup) return;
+    const dailyAllowed = supportsDailyMode(game);
+    const soloAllowed = supportsSoloMode(game);
+    const aiVsAiAllowed = supportsAiVsAiMode(game);
+    const dailyBtn = modeGroup.querySelector('.pill-btn[data-mode="daily"]');
+    const soloBtn = modeGroup.querySelector('.pill-btn[data-mode="solo"]');
+    const aiBtn = modeGroup.querySelector('.pill-btn[data-mode="vs-ai"]');
+    const aiVsAiBtn = modeGroup.querySelector('.pill-btn[data-mode="ai-vs-ai"]');
+    if (dailyBtn) dailyBtn.classList.toggle('hidden', !dailyAllowed);
+    if (soloBtn) soloBtn.classList.toggle('hidden', !soloAllowed);
+    if (aiBtn) aiBtn.classList.toggle('hidden', !aiVsAiAllowed);
+    if (aiVsAiBtn) aiVsAiBtn.classList.toggle('hidden', !aiVsAiAllowed);
+
+    const invalidMode = (!dailyAllowed && selectedMode === 'daily') ||
+                        (!soloAllowed && selectedMode === 'solo') ||
+                        (!aiVsAiAllowed && (selectedMode === 'vs-ai' || selectedMode === 'ai-vs-ai'));
+    if (invalidMode) {
+      const fallback = (clientDefaultMode === 'daily' && !dailyAllowed) ||
+                       (clientDefaultMode === 'solo' && !soloAllowed) ||
+                       ((clientDefaultMode === 'vs-ai' || clientDefaultMode === 'ai-vs-ai') && !aiVsAiAllowed)
+        ? 'pass-and-play'
+        : clientDefaultMode;
+      selectedMode = fallback || 'pass-and-play';
+      modeGroup.querySelectorAll('.pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === selectedMode);
+      });
+    }
+    if (secAiDiff) secAiDiff.classList.toggle('hidden', selectedMode !== 'vs-ai' && selectedMode !== 'ai-vs-ai');
+    if (secRoom) secRoom.classList.toggle('hidden', selectedMode !== 'room');
+    syncPillGroupSelect(modeGroup);
+  }
+
+  function updateSettingModeOptionsForGame(favGame) {
+    const settingModeGroup = document.getElementById('group-setting-mode');
+    if (!settingModeGroup) return;
+    const dailyAllowed = supportsDailyMode(favGame);
+    const soloAllowed = supportsSoloMode(favGame);
+    const aiVsAiAllowed = supportsAiVsAiMode(favGame);
+    const dailyBtn = settingModeGroup.querySelector('.pill-btn[data-mode="daily"]');
+    const soloBtn = settingModeGroup.querySelector('.pill-btn[data-mode="solo"]');
+    const aiBtn = settingModeGroup.querySelector('.pill-btn[data-mode="vs-ai"]');
+    const aiVsAiBtn = settingModeGroup.querySelector('.pill-btn[data-mode="ai-vs-ai"]');
+    if (dailyBtn) dailyBtn.classList.toggle('hidden', !dailyAllowed);
+    if (soloBtn) soloBtn.classList.toggle('hidden', !soloAllowed);
+    if (aiBtn) aiBtn.classList.toggle('hidden', !aiVsAiAllowed);
+    if (aiVsAiBtn) aiVsAiBtn.classList.toggle('hidden', !aiVsAiAllowed);
+
+    const activeHidden = (dailyBtn && !dailyAllowed && dailyBtn.classList.contains('active')) ||
+                         (soloBtn && !soloAllowed && soloBtn.classList.contains('active')) ||
+                         (aiBtn && !aiVsAiAllowed && aiBtn.classList.contains('active')) ||
+                         (aiVsAiBtn && !aiVsAiAllowed && aiVsAiBtn.classList.contains('active'));
+    if (activeHidden) {
+      settingModeGroup.querySelectorAll('.pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === 'pass-and-play');
+      });
+    }
+    syncPillGroupSelect(settingModeGroup);
+  }
+
+  // Responsive Dropdown Synchronization (<select> on small screens, icon pills on larger screens)
+  function syncPillGroupSelect(groupEl) {
+    if (!groupEl) return;
+    const buttons = Array.from(groupEl.querySelectorAll('.pill-btn:not(.hidden)'));
+    let select = groupEl.nextElementSibling;
+    if (!select || !select.classList.contains('responsive-select')) {
+      select = document.createElement('select');
+      select.className = 'responsive-select';
+      const prevLabel = groupEl.previousElementSibling;
+      if (prevLabel && prevLabel.classList.contains('section-label')) {
+        select.setAttribute('aria-label', prevLabel.textContent.trim());
+      }
+      select.addEventListener('change', () => {
+        const idx = Number(select.value);
+        const currentButtons = Array.from(groupEl.querySelectorAll('.pill-btn:not(.hidden)'));
+        if (currentButtons[idx]) {
+          currentButtons[idx].click();
+        }
+      });
+      groupEl.insertAdjacentElement('afterend', select);
+    }
+
+    groupEl.classList.add('has-responsive-select');
+    select.innerHTML = '';
+    let activeIdx = 0;
+    buttons.forEach((btn, idx) => {
+      const option = document.createElement('option');
+      option.value = String(idx);
+      option.textContent = btn.textContent.replace(/\s+/g, ' ').trim();
+      if (btn.classList.contains('active')) {
+        activeIdx = idx;
+      }
+      select.appendChild(option);
+    });
+    select.selectedIndex = activeIdx;
+    select.style.display = buttons.length === 0 ? 'none' : '';
+  }
+
+  function syncAllResponsiveSelects() {
+    document.querySelectorAll('.pill-group').forEach(groupEl => {
+      syncPillGroupSelect(groupEl);
+    });
+  }
+
+  // Dynamic Grid Size Pills (options derived from GAME_REGISTRY)
 
   function updateGridSizePills(game) {
     const secGridSize = document.getElementById('sec-grid-size');
@@ -583,7 +1156,13 @@
 
     let match = opts.find(o => o.width === selectedGridWidth && o.height === selectedGridHeight);
     if (!match) {
-      match = opts[0];
+      if (clientDefaultSize === 'compact' && opts.length > 1) {
+        match = opts[1];
+      } else if (clientDefaultSize === 'large' && opts.length > 1) {
+        match = opts[opts.length - 1];
+      } else {
+        match = opts[0];
+      }
       selectedGridWidth = match.width;
       selectedGridHeight = match.height;
     }
@@ -598,10 +1177,12 @@
         btn.classList.add('active');
         selectedGridWidth = opt.width;
         selectedGridHeight = opt.height;
+        syncPillGroupSelect(groupGridSize);
         playSound('tap');
       });
       groupGridSize.appendChild(btn);
     });
+    syncPillGroupSelect(groupGridSize);
   }
 
   // Fullscreen Confetti Particle FX
@@ -1005,11 +1586,13 @@
     document.querySelectorAll('#group-setting-fav .pill-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.fav === clientFavGame);
     });
+    applySettingFavCategoryFilter(getCategoryForGame(clientFavGame), false);
 
     // Set default play mode active pill
     document.querySelectorAll('#group-setting-mode .pill-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === clientDefaultMode);
     });
+    updateSettingModeOptionsForGame(clientFavGame);
 
     // Set default role active pill
     document.querySelectorAll('#group-setting-role .pill-btn').forEach(btn => {
@@ -1026,7 +1609,22 @@
       btn.classList.toggle('active', btn.dataset.pack === clientSoundPack);
     });
 
+    // Set default variant / difficulty / board size / turn timer active pills
+    document.querySelectorAll('#group-setting-variant .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', (btn.dataset.variant || 'standard') === clientDefaultVariant);
+    });
+    document.querySelectorAll('#group-setting-diff .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', (btn.dataset.diff || 'smart') === clientDefaultDiff);
+    });
+    document.querySelectorAll('#group-setting-size .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', (btn.dataset.size || 'standard') === clientDefaultSize);
+    });
+    document.querySelectorAll('#group-setting-timer .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', String(btn.dataset.timer || '0') === String(clientDefaultTimer));
+    });
+
     renderStatsUI();
+    syncAllResponsiveSelects();
 
     modalSettings.classList.remove('hidden');
   }
@@ -1071,6 +1669,7 @@
       document.querySelectorAll('#group-game .pill-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.game === fav);
       });
+      applyGameCategoryFilter(getCategoryForGame(fav), false);
       updateGridSizePills(fav);
     }
 
@@ -1086,6 +1685,8 @@
       if (secAiDiff) secAiDiff.classList.toggle('hidden', mode !== 'vs-ai');
       if (secRoom) secRoom.classList.toggle('hidden', mode !== 'room');
     }
+    updateSettingModeOptionsForGame(selectedGame);
+    updateModeOptionsForGame(selectedGame);
 
     const activeRoleBtn = document.querySelector('#group-setting-role .pill-btn.active');
     if (activeRoleBtn) {
@@ -1109,12 +1710,86 @@
       localStorage.setItem('bg_sound_pack', pk);
     }
 
+    const activeVariantBtn = document.querySelector('#group-setting-variant .pill-btn.active');
+    if (activeVariantBtn) {
+      const v = activeVariantBtn.dataset.variant || 'standard';
+      clientDefaultVariant = v;
+      localStorage.setItem('bg_default_variant', v);
+    }
+
+    const activeDiffBtn = document.querySelector('#group-setting-diff .pill-btn.active');
+    if (activeDiffBtn) {
+      const d = activeDiffBtn.dataset.diff || 'smart';
+      clientDefaultDiff = d;
+      localStorage.setItem('bg_default_diff', d);
+      selectedDiff = d;
+      document.querySelectorAll('#group-diff .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', (btn.dataset.diff || btn.dataset.difficulty) === d);
+      });
+    }
+
+    const activeSizeBtn = document.querySelector('#group-setting-size .pill-btn.active');
+    if (activeSizeBtn) {
+      const s = activeSizeBtn.dataset.size || 'standard';
+      clientDefaultSize = s;
+      localStorage.setItem('bg_default_size', s);
+      selectedGridWidth = null;
+      selectedGridHeight = null;
+    }
+
+    const activeTimerBtn = document.querySelector('#group-setting-timer .pill-btn.active');
+    if (activeTimerBtn) {
+      const t = Number(activeTimerBtn.dataset.timer || 0);
+      clientDefaultTimer = t;
+      localStorage.setItem('bg_default_timer', String(t));
+      selectedTimerSeconds = t;
+      document.querySelectorAll('#group-turn-timer .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.timer || 0) === t);
+      });
+    }
+
+    updateVariantPills(selectedGame);
+    updateGridSizePills(selectedGame);
+    syncAllResponsiveSelects();
+
     playSound('tap');
     triggerHaptic(20);
     if (modalSettings) modalSettings.classList.add('hidden');
   }
 
-  // Check URL parameters for direct room joining or spectating
+  // Build a direct shareable URL that immediately starts a specific game & mode
+  function buildDirectGameUrl(baseOrigin, config = {}) {
+    const origin = (baseOrigin || window.location.origin).replace(/\/$/, '');
+    const game = resolveGameId(config.game || selectedGame) || 'connect4';
+    let mode = config.mode || selectedMode || 'pass-and-play';
+    if (mode === 'daily' && !supportsDailyMode(game)) {
+      mode = 'pass-and-play';
+    }
+    if (mode === 'solo' && !supportsSoloMode(game)) {
+      mode = 'pass-and-play';
+    }
+    if ((mode === 'vs-ai' || mode === 'ai-vs-ai') && !supportsAiVsAiMode(game)) {
+      mode = 'pass-and-play';
+    }
+    const urlParams = new URLSearchParams();
+    urlParams.set('game', game);
+    urlParams.set('mode', mode);
+    if (config.variant && config.variant !== 'standard') {
+      urlParams.set('variant', config.variant);
+    }
+    if ((mode === 'vs-ai' || mode === 'ai-vs-ai') && config.diff) {
+      urlParams.set('diff', config.diff);
+    }
+    if (config.width && config.height && GRID_OPTIONS[game]) {
+      urlParams.set('size', `${config.width}x${config.height}`);
+    }
+    if (Number(config.timer || 0) > 0) {
+      urlParams.set('timer', String(Number(config.timer)));
+    }
+    return `${origin}/?${urlParams.toString()}`;
+  }
+
+  // Check URL parameters for direct room joining, spectating, or game shortcut links
   function parseUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const spectateParam = params.get('spectate');
@@ -1127,11 +1802,123 @@
       joinRoomByCode(roomParam.trim().toUpperCase());
       return true;
     }
-    return false;
+
+    const rawGame = params.get('game');
+    const rawMode = params.get('mode');
+    if (!rawGame && !rawMode) {
+      return false;
+    }
+
+    let g = resolveGameId(rawGame);
+    const normalizedRawMode = rawMode ? rawMode.trim().toLowerCase() : '';
+    if (!g && (normalizedRawMode === 'daily' || normalizedRawMode === 'solo')) {
+      g = 'sudoku';
+    }
+    if (!g || !VARIANT_OPTIONS[g]) {
+      return false;
+    }
+
+    const modeAliases = {
+      ai: 'vs-ai',
+      bot: 'vs-ai',
+      aivsai: 'ai-vs-ai',
+      bots: 'ai-vs-ai',
+      local: 'pass-and-play',
+      pass: 'pass-and-play',
+      wifi: 'room'
+    };
+    let m = (rawMode || 'pass-and-play').trim().toLowerCase();
+    m = modeAliases[m] || m;
+    const validModes = new Set(['pass-and-play', 'vs-ai', 'room', 'ai-vs-ai', 'solo', 'daily']);
+    if (!validModes.has(m)) {
+      m = 'pass-and-play';
+    }
+    if (m === 'daily' && !supportsDailyMode(g)) {
+      m = 'pass-and-play';
+    }
+    if (m === 'solo' && !supportsSoloMode(g)) {
+      m = 'pass-and-play';
+    }
+    if ((m === 'vs-ai' || m === 'ai-vs-ai') && !supportsAiVsAiMode(g)) {
+      m = 'pass-and-play';
+    }
+
+    const varOpts = VARIANT_OPTIONS[g] || [];
+    const rawVariant = (params.get('variant') || '').trim().toLowerCase();
+    const validVar = varOpts.find(v => v.id === rawVariant);
+    selectedGame = g;
+    selectedMode = m;
+    selectedVariant = validVar ? validVar.id : 'standard';
+
+    const rawDiff = (params.get('diff') || '').trim().toLowerCase();
+    if (rawDiff === 'easy' || rawDiff === 'smart') {
+      selectedDiff = rawDiff;
+    }
+
+    selectedGridWidth = null;
+    selectedGridHeight = null;
+    const rawSize = (params.get('size') || '').trim().toLowerCase();
+    const sizeMatch = rawSize.match(/^(\d+)\s*[x×]\s*(\d+)$/);
+    if (sizeMatch) {
+      selectedGridWidth = Number(sizeMatch[1]);
+      selectedGridHeight = Number(sizeMatch[2]);
+    } else {
+      const rawW = Number(params.get('width'));
+      const rawH = Number(params.get('height'));
+      if (rawW > 0 && rawH > 0) {
+        selectedGridWidth = rawW;
+        selectedGridHeight = rawH;
+      }
+    }
+
+    const rawTimer = params.get('timer');
+    if (rawTimer !== null && rawTimer !== '') {
+      const t = Number(rawTimer);
+      if ([0, 15, 30, 60].includes(t)) {
+        selectedTimerSeconds = t;
+      }
+    }
+
+    document.querySelectorAll('#group-game .pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.game === selectedGame);
+    });
+    applyGameCategoryFilter(getCategoryForGame(selectedGame), false);
+    document.querySelectorAll('#group-mode .pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === selectedMode);
+    });
+    updateModeOptionsForGame(selectedGame);
+    if (secAiDiff) secAiDiff.classList.toggle('hidden', selectedMode !== 'vs-ai' && selectedMode !== 'ai-vs-ai');
+    if (secRoom) secRoom.classList.toggle('hidden', selectedMode !== 'room');
+    updateVariantPills(selectedGame, true);
+    updateGridSizePills(selectedGame);
+    document.querySelectorAll('#group-diff .pill-btn').forEach(b => {
+      b.classList.toggle('active', (b.dataset.diff || b.dataset.difficulty) === selectedDiff);
+    });
+    document.querySelectorAll('#group-turn-timer .pill-btn').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.timer || 0) === Number(selectedTimerSeconds));
+    });
+    syncAllResponsiveSelects();
+
+    const p2Name = selectedMode === 'daily'
+      ? 'Daily Challenge'
+      : (selectedMode === 'solo' ? 'Solo' : (selectedMode === 'ai-vs-ai' ? 'AI Bot 2' : 'Player 2'));
+    createSession(
+      selectedGame,
+      selectedMode,
+      selectedDiff,
+      clientPlayerName || 'Player 1',
+      p2Name,
+      true,
+      selectedGridWidth,
+      selectedGridHeight,
+      selectedTimerSeconds,
+      selectedVariant
+    );
+    return true;
   }
 
   // Create new session
-  async function createSession(game, mode, diff, p1, p2, isPublic = true, customWidth = null, customHeight = null, timerSeconds = 0) {
+  async function createSession(game, mode, diff, p1, p2, isPublic = true, customWidth = null, customHeight = null, timerSeconds = 0, variant = selectedVariant) {
     isSpectator = false;
     hasVotedPrediction = false;
     returnToLive();
@@ -1148,7 +1935,8 @@
           isPublic: Boolean(isPublic),
           customWidth: customWidth ? Number(customWidth) : null,
           customHeight: customHeight ? Number(customHeight) : null,
-          timerSeconds: Number(timerSeconds || 0)
+          timerSeconds: Number(timerSeconds || 0),
+          variant: variant || 'standard'
         })
       });
 
@@ -1172,7 +1960,8 @@
         player2Name: p2 || 'Player 2',
         width: customWidth,
         height: customHeight,
-        timerSeconds: timerSeconds
+        timerSeconds: timerSeconds,
+        variant: variant || 'standard'
       });
       onSessionUpdated(fallback);
     }
@@ -1200,14 +1989,13 @@
     }
 
     lobbyRoomList.innerHTML = '';
-    const icons = { connect4: '🔴', tictactoe: '❌', chomp: '🍫', gomoku: '⚫', othello: '⚪', nim: '🪨', hex: '⬡' };
-    const names = { connect4: 'Connect 4', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp', gomoku: 'Gomoku', othello: 'Othello', nim: 'Nim', hex: 'Hex' };
-    const modeLabels = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Room' };
+    const modeLabels = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Room', 'solo': 'Solo', 'daily': 'Daily' };
 
     rooms.forEach(r => {
       const code = r.roomCode || r.RoomCode || '';
       const sid = r.sessionId || r.SessionId || '';
       const game = (r.gameType || r.GameType || 'connect4').toLowerCase();
+      const meta = getGameMeta(game);
       const mode = (r.mode || r.Mode || 'room').toLowerCase();
       const host = r.hostName || r.HostName || 'Host';
       const time = r.timeAgo || r.TimeAgo || 'just now';
@@ -1229,9 +2017,9 @@
 
       card.innerHTML = `
         <div class="lobby-card-left">
-          <span class="lobby-card-icon">${icons[game] || '🎲'}</span>
+          <span class="lobby-card-icon">${meta.icon || '🎲'}</span>
           <div class="lobby-card-info">
-            <h4>${escapeHtml(names[game] || game)} <span class="lobby-mode-badge ${modeClass}">${escapeHtml(modeLabels[mode] || mode)}</span> ${codeBadgeHtml}</h4>
+            <h4>${escapeHtml(meta.shortName || game)} <span class="lobby-mode-badge ${modeClass}">${escapeHtml(modeLabels[mode] || mode)}</span> ${codeBadgeHtml}</h4>
             <div class="lobby-card-meta">Host: ${escapeHtml(host)} • ${escapeHtml(time)} <span class="lobby-status-badge ${statusClass}">${statusLabel}</span></div>
           </div>
         </div>
@@ -1458,7 +2246,7 @@
   }
 
   // Submit move
-  async function submitMove(x, y) {
+  async function postMovePayload(payload) {
     if (isSpectator) {
       triggerHaptic([20, 20]);
       return;
@@ -1471,20 +2259,57 @@
       const res = await fetch(`/api/session/${currentSession.id}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          x: Number(x),
-          y: Number(y),
-          playerToken: playerToken
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) {
         triggerHaptic([30, 50, 30]);
+        if (data && data.error) {
+          showSpeechBubble(data.error, 'Rules');
+        }
         return;
       }
       const sessionObj = data.session || data.Session;
       if (sessionObj) onSessionUpdated(sessionObj);
     } catch (e) { }
+  }
+
+  async function submitMove(x, y) {
+    return postMovePayload({
+      x: Number(x),
+      y: Number(y),
+      playerToken: playerToken
+    });
+  }
+
+  async function submitPieceMove(fromX, fromY, toX, toY) {
+    return postMovePayload({
+      x: Number(fromX),
+      y: Number(fromY),
+      toX: Number(toX),
+      toY: Number(toY),
+      playerToken: playerToken
+    });
+  }
+
+  async function submitWordMove(placements, isPass) {
+    const first = placements && placements.length > 0 ? placements[0] : { x: 0, y: 0 };
+    return postMovePayload({
+      x: Number(first.x || 0),
+      y: Number(first.y || 0),
+      placements: placements || [],
+      isPass: Boolean(isPass),
+      playerToken: playerToken
+    });
+  }
+
+  async function submitSudokuMove(x, y, digit) {
+    return postMovePayload({
+      x: Number(x),
+      y: Number(y),
+      digit: Number(digit),
+      playerToken: playerToken
+    });
   }
 
   // Reset current session
@@ -1505,6 +2330,40 @@
     } catch (e) { }
   }
 
+  let aiExhibitionInFlight = false;
+  async function stepAiExhibition(sessionId) {
+    if (!sessionId || aiExhibitionInFlight) return;
+    aiExhibitionInFlight = true;
+    try {
+      const res = await fetch(`/api/session/${sessionId}/ai-step`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        const sessionObj = data.session || data.Session;
+        if (sessionObj) onSessionUpdated(sessionObj);
+      }
+    } catch (e) { } finally {
+      aiExhibitionInFlight = false;
+    }
+  }
+
+  function syncAiExhibitionLoop(session) {
+    if (aiExhibitionTimer) {
+      clearInterval(aiExhibitionTimer);
+      aiExhibitionTimer = null;
+    }
+    if (!session || session.mode !== 'ai-vs-ai' || session.status !== 'InProgress' || isSpectator || aiExhibitionPaused) {
+      return;
+    }
+    aiExhibitionTimer = setInterval(() => {
+      if (!currentSession || currentSession.mode !== 'ai-vs-ai' || currentSession.status !== 'InProgress' || aiExhibitionPaused) {
+        clearInterval(aiExhibitionTimer);
+        aiExhibitionTimer = null;
+        return;
+      }
+      stepAiExhibition(currentSession.id);
+    }, 550);
+  }
+
   // Handle session updates
   function onSessionUpdated(rawSession) {
     const session = normalizeSession(rawSession);
@@ -1512,6 +2371,19 @@
 
     const prevStatus = currentSession ? currentSession.status : null;
     const prevMoveCount = currentSession ? currentSession.moveCount : 0;
+    const prevId = currentSession ? currentSession.id : null;
+    if (prevId !== session.id) {
+      aiExhibitionPaused = false;
+    }
+    if (prevId !== session.id || prevMoveCount !== session.moveCount) {
+      selectedChecker = null;
+      selectedBreakthroughPiece = null;
+      wordleCurrentGuess = '';
+      selectedScrabbleTileIndex = null;
+      pendingScrabblePlacements = [];
+      selectedSudokuCell = null;
+      highlightedSudokuDigit = null;
+    }
     currentSession = session;
 
     if (session.moveCount === 0 && session.player1Predictions === 0 && session.player2Predictions === 0) {
@@ -1525,13 +2397,19 @@
     } catch (e) { }
 
     // Header info
-    const gameNames = { connect4: 'Connect Four', tictactoe: 'Tic-Tac-Toe', chomp: 'Chomp', gomoku: 'Gomoku', othello: 'Othello', nim: 'Nim', hex: 'Hex' };
-    const modeNames = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Wi-Fi Room' };
-    gameTitle.textContent = gameNames[session.gameType] || 'Board Game';
+    const modeNames = { 'pass-and-play': 'Pass & Play', 'vs-ai': 'vs AI', 'room': 'Wi-Fi Room', 'ai-vs-ai': '⚔️ AI vs AI', 'daily': '📅 Daily Puzzle', 'solo': '👤 Solo' };
+    gameTitle.textContent = getGameMeta(session.gameType).name || 'Board Game';
+    const vOpts = VARIANT_OPTIONS[session.gameType] || [];
+    const vOpt = vOpts.find(v => v.id === session.variant);
+    const vLabel = vOpt ? vOpt.label : session.variant;
+    const baseMode = modeNames[session.mode] || session.mode;
+    const modeLabel = (session.variant && session.variant !== 'standard')
+      ? `${baseMode} • ${vLabel}`
+      : baseMode;
     if (isSpectator) {
-      modeBadge.textContent = `👀 Spectating (${modeNames[session.mode] || session.mode})`;
+      modeBadge.textContent = `👀 Spectating (${modeLabel})`;
     } else {
-      modeBadge.textContent = modeNames[session.mode] || session.mode;
+      modeBadge.textContent = modeLabel;
     }
 
     // Series score tag
@@ -1624,6 +2502,8 @@
     if (prevStatus === 'InProgress' && (session.status === 'Finished' || session.status === 'Draw')) {
       handleGameOver(session);
     }
+
+    syncAiExhibitionLoop(session);
   }
 
   function updateStatusBanner(session) {
@@ -1699,6 +2579,31 @@
     boardContainer.innerHTML = '';
     boardContainer.className = `board-container ${session.gameType}-mode` + (isSpectator ? ' spectator-mode' : '');
 
+    if (session.mode === 'ai-vs-ai' && session.status === 'InProgress' && !isSpectator && replayIndex === null) {
+      const aiBar = document.createElement('div');
+      aiBar.className = 'ai-exhibition-bar';
+
+      const btnPause = document.createElement('button');
+      btnPause.type = 'button';
+      btnPause.className = 'btn btn-xs btn-secondary';
+      btnPause.textContent = aiExhibitionPaused ? '▶ Resume AI' : '⏸ Pause AI';
+      btnPause.addEventListener('click', () => {
+        aiExhibitionPaused = !aiExhibitionPaused;
+        syncAiExhibitionLoop(session);
+        renderBoard(session);
+      });
+
+      const btnStep = document.createElement('button');
+      btnStep.type = 'button';
+      btnStep.className = 'btn btn-xs btn-primary';
+      btnStep.textContent = '⏭ Step Move';
+      btnStep.addEventListener('click', () => stepAiExhibition(session.id));
+
+      aiBar.appendChild(btnPause);
+      aiBar.appendChild(btnStep);
+      boardContainer.appendChild(aiBar);
+    }
+
     switch (session.gameType) {
       case 'connect4':
         renderConnectFour(session);
@@ -1721,10 +2626,676 @@
       case 'hex':
         renderHex(session);
         break;
+      case 'checkers':
+        renderCheckers(session);
+        break;
+      case 'scrabble':
+        renderScrabble(session);
+        break;
+      case 'sudoku':
+        renderSudoku(session);
+        break;
+      case 'breakthrough':
+        renderBreakthrough(session);
+        break;
+      case 'mancala':
+        renderMancala(session);
+        break;
+      case 'wordle':
+        renderWordle(session);
+        break;
+      case 'minesweeper':
+        renderMinesweeper(session);
+        break;
       default:
         renderConnectFour(session);
         break;
     }
+  }
+
+  function renderBreakthrough(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'checkers-wrapper';
+
+    const hint = document.createElement('div');
+    hint.className = 'checkers-hint';
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+    if (!canPlay) {
+      hint.textContent = session.lastMoveText || 'Breakthrough';
+    } else if (selectedBreakthroughPiece) {
+      hint.textContent = `Pawn (${selectedBreakthroughPiece.x}, ${selectedBreakthroughPiece.y}) selected — tap forward square`;
+    } else {
+      hint.textContent = 'Tap one of your pawns, then tap 1 square forward or diagonally forward';
+    }
+    wrapper.appendChild(hint);
+
+    const grid = document.createElement('div');
+    grid.className = 'bt-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const val = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x] : ' ';
+        const isAlt = (x + y) % 2 === 1;
+        const isSelected = selectedBreakthroughPiece && selectedBreakthroughPiece.x === x && selectedBreakthroughPiece.y === y;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
+
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'bt-cell' +
+          (isAlt ? ' alt-square' : '') +
+          (isSelected ? ' selected' : '') +
+          (isLastMove ? ' last-move' : '');
+
+        if (val === 'W' || val === 'B') {
+          const piece = document.createElement('span');
+          piece.className = val === 'W' ? 'bt-piece-w' : 'bt-piece-b';
+          cell.appendChild(piece);
+        }
+
+        const isOwn = session.currentTurnIndex === 0 ? val === 'W' : val === 'B';
+        if (canPlay) {
+          cell.addEventListener('click', () => {
+            if (isOwn) {
+              selectedBreakthroughPiece = (selectedBreakthroughPiece && selectedBreakthroughPiece.x === x && selectedBreakthroughPiece.y === y)
+                ? null
+                : { x, y };
+              playSound('tap');
+              renderBoard(session);
+            } else if (selectedBreakthroughPiece) {
+              const fromX = selectedBreakthroughPiece.x;
+              const fromY = selectedBreakthroughPiece.y;
+              selectedBreakthroughPiece = null;
+              submitPieceMove(fromX, fromY, x, y);
+            }
+          });
+        } else {
+          cell.disabled = true;
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    wrapper.appendChild(grid);
+    boardContainer.appendChild(wrapper);
+  }
+
+  function renderMancala(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'checkers-wrapper';
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+
+    const hint = document.createElement('div');
+    hint.className = 'checkers-hint';
+    hint.textContent = session.lastMoveText || 'Tap a pit on your row to sow stones counter-clockwise';
+    wrapper.appendChild(hint);
+
+    const board = document.createElement('div');
+    board.className = 'mancala-board';
+
+    // Left Store = Player 2
+    const p2Store = document.createElement('div');
+    p2Store.className = 'mancala-store';
+    p2Store.innerHTML = `<span class="mancala-store-name">${escapeHtml(session.player2Name)}</span><span class="mancala-store-val">${session.player2GamePoints || 0}</span>`;
+    board.appendChild(p2Store);
+
+    // Center 2x6 Pits
+    const pitsWrap = document.createElement('div');
+    pitsWrap.className = 'mancala-pits';
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 6; x++) {
+        const count = Number((session.grid[y] && session.grid[y][x]) || 0);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mancala-pit';
+        btn.textContent = String(count);
+        const isOwnRow = (session.currentTurnIndex === 0 && y === 1) || (session.currentTurnIndex === 1 && y === 0);
+        btn.disabled = !canPlay || !isOwnRow || count <= 0;
+        btn.addEventListener('click', () => submitMove(x, y));
+        pitsWrap.appendChild(btn);
+      }
+    }
+    board.appendChild(pitsWrap);
+
+    // Right Store = Player 1
+    const p1Store = document.createElement('div');
+    p1Store.className = 'mancala-store';
+    p1Store.innerHTML = `<span class="mancala-store-name">${escapeHtml(session.player1Name)}</span><span class="mancala-store-val">${session.player1GamePoints || 0}</span>`;
+    board.appendChild(p1Store);
+
+    wrapper.appendChild(board);
+    boardContainer.appendChild(wrapper);
+  }
+
+  function renderWordle(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'wordle-wrapper';
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+
+    // HUD
+    const hud = document.createElement('div');
+    hud.className = 'sudoku-hud';
+    hud.innerHTML = `
+      <span class="scrabble-score-pill active">${escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0} pts</strong></span>
+      <button type="button" class="btn btn-xs btn-secondary wordle-lb-btn">🏆 Leaderboard</button>
+    `;
+    const lbBtn = hud.querySelector('.wordle-lb-btn');
+    if (lbBtn) {
+      lbBtn.addEventListener('click', () => openLeaderboard('wordle', session.mode === 'daily' ? 'daily' : 'all'));
+    }
+    wrapper.appendChild(hud);
+
+    // Find active row & letter color map
+    let activeRow = session.height;
+    const keyStates = {};
+    const priority = { green: 3, yellow: 2, gray: 1 };
+
+    for (let y = 0; y < session.height; y++) {
+      const first = (session.grid[y] && session.grid[y][0]) ? session.grid[y][0].trim() : '';
+      if (!first && activeRow === session.height) {
+        activeRow = y;
+      }
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'wordle-grid';
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const raw = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x].trim() : '';
+        const cell = document.createElement('div');
+        cell.className = 'wordle-cell';
+        if (raw.length === 2) {
+          const code = raw[0];
+          const ch = raw[1];
+          const cls = code === 'G' ? 'green' : (code === 'Y' ? 'yellow' : 'gray');
+          cell.classList.add(cls);
+          cell.textContent = ch;
+          if (!keyStates[ch] || priority[cls] > priority[keyStates[ch]]) {
+            keyStates[ch] = cls;
+          }
+        } else if (canPlay && y === activeRow && x < wordleCurrentGuess.length) {
+          cell.classList.add('filled');
+          cell.textContent = wordleCurrentGuess[x];
+        }
+        grid.appendChild(cell);
+      }
+    }
+    wrapper.appendChild(grid);
+
+    // On-screen QWERTY Keyboard
+    const kbRows = [
+      ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+      ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+      ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '⌫']
+    ];
+    const kb = document.createElement('div');
+    kb.className = 'wordle-keyboard';
+
+    const submitWordleGuess = () => {
+      if (!canPlay || activeRow >= session.height || wordleCurrentGuess.length !== 5) return;
+      const placements = Array.from(wordleCurrentGuess).map((ch, x) => ({ x, y: activeRow, letter: ch }));
+      submitWordMove(placements, false);
+    };
+
+    kbRows.forEach(rowKeys => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'wordle-kb-row';
+      rowKeys.forEach(k => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'wordle-key' + (k.length > 1 || k === '⌫' ? ' wide' : '');
+        if (k.length === 1 && keyStates[k]) {
+          btn.classList.add(keyStates[k]);
+        }
+        btn.textContent = k;
+        btn.disabled = !canPlay;
+        btn.addEventListener('click', () => {
+          if (!canPlay) return;
+          if (k === 'ENTER') {
+            submitWordleGuess();
+          } else if (k === '⌫') {
+            if (wordleCurrentGuess.length > 0) {
+              wordleCurrentGuess = wordleCurrentGuess.slice(0, -1);
+              playSound('tap');
+              renderBoard(session);
+            }
+          } else if (wordleCurrentGuess.length < 5) {
+            wordleCurrentGuess += k;
+            playSound('tap');
+            renderBoard(session);
+          }
+        });
+        rowEl.appendChild(btn);
+      });
+      kb.appendChild(rowEl);
+    });
+    wrapper.appendChild(kb);
+    boardContainer.appendChild(wrapper);
+  }
+
+  function renderMinesweeper(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'ms-wrapper';
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'ms-toolbar';
+
+    const scorePill = document.createElement('span');
+    scorePill.className = 'scrabble-score-pill active';
+    scorePill.innerHTML = `Score: <strong>${session.player1GamePoints || 0}</strong>`;
+
+    const btnFlag = document.createElement('button');
+    btnFlag.type = 'button';
+    btnFlag.className = `btn btn-xs ${minesweeperFlagMode ? 'btn-primary' : 'btn-secondary'}`;
+    btnFlag.textContent = minesweeperFlagMode ? '🚩 Flag Mode: ON' : '⛏️ Reveal Mode';
+    btnFlag.disabled = !canPlay;
+    btnFlag.addEventListener('click', () => {
+      minesweeperFlagMode = !minesweeperFlagMode;
+      playSound('tap');
+      renderBoard(session);
+    });
+
+    const btnLb = document.createElement('button');
+    btnLb.type = 'button';
+    btnLb.className = 'btn btn-xs btn-secondary';
+    btnLb.textContent = '🏆 Ranks';
+    btnLb.addEventListener('click', () => openLeaderboard('minesweeper', session.mode === 'daily' ? 'daily' : 'all'));
+
+    toolbar.appendChild(scorePill);
+    toolbar.appendChild(btnFlag);
+    toolbar.appendChild(btnLb);
+    wrapper.appendChild(toolbar);
+
+    const grid = document.createElement('div');
+    grid.className = 'ms-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const val = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x].trim() : 'H';
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'ms-cell';
+
+        if (val === 'H') {
+          cell.textContent = '';
+        } else if (val === 'F') {
+          cell.textContent = '🚩';
+        } else if (val === 'M' || val === '*') {
+          cell.classList.add('revealed', 'mine');
+          cell.textContent = val === 'M' ? '💥' : '💣';
+        } else {
+          cell.classList.add('revealed');
+          if (val !== '0') {
+            cell.classList.add(`n${val}`);
+            cell.textContent = val;
+          }
+        }
+
+        if (canPlay && (val === 'H' || val === 'F')) {
+          cell.addEventListener('click', () => {
+            if (minesweeperFlagMode) {
+              submitSudokuMove(x, y, 1);
+            } else if (val === 'H') {
+              submitMove(x, y);
+            }
+          });
+          cell.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            submitSudokuMove(x, y, 1);
+          });
+        } else {
+          cell.disabled = true;
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    wrapper.appendChild(grid);
+    boardContainer.appendChild(wrapper);
+  }
+
+  function renderSudoku(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sudoku-wrapper';
+
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+
+    // HUD
+    const hud = document.createElement('div');
+    hud.className = 'sudoku-hud';
+    const isSoloDaily = session.mode === 'daily' || session.mode === 'solo';
+    if (isSoloDaily) {
+      hud.innerHTML = `
+        <span class="scrabble-score-pill active">${escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0} pts</strong></span>
+        <button type="button" class="btn btn-xs btn-secondary sudoku-lb-btn">🏆 Leaderboard</button>
+      `;
+    } else {
+      hud.innerHTML = `
+        <span class="scrabble-score-pill ${session.currentTurnIndex === 0 ? 'active' : ''}">${escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0}</strong></span>
+        <button type="button" class="btn btn-xs btn-secondary sudoku-lb-btn">🏆 Ranks</button>
+        <span class="scrabble-score-pill ${session.currentTurnIndex === 1 ? 'active' : ''}">${escapeHtml(session.player2Name)}: <strong>${session.player2GamePoints || 0}</strong></span>
+      `;
+    }
+    const lbShortcut = hud.querySelector('.sudoku-lb-btn');
+    if (lbShortcut) {
+      lbShortcut.addEventListener('click', () => {
+        openLeaderboard('sudoku', session.mode === 'daily' ? 'daily' : 'all');
+      });
+    }
+    wrapper.appendChild(hud);
+
+    // 9x9 Grid
+    const grid = document.createElement('div');
+    grid.className = 'sudoku-grid';
+
+    for (let y = 0; y < 9; y++) {
+      for (let x = 0; x < 9; x++) {
+        const rawVal = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x] : ' ';
+        const isGiven = typeof rawVal === 'string' && rawVal.startsWith('G') && rawVal.length === 2;
+        const digit = isGiven ? rawVal[1] : (rawVal && rawVal !== ' ' ? rawVal : '');
+        const isSelected = selectedSudokuCell && selectedSudokuCell.x === x && selectedSudokuCell.y === y;
+        const isSameDigit = highlightedSudokuDigit && digit === highlightedSudokuDigit;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
+
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'sudoku-cell' +
+          (isGiven ? ' given' : (digit ? ' placed' : '')) +
+          (x === 2 || x === 5 ? ' subgrid-right' : '') +
+          (y === 2 || y === 5 ? ' subgrid-bottom' : '') +
+          (isSelected ? ' selected' : '') +
+          (isSameDigit ? ' same-digit' : '') +
+          (isLastMove ? ' last-move' : '');
+        cell.textContent = digit;
+        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}${digit ? `, ${digit}` : ''}`);
+
+        cell.addEventListener('click', () => {
+          if (digit) {
+            highlightedSudokuDigit = highlightedSudokuDigit === digit ? null : digit;
+            selectedSudokuCell = null;
+            playSound('tap');
+            renderBoard(session);
+          } else if (canPlay) {
+            selectedSudokuCell = { x, y };
+            highlightedSudokuDigit = null;
+            playSound('tap');
+            renderBoard(session);
+          }
+        });
+
+        grid.appendChild(cell);
+      }
+    }
+    wrapper.appendChild(grid);
+
+    // 1-9 Number Pad
+    const numpad = document.createElement('div');
+    numpad.className = 'sudoku-numpad';
+    for (let d = 1; d <= 9; d++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sudoku-num-btn';
+      btn.textContent = String(d);
+      btn.disabled = !canPlay || !selectedSudokuCell;
+      btn.addEventListener('click', () => {
+        if (!canPlay || !selectedSudokuCell) return;
+        const { x, y } = selectedSudokuCell;
+        submitSudokuMove(x, y, d);
+      });
+      numpad.appendChild(btn);
+    }
+    wrapper.appendChild(numpad);
+
+    boardContainer.appendChild(wrapper);
+  }
+
+  function isOwnCheckerPiece(val, turnIndex) {
+    if (turnIndex === 0) return val === 'R' || val === 'RK';
+    return val === 'B' || val === 'BK';
+  }
+
+  function renderCheckers(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'checkers-wrapper';
+
+    const hint = document.createElement('div');
+    hint.className = 'checkers-hint';
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+    if (!canPlay) {
+      hint.textContent = session.lastMoveText || 'Checkers';
+    } else if (selectedChecker) {
+      hint.textContent = `Piece (${selectedChecker.x}, ${selectedChecker.y}) selected — tap destination square`;
+    } else {
+      hint.textContent = 'Tap one of your pieces, then tap destination (captures mandatory)';
+    }
+    wrapper.appendChild(hint);
+
+    const grid = document.createElement('div');
+    grid.className = 'checkers-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const val = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x] : ' ';
+        const isDark = (x + y) % 2 === 1;
+        const isSelected = selectedChecker && selectedChecker.x === x && selectedChecker.y === y;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
+
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'checkers-cell ' + (isDark ? 'dark-square' : 'light-square') +
+          (isSelected ? ' selected' : '') +
+          (isLastMove ? ' last-move' : '');
+        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
+
+        if (val === 'R' || val === 'RK' || val === 'B' || val === 'BK') {
+          const piece = document.createElement('span');
+          const isRed = val === 'R' || val === 'RK';
+          const isKing = val === 'RK' || val === 'BK';
+          piece.className = (isRed ? 'checkers-piece-r' : 'checkers-piece-b') + (isKing ? ' checkers-king' : '');
+          if (isKing) {
+            piece.textContent = '👑';
+          }
+          cell.appendChild(piece);
+        }
+
+        if (canPlay && isDark) {
+          cell.addEventListener('click', () => {
+            if (isOwnCheckerPiece(val, session.currentTurnIndex)) {
+              if (selectedChecker && selectedChecker.x === x && selectedChecker.y === y) {
+                selectedChecker = null;
+              } else {
+                selectedChecker = { x, y };
+              }
+              playSound('tap');
+              renderBoard(session);
+            } else if (selectedChecker && (val === '' || val === ' ')) {
+              const fromX = selectedChecker.x;
+              const fromY = selectedChecker.y;
+              selectedChecker = null;
+              submitPieceMove(fromX, fromY, x, y);
+            }
+          });
+        } else {
+          cell.disabled = true;
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    wrapper.appendChild(grid);
+    boardContainer.appendChild(wrapper);
+  }
+
+  const SCRABBLE_LETTER_POINTS = {
+    A: 1, B: 3, C: 3, D: 2, E: 1, F: 4, G: 2, H: 4, I: 1, J: 8, K: 5, L: 1, M: 3,
+    N: 1, O: 1, P: 3, Q: 10, R: 1, S: 1, T: 1, U: 1, V: 4, W: 4, X: 8, Y: 4, Z: 10
+  };
+
+  function renderScrabble(session) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'scrabble-wrapper';
+
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !isSpectator && replayIndex === null;
+    const rack = Array.isArray(session.currentPlayerRack) ? session.currentPlayerRack : [];
+    const usedIndices = new Set(pendingScrabblePlacements.map(p => p.rackIndex));
+
+    // Score & Bag HUD
+    const hud = document.createElement('div');
+    hud.className = 'scrabble-hud';
+    hud.innerHTML = `
+      <span class="scrabble-score-pill ${session.currentTurnIndex === 0 ? 'active' : ''}">${escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0}</strong></span>
+      <span class="scrabble-bag-pill">Bag: <strong>${session.tileBagCount || 0}</strong></span>
+      <span class="scrabble-score-pill ${session.currentTurnIndex === 1 ? 'active' : ''}">${escapeHtml(session.player2Name)}: <strong>${session.player2GamePoints || 0}</strong></span>
+    `;
+    wrapper.appendChild(hud);
+
+    // 15x15 Board
+    const grid = document.createElement('div');
+    grid.className = 'scrabble-grid';
+    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
+
+    for (let y = 0; y < session.height; y++) {
+      for (let x = 0; x < session.width; x++) {
+        const boardVal = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x] : ' ';
+        const pending = pendingScrabblePlacements.find(p => p.x === x && p.y === y);
+        const bonus = (session.bonusGrid && session.bonusGrid[y] && session.bonusGrid[y][x]) ? session.bonusGrid[y][x] : '';
+        const isCenter = x === Math.floor(session.width / 2) && y === Math.floor(session.height / 2);
+
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'scrabble-cell' +
+          (bonus ? ` bonus-${bonus.toLowerCase()}` : '') +
+          (isCenter ? ' center-star' : '');
+        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
+
+        if (boardVal && boardVal !== ' ') {
+          const tile = document.createElement('span');
+          tile.className = 'scrabble-tile';
+          const pts = SCRABBLE_LETTER_POINTS[boardVal.toUpperCase()] || 0;
+          tile.innerHTML = `${escapeHtml(boardVal)}<sub>${pts}</sub>`;
+          cell.appendChild(tile);
+          cell.disabled = true;
+        } else if (pending) {
+          const tile = document.createElement('span');
+          tile.className = 'scrabble-tile pending-tile';
+          const pts = SCRABBLE_LETTER_POINTS[pending.letter.toUpperCase()] || 0;
+          tile.innerHTML = `${escapeHtml(pending.letter)}<sub>${pts}</sub>`;
+          cell.appendChild(tile);
+          if (canPlay) {
+            cell.addEventListener('click', () => {
+              pendingScrabblePlacements = pendingScrabblePlacements.filter(p => !(p.x === x && p.y === y));
+              playSound('tap');
+              renderBoard(session);
+            });
+          } else {
+            cell.disabled = true;
+          }
+        } else {
+          if (isCenter) {
+            cell.textContent = '★';
+          } else if (bonus) {
+            cell.textContent = bonus;
+          }
+          if (canPlay) {
+            cell.addEventListener('click', () => {
+              if (selectedScrabbleTileIndex === null || usedIndices.has(selectedScrabbleTileIndex)) {
+                // Auto-select first unused rack tile if user taps the board first
+                const nextIdx = rack.findIndex((_, idx) => !usedIndices.has(idx));
+                if (nextIdx === -1) return;
+                selectedScrabbleTileIndex = nextIdx;
+              }
+              const letter = rack[selectedScrabbleTileIndex];
+              if (!letter) return;
+              pendingScrabblePlacements.push({ x, y, letter, rackIndex: selectedScrabbleTileIndex });
+              selectedScrabbleTileIndex = null;
+              playSound('tap');
+              renderBoard(session);
+            });
+          } else {
+            cell.disabled = true;
+          }
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+    wrapper.appendChild(grid);
+
+    // Tile Rack
+    const rackBar = document.createElement('div');
+    rackBar.className = 'scrabble-rack-bar';
+    if (rack.length === 0) {
+      rackBar.innerHTML = '<span class="scrabble-rack-empty">Rack empty</span>';
+    } else {
+      rack.forEach((letter, idx) => {
+        const isUsed = usedIndices.has(idx);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'scrabble-rack-tile' +
+          (idx === selectedScrabbleTileIndex ? ' selected' : '') +
+          (isUsed ? ' used' : '');
+        btn.disabled = !canPlay || isUsed;
+        const pts = SCRABBLE_LETTER_POINTS[letter.toUpperCase()] || 0;
+        btn.innerHTML = `${escapeHtml(letter)}<sub>${pts}</sub>`;
+        btn.addEventListener('click', () => {
+          selectedScrabbleTileIndex = (selectedScrabbleTileIndex === idx) ? null : idx;
+          playSound('tap');
+          renderBoard(session);
+        });
+        rackBar.appendChild(btn);
+      });
+    }
+    wrapper.appendChild(rackBar);
+
+    // Action Buttons
+    const actions = document.createElement('div');
+    actions.className = 'scrabble-actions';
+
+    const btnSubmit = document.createElement('button');
+    btnSubmit.type = 'button';
+    btnSubmit.className = 'btn btn-sm btn-primary';
+    btnSubmit.textContent = 'Submit Word';
+    btnSubmit.disabled = !canPlay || pendingScrabblePlacements.length === 0;
+    btnSubmit.addEventListener('click', () => {
+      const payload = pendingScrabblePlacements.map(p => ({ x: p.x, y: p.y, letter: p.letter }));
+      submitWordMove(payload, false);
+    });
+
+    const btnClear = document.createElement('button');
+    btnClear.type = 'button';
+    btnClear.className = 'btn btn-sm btn-secondary';
+    btnClear.textContent = 'Clear';
+    btnClear.disabled = !canPlay || pendingScrabblePlacements.length === 0;
+    btnClear.addEventListener('click', () => {
+      pendingScrabblePlacements = [];
+      selectedScrabbleTileIndex = null;
+      playSound('tap');
+      renderBoard(session);
+    });
+
+    const btnPass = document.createElement('button');
+    btnPass.type = 'button';
+    btnPass.className = 'btn btn-sm btn-secondary';
+    btnPass.textContent = 'Pass Turn';
+    btnPass.disabled = !canPlay;
+    btnPass.addEventListener('click', () => {
+      pendingScrabblePlacements = [];
+      selectedScrabbleTileIndex = null;
+      submitWordMove([], true);
+    });
+
+    actions.appendChild(btnSubmit);
+    actions.appendChild(btnClear);
+    actions.appendChild(btnPass);
+    wrapper.appendChild(actions);
+
+    boardContainer.appendChild(wrapper);
   }
 
   function renderGomoku(session) {
@@ -2022,10 +3593,27 @@
 
   // Setup Event Listeners
   function setupEvents() {
+    function openGameSetupModal() {
+      if (currentSession && currentSession.gameType) {
+        selectedGame = currentSession.gameType;
+        if (currentSession.variant) {
+          selectedVariant = currentSession.variant;
+        }
+        applyGameCategoryFilter(getCategoryForGame(selectedGame), false);
+        updateModeOptionsForGame(selectedGame);
+        updateVariantPills(selectedGame, true);
+        updateGridSizePills(selectedGame);
+        syncAllResponsiveSelects();
+      } else {
+        applyGameCategoryFilter(selectedCategory || getCategoryForGame(selectedGame), false);
+      }
+      modalMenu.classList.remove('hidden');
+    }
+
     // Menu modal
-    btnOpenMenu.addEventListener('click', () => modalMenu.classList.remove('hidden'));
+    btnOpenMenu.addEventListener('click', () => openGameSetupModal());
     btnCloseMenu.addEventListener('click', () => modalMenu.classList.add('hidden'));
-    btnNewGame.addEventListener('click', () => modalMenu.classList.remove('hidden'));
+    btnNewGame.addEventListener('click', () => openGameSetupModal());
 
     // Sound toggle
     btnSound.addEventListener('click', () => {
@@ -2065,43 +3653,127 @@
       if (confirm('Restart the current game?')) resetSession();
     });
 
-    // Share modal
-    btnShare.addEventListener('click', async () => {
-      modalShare.classList.remove('hidden');
-      copyFeedback.classList.add('hidden');
+    // Share modal (Game Shortcut & Live Match)
+    let shareLinkMode = 'shortcut';
+    let shareConfigSource = 'current';
+    let cachedShareBaseOrigin = null;
 
-      let url = window.location.origin;
-      try {
-        const infoRes = await fetch('/api/info');
-        if (infoRes.ok) {
-          const info = await infoRes.json();
-          const ips = info.localIps || info.LocalIps;
-          if (ips && ips.length > 0) {
-            const port = window.location.port ? `:${window.location.port}` : '';
-            url = `${window.location.protocol}//${ips[0]}${port}`;
+    async function resolveShareBaseOrigin() {
+      if (cachedShareBaseOrigin) return cachedShareBaseOrigin;
+      let origin = window.location.origin;
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]') {
+        try {
+          const infoRes = await fetch('/api/info');
+          if (infoRes.ok) {
+            const info = await infoRes.json();
+            const ips = info.localIps || info.LocalIps;
+            if (ips && ips.length > 0) {
+              const port = window.location.port ? `:${window.location.port}` : '';
+              origin = `${window.location.protocol}//${ips[0]}${port}`;
+            }
           }
-        }
-      } catch (e) { }
+        } catch (e) { }
+      }
+      cachedShareBaseOrigin = origin;
+      return origin;
+    }
 
-      if (isSpectator && currentSession) {
-        url += `?spectate=${currentSession.id}`;
-      } else if (currentSession && currentSession.mode === 'room' && currentSession.status === 'WaitingForPlayer') {
-        url += `?room=${currentSession.roomCode}`;
-      } else if (currentSession) {
-        url += `?spectate=${currentSession.id}`;
+    async function openShareModal(linkMode = 'shortcut', source = 'current') {
+      shareLinkMode = linkMode;
+      shareConfigSource = source;
+      if (modalShare) modalShare.classList.remove('hidden');
+      if (copyFeedback) copyFeedback.classList.add('hidden');
+      if (tabShareShortcut) tabShareShortcut.classList.toggle('active', shareLinkMode === 'shortcut');
+      if (tabShareSession) tabShareSession.classList.toggle('active', shareLinkMode === 'session');
+
+      const baseOrigin = await resolveShareBaseOrigin();
+      let url = baseOrigin;
+
+      if (shareLinkMode === 'shortcut') {
+        const useMenu = shareConfigSource === 'menu' || !currentSession;
+        const cfg = useMenu
+          ? {
+              game: selectedGame,
+              mode: selectedMode,
+              variant: selectedVariant,
+              diff: selectedDiff,
+              width: selectedGridWidth,
+              height: selectedGridHeight,
+              timer: selectedTimerSeconds
+            }
+          : {
+              game: currentSession.gameType,
+              mode: currentSession.mode,
+              variant: currentSession.variant || 'standard',
+              diff: selectedDiff || clientDefaultDiff,
+              width: currentSession.width,
+              height: currentSession.height,
+              timer: currentSession.timerSeconds || 0
+            };
+
+        const gameLabel = getGameMeta(cfg.game).name || cfg.game;
+        if (shareModalTitle) shareModalTitle.textContent = 'Share Game Shortcut';
+        if (shareModalSubtitle) {
+          shareModalSubtitle.textContent = `Scan or copy this link to immediately start a new ${gameLabel} (${cfg.mode}) game:`;
+        }
+        url = buildDirectGameUrl(baseOrigin, cfg);
+      } else {
+        if (shareModalTitle) shareModalTitle.textContent = 'Play on Phone';
+        if (isSpectator && currentSession) {
+          url = `${baseOrigin}/?spectate=${currentSession.id}`;
+          if (shareModalSubtitle) shareModalSubtitle.textContent = 'Scan or copy this link to spectate this live match:';
+        } else if (currentSession && currentSession.mode === 'room' && currentSession.status === 'WaitingForPlayer') {
+          url = `${baseOrigin}/?room=${currentSession.roomCode}`;
+          if (shareModalSubtitle) shareModalSubtitle.textContent = 'Scan or copy this link to join this live Wi-Fi match:';
+        } else if (currentSession) {
+          url = `${baseOrigin}/?spectate=${currentSession.id}`;
+          if (shareModalSubtitle) shareModalSubtitle.textContent = 'Scan or copy this link to spectate this live match on another device:';
+        } else {
+          if (shareModalSubtitle) shareModalSubtitle.textContent = 'Scan this code with any phone connected to the same Wi-Fi network:';
+        }
       }
 
       shareUrlText.textContent = url;
       renderSimpleQR(url, qrContainer);
+    }
+
+    if (tabShareShortcut) {
+      tabShareShortcut.addEventListener('click', () => {
+        openShareModal('shortcut', shareConfigSource);
+        playSound('tap');
+      });
+    }
+
+    if (tabShareSession) {
+      tabShareSession.addEventListener('click', () => {
+        openShareModal('session', shareConfigSource);
+        playSound('tap');
+      });
+    }
+
+    btnShare.addEventListener('click', () => {
+      const preferLive = currentSession && (isSpectator || (currentSession.mode === 'room' && currentSession.status === 'WaitingForPlayer'));
+      openShareModal(preferLive ? 'session' : 'shortcut', 'current');
     });
 
     btnCloseShare.addEventListener('click', () => modalShare.classList.add('hidden'));
 
+    const btnShareShortcut = document.getElementById('btn-share-shortcut');
+    if (btnShareShortcut) {
+      btnShareShortcut.addEventListener('click', () => {
+        modalMenu.classList.add('hidden');
+        openShareModal('shortcut', 'menu');
+        playSound('tap');
+      });
+    }
+
     const btnShareP2 = document.getElementById('btn-share-p2');
-    if (btnShareP2 && btnShare) {
+    if (btnShareP2) {
       btnShareP2.addEventListener('click', () => {
         modalMenu.classList.add('hidden');
-        btnShare.click();
+        openShareModal('shortcut', 'menu');
+        playSound('tap');
       });
     }
 
@@ -2203,11 +3875,20 @@
       });
     });
 
+    // Settings Fav Game Category pills
+    document.querySelectorAll('#group-setting-fav-category .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        applySettingFavCategoryFilter(btn.dataset.category, true);
+        playSound('tap');
+      });
+    });
+
     // Settings Fav Game pills
     document.querySelectorAll('#group-setting-fav .pill-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#group-setting-fav .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        updateSettingModeOptionsForGame(btn.dataset.fav);
       });
     });
 
@@ -2248,6 +3929,28 @@
         clientSoundPack = btn.dataset.pack || 'arcade';
         playSound('tap');
       });
+    });
+
+    // Settings Variant, AI Difficulty, Board Size & Turn Timer pills
+    ['#group-setting-variant', '#group-setting-diff', '#group-setting-size', '#group-setting-timer'].forEach(sel => {
+      const grp = document.querySelector(sel);
+      if (!grp) return;
+      grp.querySelectorAll('.pill-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          grp.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          syncPillGroupSelect(grp);
+          playSound('tap');
+        });
+      });
+    });
+
+    // Keep responsive <select> dropdowns in sync with pill clicks
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pill-group .pill-btn');
+      if (!btn) return;
+      const groupEl = btn.closest('.pill-group');
+      if (groupEl) syncPillGroupSelect(groupEl);
     });
 
     // Reset stats button
@@ -2315,13 +4018,22 @@
         document.querySelectorAll('#group-turn-timer .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedTimerSeconds = Number(btn.dataset.timer || 0);
+        syncPillGroupSelect(document.getElementById('group-turn-timer'));
         playSound('tap');
       });
     });
 
     btnChangeGame.addEventListener('click', () => {
       gameOverModal.classList.add('hidden');
-      modalMenu.classList.remove('hidden');
+      openGameSetupModal();
+    });
+
+    // Category selections in menu
+    document.querySelectorAll('#group-game-category .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        applyGameCategoryFilter(btn.dataset.category, true);
+        playSound('tap');
+      });
     });
 
     // Pill selections in menu
@@ -2330,7 +4042,10 @@
         document.querySelectorAll('#group-game .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedGame = btn.dataset.game;
+        updateModeOptionsForGame(selectedGame);
+        updateVariantPills(selectedGame);
         updateGridSizePills(selectedGame);
+        syncPillGroupSelect(document.getElementById('group-game'));
         playSound('tap');
       });
     });
@@ -2340,7 +4055,14 @@
         document.querySelectorAll('#group-mode .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedMode = btn.dataset.mode;
-        secAiDiff.classList.toggle('hidden', selectedMode !== 'vs-ai');
+        if (selectedMode === 'daily' && selectedGame !== 'sudoku') {
+          selectedGame = 'sudoku';
+          document.querySelectorAll('#group-game .pill-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.game === 'sudoku');
+          });
+          updateGridSizePills('sudoku');
+        }
+        secAiDiff.classList.toggle('hidden', selectedMode !== 'vs-ai' && selectedMode !== 'ai-vs-ai');
         secRoom.classList.toggle('hidden', selectedMode !== 'room');
         if (selectedMode === 'room' && roomAction === 'join') {
           fetchAvailableRooms();
@@ -2401,32 +4123,198 @@
       }
 
       const isPublic = chkSharePublic ? chkSharePublic.checked : true;
+      const p2Name = selectedMode === 'daily'
+        ? 'Daily Challenge'
+        : (selectedMode === 'solo'
+          ? 'Solo'
+          : (selectedMode === 'ai-vs-ai' ? 'AI Bot 2' : (inputP2.value.trim() || 'Player 2')));
       modalMenu.classList.add('hidden');
       createSession(
         selectedGame,
         selectedMode,
         selectedDiff,
         inputP1.value.trim() || 'Player 1',
-        inputP2.value.trim() || 'Player 2',
+        p2Name,
         isPublic,
         selectedGridWidth,
         selectedGridHeight,
-        selectedTimerSeconds
+        selectedTimerSeconds,
+        selectedVariant
       );
     });
 
     // Quick Rules button
     document.getElementById('btn-quick-rules').addEventListener('click', () => {
-      const rules = {
-        connect4: '🔴 CONNECT FOUR:\nTake turns dropping discs into columns.\nFirst player to connect 4 discs horizontally, vertically, or diagonally wins!',
-        tictactoe: '❌ TIC-TAC-TOE:\nTake turns marking squares in the grid.\nAlign a full line in a row (or 4 in a row on 4x4/5x5) to win!',
-        chomp: '🍫 CHOMP:\nTwo players eat blocks of chocolate. Chomping a block removes everything to its right and below.\nThe top-left block ☠️ is POISON!\nWhoever is forced to eat the poison block loses!',
-        gomoku: '⚫ GOMOKU (5-in-a-Row):\nTwo players alternate placing black and white stones on a 15×15 board.\nFirst player to form an unbroken line of 5 stones horizontally, vertically, or diagonally wins!',
-        othello: '⚪ OTHELLO (Reversi):\nTwo players place black and white discs on an 8×8 board.\nOutflank opponent discs in any direction to flip them to your color. Most discs when no moves remain wins!',
-        nim: '🪨 NIM:\nFour rows of stones (1, 3, 5, 7).\nOn your turn, click any stone to remove it and all stones to its right in that row.\nThe player who takes the LAST stone wins!',
-        hex: '⬡ HEX:\nBlack connects Top-to-Bottom; White connects Left-to-Right.\nTake turns placing stones on the skewed hex grid. First player to form an unbroken chain wins!'
-      };
-      alert(rules[currentSession?.gameType || 'connect4']);
+      alert(getGameMeta(currentSession?.gameType).rules);
+    });
+
+    // Keyboard input 1-9 for Sudoku & A-Z/Backspace/Enter for Wordle
+    document.addEventListener('keydown', (e) => {
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        return;
+      }
+      if (!currentSession || currentSession.status !== 'InProgress' || currentSession.isAiTurn || isSpectator) {
+        return;
+      }
+      if (currentSession.gameType === 'sudoku' && selectedSudokuCell && e.key >= '1' && e.key <= '9') {
+        submitSudokuMove(selectedSudokuCell.x, selectedSudokuCell.y, Number(e.key));
+      } else if (currentSession.gameType === 'wordle') {
+        if (e.key === 'Backspace') {
+          if (wordleCurrentGuess.length > 0) {
+            wordleCurrentGuess = wordleCurrentGuess.slice(0, -1);
+            renderBoard(currentSession);
+          }
+        } else if (e.key === 'Enter' && wordleCurrentGuess.length === 5) {
+          let activeRow = currentSession.height;
+          for (let y = 0; y < currentSession.height; y++) {
+            const first = (currentSession.grid[y] && currentSession.grid[y][0]) ? currentSession.grid[y][0].trim() : '';
+            if (!first) { activeRow = y; break; }
+          }
+          if (activeRow < currentSession.height) {
+            const placements = Array.from(wordleCurrentGuess).map((ch, x) => ({ x, y: activeRow, letter: ch }));
+            submitWordMove(placements, false);
+          }
+        } else if (/^[a-zA-Z]$/.test(e.key) && wordleCurrentGuess.length < 5) {
+          wordleCurrentGuess += e.key.toUpperCase();
+          renderBoard(currentSession);
+        }
+      }
+    });
+
+    // Leaderboard modal events
+    if (btnLeaderboard) {
+      btnLeaderboard.addEventListener('click', () => {
+        const g = currentSession?.gameType || 'all';
+        const m = (currentSession?.gameType === 'sudoku' && currentSession?.mode === 'daily') ? 'daily' : 'all';
+        openLeaderboard(g, m);
+      });
+    }
+    if (btnCloseLeaderboard && modalLeaderboard) {
+      btnCloseLeaderboard.addEventListener('click', () => modalLeaderboard.classList.add('hidden'));
+    }
+    if (btnRefreshLeaderboard) {
+      btnRefreshLeaderboard.addEventListener('click', () => fetchLeaderboard());
+    }
+    if (btnPlayDailySudoku) {
+      btnPlayDailySudoku.addEventListener('click', () => {
+        if (modalLeaderboard) modalLeaderboard.classList.add('hidden');
+        createSession('sudoku', 'daily', 'smart', clientPlayerName || 'Player 1', 'Daily Challenge', true, null, null, 0);
+      });
+    }
+    document.querySelectorAll('#group-lb-filter .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        lbFilterGame = btn.dataset.lbGame || 'all';
+        lbFilterMode = btn.dataset.lbMode || 'all';
+        document.querySelectorAll('#group-lb-filter .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        playSound('tap');
+        fetchLeaderboard();
+      });
+    });
+    if (tabLbScores && tabLbPlayers) {
+      tabLbScores.addEventListener('click', () => {
+        lbActiveTab = 'scores';
+        tabLbScores.classList.add('active');
+        tabLbPlayers.classList.remove('active');
+        fetchLeaderboard();
+      });
+      tabLbPlayers.addEventListener('click', () => {
+        lbActiveTab = 'players';
+        tabLbPlayers.classList.add('active');
+        tabLbScores.classList.remove('active');
+        fetchLeaderboard();
+      });
+    }
+  }
+
+  function openLeaderboard(gameFilter = 'all', modeFilter = 'all') {
+    if (!modalLeaderboard) return;
+    lbFilterGame = gameFilter || 'all';
+    lbFilterMode = modeFilter || 'all';
+    document.querySelectorAll('#group-lb-filter .pill-btn').forEach(b => {
+      const match = (b.dataset.lbGame || 'all') === lbFilterGame && (b.dataset.lbMode || 'all') === lbFilterMode;
+      b.classList.toggle('active', match);
+    });
+    syncPillGroupSelect(document.getElementById('group-lb-filter'));
+    syncAllResponsiveSelects();
+    modalLeaderboard.classList.remove('hidden');
+    fetchLeaderboard();
+  }
+
+  function formatDurationShort(sec) {
+    const s = Math.max(0, Number(sec || 0));
+    const mins = Math.floor(s / 60);
+    const rem = s % 60;
+    return mins > 0 ? `${mins}m ${String(rem).padStart(2, '0')}s` : `${rem}s`;
+  }
+
+  async function fetchLeaderboard() {
+    if (!leaderboardList) return;
+    leaderboardList.innerHTML = '<div class="lobby-empty">Loading leaderboard...</div>';
+    try {
+      const params = new URLSearchParams({ gameType: lbFilterGame, mode: lbFilterMode });
+      const res = await fetch(`/api/leaderboard?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      if (lbDailyDate && data.dailyDate) {
+        lbDailyDate.textContent = `Daily Puzzle • ${data.dailyDate}`;
+      }
+      renderLeaderboardEntries(data.entries || [], data.standings || []);
+    } catch (e) {
+      leaderboardList.innerHTML = '<div class="lobby-empty">Could not load leaderboard right now.</div>';
+    }
+  }
+
+  function renderLeaderboardEntries(entries, standings) {
+    if (!leaderboardList) return;
+    leaderboardList.innerHTML = '';
+
+    const medal = (rank) => rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : `#${rank}`));
+
+    if (lbActiveTab === 'players') {
+      if (!standings || standings.length === 0) {
+        leaderboardList.innerHTML = '<div class="lobby-empty">No completed games recorded yet.<br><small style="color:var(--text-dim);">Finish a match or Daily Sudoku to appear here!</small></div>';
+        return;
+      }
+      standings.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'lb-row';
+        row.innerHTML = `
+          <div class="lb-left">
+            <span class="lb-rank">${medal(p.rank)}</span>
+            <div>
+              <div class="lb-player">${escapeHtml(p.playerName)}</div>
+              <div class="lb-meta">${p.wins} win${p.wins === 1 ? '' : 's'} • Best ${p.bestScore} pts • Fastest ${formatDurationShort(p.fastestWinSeconds)}</div>
+            </div>
+          </div>
+          <div class="lb-score">${p.totalScore} <span>total</span></div>
+        `;
+        leaderboardList.appendChild(row);
+      });
+      return;
+    }
+
+    if (!entries || entries.length === 0) {
+      leaderboardList.innerHTML = '<div class="lobby-empty">No scores recorded for this filter yet.<br><small style="color:var(--text-dim);">Complete a game to claim the #1 spot!</small></div>';
+      return;
+    }
+
+    entries.forEach(e => {
+      const row = document.createElement('div');
+      row.className = 'lb-row';
+      const gameLabel = getGameMeta(e.gameType).shortName || e.gameType;
+      const modeTag = e.mode === 'daily' ? ' • Daily' : (e.mode === 'solo' ? ' • Solo' : '');
+      row.innerHTML = `
+        <div class="lb-left">
+          <span class="lb-rank">${medal(e.rank)}</span>
+          <div>
+            <div class="lb-player">${escapeHtml(e.playerName)}</div>
+            <div class="lb-meta">${escapeHtml(gameLabel + modeTag)} • ${formatDurationShort(e.durationSeconds)} • ${e.moves} moves • ${escapeHtml(e.timeAgo)}</div>
+          </div>
+        </div>
+        <div class="lb-score">${e.score} <span>pts</span></div>
+      `;
+      leaderboardList.appendChild(row);
     });
   }
 
@@ -2436,6 +4324,8 @@
     if (inputP1) inputP1.value = clientPlayerName;
     updateSoundUI();
     setupEvents();
+    selectedDiff = clientDefaultDiff;
+    selectedTimerSeconds = clientDefaultTimer;
     updateGridSizePills(clientFavGame);
     renderStatsUI();
 
@@ -2450,6 +4340,20 @@
     });
     if (secAiDiff) secAiDiff.classList.toggle('hidden', clientDefaultMode !== 'vs-ai');
     if (secRoom) secRoom.classList.toggle('hidden', clientDefaultMode !== 'room');
+
+    // Set initial active difficulty, variant & turn timer from preferences
+    document.querySelectorAll('#group-diff .pill-btn').forEach(b => {
+      b.classList.toggle('active', (b.dataset.diff || b.dataset.difficulty) === clientDefaultDiff);
+    });
+    document.querySelectorAll('#group-turn-timer .pill-btn').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.timer || 0) === Number(clientDefaultTimer));
+    });
+    updateModeOptionsForGame(clientFavGame);
+    updateSettingModeOptionsForGame(clientFavGame);
+    applyGameCategoryFilter(getCategoryForGame(clientFavGame), false);
+    applySettingFavCategoryFilter(getCategoryForGame(clientFavGame), false);
+    updateVariantPills(clientFavGame);
+    syncAllResponsiveSelects();
 
     const joinedFromUrl = parseUrlParams();
     if (!joinedFromUrl) {
@@ -2472,11 +4376,11 @@
       if (!resumed) {
         if (clientDefaultRole === 'spectate') {
           // Open Wi-Fi lobby directly when client prefers spectating by default
-          await createSession(clientFavGame, 'pass-and-play', 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
+          await createSession(clientFavGame, 'pass-and-play', selectedDiff, clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds, selectedVariant);
           openLobby();
         } else {
           // Start favorite game in default play mode
-          await createSession(clientFavGame, clientDefaultMode, 'smart', clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds);
+          await createSession(clientFavGame, selectedMode, selectedDiff, clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds, selectedVariant);
         }
       }
     }

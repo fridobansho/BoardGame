@@ -1,7 +1,14 @@
 namespace BoardGame.Tests.Implementations;
 
+using System.Collections.Generic;
 using System.Linq;
 using BoardGame.Library.Implementations;
+using BoardGame.Library.Implementations.Checkers;
+using BoardGame.Library.Implementations.Scrabble;
+using BoardGame.Library.Implementations.Sudoku;
+using BoardGame.Library.Implementations.Wordle;
+using BoardGame.Library.Interfaces;
+using BoardGame.Web.Models;
 using BoardGame.Web.Services;
 using NUnit.Framework;
 using Shouldly;
@@ -409,5 +416,386 @@ public class GameSessionShould
         var (rematchMoveOk, _) = session.MakeMove(1, 1);
         rematchMoveOk.ShouldBeTrue();
         session.Status.ShouldBe("InProgress");
+    }
+
+    [Test]
+    public void SupportCheckersPieceMoveAndVsAiMode()
+    {
+        var session = new GameSession("checkers", "pass-and-play", "smart", "Alice", "Bob");
+
+        session.Board.Width.ShouldBe(8);
+        session.Board.Height.ShouldBe(8);
+        session.Board.PieceAt(0, 5).Value.ShouldBe(RedCheckerPiece.Red.Value);
+        session.Board.PieceAt(1, 2).Value.ShouldBe(BlackCheckerPiece.Black.Value);
+
+        var (ok, err) = session.MakeMove(0, 5, toX: 1, toY: 4);
+        ok.ShouldBeTrue();
+        err.ShouldBeNull();
+        session.Board.PieceAt(0, 5).Value.ShouldBe(BlankPiece.BlankValue);
+        session.Board.PieceAt(1, 4).Value.ShouldBe(RedCheckerPiece.Red.Value);
+        session.CurrentTurnIndex.ShouldBe(1);
+
+        var aiSession = new GameSession("checkers", "vs-ai", "smart", "Human", null);
+        var (aiOk, aiErr) = aiSession.MakeMove(0, 5, toX: 1, toY: 4);
+        aiOk.ShouldBeTrue();
+        aiErr.ShouldBeNull();
+        aiSession.MoveCount.ShouldBe(2);
+        aiSession.CurrentTurnIndex.ShouldBe(0);
+    }
+
+    [Test]
+    public void SupportScrabbleWordMoveRackScoresAndPass()
+    {
+        var session = new GameSession("scrabble", "pass-and-play", "smart", "Alice", "Bob");
+
+        var initialDto = session.ToDto();
+        initialDto.Width.ShouldBe(15);
+        initialDto.Height.ShouldBe(15);
+        initialDto.TileBagCount.ShouldBe(84);
+        initialDto.Player1Rack.Count.ShouldBe(7);
+        initialDto.Player2Rack.Count.ShouldBe(7);
+        initialDto.BonusGrid![7][7].ShouldBe("DW");
+
+        var logic = (ScrabbleLogic)session.GameLogic;
+        logic.SetRack(session.Players[0], new[] { 'C', 'A', 'T', 'S', 'E', 'R', 'D' });
+
+        var placements = new List<TilePlacementDto>
+        {
+            new(7, 7, "C"),
+            new(8, 7, "A"),
+            new(9, 7, "T")
+        };
+
+        var (ok, err) = session.MakeMove(7, 7, placements: placements);
+        ok.ShouldBeTrue();
+        err.ShouldBeNull();
+
+        var afterWordDto = session.ToDto();
+        afterWordDto.Player1GamePoints.ShouldBe(10);
+        afterWordDto.CurrentTurnIndex.ShouldBe(1);
+        session.Board.PieceAt(7, 7).Value.ShouldBe("C");
+
+        var (p2PassOk, _) = session.MakeMove(0, 0, isPass: true);
+        p2PassOk.ShouldBeTrue();
+        var (p1PassOk, _) = session.MakeMove(0, 0, isPass: true);
+        p1PassOk.ShouldBeTrue();
+
+        session.Status.ShouldBe("Finished");
+        session.Winner.ShouldBe("Alice");
+    }
+
+    [Test]
+    public void TriggerScrabbleAiResponseInVsAiMode()
+    {
+        var session = new GameSession("scrabble", "vs-ai", "smart", "Human", null);
+        var logic = (ScrabbleLogic)session.GameLogic;
+        logic.SetRack(session.Players[0], new[] { 'C', 'A', 'T', 'S', 'E', 'R', 'D' });
+
+        var (ok, err) = session.MakeMove(7, 7, placements: new List<TilePlacementDto>
+        {
+            new(7, 7, "C"),
+            new(8, 7, "A"),
+            new(9, 7, "T")
+        });
+
+        ok.ShouldBeTrue();
+        err.ShouldBeNull();
+        session.MoveCount.ShouldBe(2);
+        session.CurrentTurnIndex.ShouldBe(0);
+    }
+
+    [Test]
+    public void SupportSudokuDailyAndVsAiModes()
+    {
+        var dailySession = new GameSession("sudoku", "daily", "smart", "Alice", null);
+        dailySession.Board.Width.ShouldBe(9);
+        dailySession.Board.Height.ShouldBe(9);
+        var dailyLogic = (SudokuLogic)dailySession.GameLogic;
+
+        int emptyX = -1, emptyY = -1;
+        for (int y = 0; y < 9 && emptyX == -1; y++)
+        {
+            for (int x = 0; x < 9; x++)
+            {
+                if (SudokuLogic.GetDigitAt(dailySession.Board, x, y) == 0)
+                {
+                    emptyX = x;
+                    emptyY = y;
+                    break;
+                }
+            }
+        }
+
+        int digit = dailyLogic.GetSolutionAt(emptyX, emptyY);
+        var (ok, err) = dailySession.MakeMove(emptyX, emptyY, digit: digit);
+        ok.ShouldBeTrue();
+        err.ShouldBeNull();
+        dailySession.CurrentTurnIndex.ShouldBe(0); // Daily stays on Player 1
+        dailySession.ToDto().Player1GamePoints.ShouldBeGreaterThanOrEqualTo(10);
+
+        var aiSession = new GameSession("sudoku", "vs-ai", "smart", "Human", null);
+        var aiLogic = (SudokuLogic)aiSession.GameLogic;
+        int ex = -1, ey = -1;
+        for (int y = 0; y < 9 && ex == -1; y++)
+        {
+            for (int x = 0; x < 9; x++)
+            {
+                if (SudokuLogic.GetDigitAt(aiSession.Board, x, y) == 0)
+                {
+                    ex = x;
+                    ey = y;
+                    break;
+                }
+            }
+        }
+        var (aiOk, aiErr) = aiSession.MakeMove(ex, ey, digit: aiLogic.GetSolutionAt(ex, ey));
+        aiOk.ShouldBeTrue();
+        aiErr.ShouldBeNull();
+        aiSession.MoveCount.ShouldBe(2);
+        aiSession.CurrentTurnIndex.ShouldBe(0);
+    }
+
+    [Test]
+    public void RecordAndQueryLeaderboardsAcrossMultipleGames()
+    {
+        using var sm = CreateIsolatedSessionManager();
+
+        // 1. Finish a Tic-Tac-Toe game
+        var ttt = sm.CreateSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob");
+        ttt.MakeMove(0, 0);
+        ttt.MakeMove(0, 1);
+        ttt.MakeMove(1, 0);
+        ttt.MakeMove(1, 1);
+        ttt.MakeMove(2, 0); // Alice wins
+        ttt.Status.ShouldBe("Finished");
+
+        // 2. Finish a Scrabble game
+        var scrabble = sm.CreateSession("scrabble", "pass-and-play", "smart", "Alice", "Bob");
+        var sl = (ScrabbleLogic)scrabble.GameLogic;
+        sl.SetRack(scrabble.Players[0], new[] { 'C', 'A', 'T', 'S', 'E', 'R', 'D' });
+        scrabble.MakeMove(7, 7, placements: new List<TilePlacementDto>
+        {
+            new(7, 7, "C"),
+            new(8, 7, "A"),
+            new(9, 7, "T")
+        });
+        scrabble.MakeMove(0, 0, isPass: true);
+        scrabble.MakeMove(0, 0, isPass: true); // Alice wins with 10 points
+        scrabble.Status.ShouldBe("Finished");
+
+        // 3. Finish a Daily Sudoku puzzle
+        var sudoku = sm.CreateSession("sudoku", "daily", "smart", "Charlie", null);
+        var sdl = (SudokuLogic)sudoku.GameLogic;
+        for (int y = 0; y < 9; y++)
+        {
+            for (int x = 0; x < 9; x++)
+            {
+                if (SudokuLogic.GetDigitAt(sudoku.Board, x, y) == 0)
+                {
+                    sudoku.MakeMove(x, y, digit: sdl.GetSolutionAt(x, y));
+                }
+            }
+        }
+        sudoku.Status.ShouldBe("Finished");
+        sudoku.Winner.ShouldBe("Charlie");
+
+        // Query per-game and global leaderboards
+        var allEntries = sm.GetLeaderboard("all", "all");
+        allEntries.Count.ShouldBe(3);
+
+        var scrabbleEntries = sm.GetLeaderboard("scrabble", "all");
+        scrabbleEntries.Count.ShouldBe(1);
+        scrabbleEntries[0].PlayerName.ShouldBe("Alice");
+        scrabbleEntries[0].Score.ShouldBe(10);
+
+        var dailySudoku = sm.GetLeaderboard("sudoku", "daily");
+        dailySudoku.Count.ShouldBe(1);
+        dailySudoku[0].PlayerName.ShouldBe("Charlie");
+        dailySudoku[0].Score.ShouldBeGreaterThan(400);
+
+        var standings = sm.GetPlayerStandings("all");
+        standings.Count.ShouldBe(2);
+        standings[0].PlayerName.ShouldBe("Alice");
+        standings[0].Wins.ShouldBe(2);
+    }
+
+    [Test]
+    public void SupportMisereTicTacToeVariant()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob", variant: "misere");
+        session.Variant.ShouldBe("misere");
+        session.ToDto().Variant.ShouldBe("misere");
+
+        // Alice completes row 0 -> loses under Misere rules, Bob wins
+        session.MakeMove(0, 0).Success.ShouldBeTrue();
+        session.MakeMove(0, 1).Success.ShouldBeTrue();
+        session.MakeMove(1, 0).Success.ShouldBeTrue();
+        session.MakeMove(1, 1).Success.ShouldBeTrue();
+        session.MakeMove(2, 0).Success.ShouldBeTrue();
+
+        session.Status.ShouldBe("Finished");
+        session.Winner.ShouldBe("Bob");
+    }
+
+    [Test]
+    public void SupportMisereNimVariant()
+    {
+        var session = new GameSession("nim", "pass-and-play", "smart", "Alice", "Bob", variant: "misere");
+        session.Variant.ShouldBe("misere");
+
+        // Standard 1-3-5-7 heaps: players clear rows 0..3; Bob takes last stone so Alice wins
+        session.MakeMove(0, 0).Success.ShouldBeTrue();
+        session.MakeMove(0, 1).Success.ShouldBeTrue();
+        session.MakeMove(0, 2).Success.ShouldBeTrue();
+        session.MakeMove(0, 3).Success.ShouldBeTrue();
+
+        session.Status.ShouldBe("Finished");
+        session.Winner.ShouldBe("Alice");
+    }
+
+    [Test]
+    public void SupportCasualCheckersVariantAllowsOptionalCaptures()
+    {
+        var standard = new GameSession("checkers", "pass-and-play", "smart", "Alice", "Bob", variant: "standard");
+        standard.MakeMove(2, 5, toX: 3, toY: 4).Success.ShouldBeTrue();
+        standard.MakeMove(1, 2, toX: 2, toY: 3).Success.ShouldBeTrue();
+        // Capture (3,4)->(1,2) is available, so non-capture move (4,5)->(5,4) fails in standard
+        standard.MakeMove(4, 5, toX: 5, toY: 4).Success.ShouldBeFalse();
+
+        var casual = new GameSession("checkers", "pass-and-play", "smart", "Alice", "Bob", variant: "casual");
+        casual.Variant.ShouldBe("casual");
+        casual.MakeMove(2, 5, toX: 3, toY: 4).Success.ShouldBeTrue();
+        casual.MakeMove(1, 2, toX: 2, toY: 3).Success.ShouldBeTrue();
+        casual.MakeMove(4, 5, toX: 5, toY: 4).Success.ShouldBeTrue();
+    }
+
+    [Test]
+    public void SupportBlitzScrabbleVariantShortensTileBag()
+    {
+        var standard = new GameSession("scrabble", "pass-and-play", "smart", "Alice", "Bob", variant: "standard");
+        var blitz = new GameSession("scrabble", "pass-and-play", "smart", "Alice", "Bob", variant: "blitz");
+
+        standard.ToDto().TileBagCount.ShouldBe(84);
+        blitz.ToDto().Variant.ShouldBe("blitz");
+        blitz.ToDto().TileBagCount.ShouldBe(22);
+    }
+
+    [Test]
+    public void SupportSoloSudokuModeAndPersistScoredCustomState()
+    {
+        var solo = new GameSession("sudoku", "solo", "smart", "Alice", null);
+        solo.Mode.ShouldBe("solo");
+        solo.Players[1].Name.ShouldBe("Solo");
+        (solo.GameLogic is IScoredGameLogic).ShouldBeTrue();
+        var scored = (IScoredGameLogic)solo.GameLogic;
+        var sudokuLogic = (SudokuLogic)solo.GameLogic;
+
+        int moveX = -1;
+        int moveY = -1;
+        for (int y = 0; y < 9 && moveX == -1; y++)
+        {
+            for (int x = 0; x < 9; x++)
+            {
+                if (!SudokuLogic.IsGivenCell(solo.Board, x, y))
+                {
+                    moveX = x;
+                    moveY = y;
+                    break;
+                }
+            }
+        }
+
+        int digit = sudokuLogic.GetSolutionAt(moveX, moveY);
+        solo.MakeMove(moveX, moveY, digit: digit).Success.ShouldBeTrue();
+        solo.CurrentTurnIndex.ShouldBe(0);
+        scored.GetScore(solo.Players[0]).ShouldBeGreaterThan(0);
+        solo.ToDto().Player1GamePoints.ShouldBe(scored.GetScore(solo.Players[0]));
+
+        // Scrabble custom state & undo/persistence round-trip
+        var scrabble = new GameSession("scrabble", "pass-and-play", "smart", "Alice", "Bob");
+        (scrabble.GameLogic is ICustomStateGameLogic).ShouldBeTrue();
+        (scrabble.GameLogic is IScoredGameLogic).ShouldBeTrue();
+        scrabble.MakeMove(0, 0, isPass: true).Success.ShouldBeTrue();
+        var persisted = scrabble.ExportPersistedState();
+        persisted.CustomState.ShouldNotBeNull();
+        persisted.CustomState!["consecutivePasses"].ShouldBe("1");
+
+        var restored = GameSession.FromPersistedState(persisted);
+        ((ScrabbleLogic)restored.GameLogic).ConsecutivePasses.ShouldBe(1);
+        scrabble.Undo().Success.ShouldBeTrue();
+        ((ScrabbleLogic)scrabble.GameLogic).ConsecutivePasses.ShouldBe(0);
+
+        // Checkers custom state & payload-shape PieceMove round-trip
+        var checkers = new GameSession("checkers", "pass-and-play", "smart", "Alice", "Bob");
+        (checkers.GameLogic is ICustomStateGameLogic).ShouldBeTrue();
+        checkers.MakeMove(2, 5, toX: 3, toY: 4).Success.ShouldBeTrue();
+        var checkersPersisted = checkers.ExportPersistedState();
+        checkersPersisted.CustomState!["noProgressMoves"].ShouldBe("1");
+        var checkersRestored = GameSession.FromPersistedState(checkersPersisted);
+        ((CheckersLogic)checkersRestored.GameLogic).MovesWithoutCaptureOrPromotion.ShouldBe(1);
+    }
+
+    [Test]
+    public void PlayBreakthroughAndAiVsAiExhibitionToCompletion()
+    {
+        var session = new GameSession("breakthrough", "pass-and-play", "smart", "Alice", "Bob");
+        session.Board.Width.ShouldBe(8);
+        session.Board.Height.ShouldBe(8);
+        session.MakeMove(0, 6, toX: 0, toY: 5).Success.ShouldBeTrue();
+        session.Board.PieceAt(0, 5).Value.ShouldBe("W");
+
+        var aiMatch = new GameSession("breakthrough", "ai-vs-ai", "smart", "Bot", null);
+        aiMatch.Mode.ShouldBe("ai-vs-ai");
+        aiMatch.MakeMove(0, 6, toX: 0, toY: 5).Success.ShouldBeFalse();
+
+        int steps = 0;
+        while (aiMatch.Status == "InProgress" && steps++ < 400)
+        {
+            aiMatch.StepAiMove().Success.ShouldBeTrue();
+        }
+        aiMatch.Status.ShouldBe("Finished");
+        aiMatch.Winner.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Test]
+    public void PlayMancalaWithExtraTurnInStore()
+    {
+        var session = new GameSession("mancala", "pass-and-play", "smart", "Alice", "Bob");
+        session.Board.Width.ShouldBe(6);
+        session.Board.Height.ShouldBe(2);
+
+        // Pit x=2 on P1 row (y=1) has 4 stones -> lands in P1 Store (index 6) for extra turn
+        session.MakeMove(2, 1).Success.ShouldBeTrue();
+        session.CurrentTurnIndex.ShouldBe(0);
+        session.ToDto().Player1GamePoints.ShouldBe(1);
+
+        // Next move from pit x=0 (4 stones -> lands at x=4, no extra turn) advances to Bob
+        session.MakeMove(0, 1).Success.ShouldBeTrue();
+        session.CurrentTurnIndex.ShouldBe(1);
+    }
+
+    [Test]
+    public void PlayWordleAndMinesweeperInDailyAndSoloModes()
+    {
+        var wordle = new GameSession("wordle", "daily", "smart", "Alice", null);
+        var wl = (WordleLogic)wordle.GameLogic;
+        string secret = wl.SecretWord;
+        var placements = Enumerable.Range(0, 5)
+            .Select(i => new TilePlacementDto(i, 0, secret[i].ToString()))
+            .ToList();
+
+        wordle.MakeMove(0, 0, placements: placements).Success.ShouldBeTrue();
+        wordle.Status.ShouldBe("Finished");
+        wordle.Winner.ShouldBe("Alice");
+        wordle.ToDto().Player1GamePoints.ShouldBe(1000);
+
+        var minesweeper = new GameSession("minesweeper", "solo", "smart", "Alice", null);
+        minesweeper.MakeMove(0, 0, digit: 1).Success.ShouldBeTrue();
+        minesweeper.ToDto().Grid[0][0].ShouldBe("F");
+        minesweeper.MakeMove(0, 0, digit: 1).Success.ShouldBeTrue();
+        minesweeper.ToDto().Grid[0][0].ShouldBe("H");
+
+        minesweeper.MakeMove(0, 0).Success.ShouldBeTrue();
+        minesweeper.ToDto().Player1GamePoints.ShouldBeGreaterThanOrEqualTo(10);
     }
 }

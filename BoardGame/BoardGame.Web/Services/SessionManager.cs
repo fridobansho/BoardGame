@@ -1,7 +1,9 @@
 namespace BoardGame.Web.Services;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
+using BoardGame.Library.Interfaces;
 using BoardGame.Web.Models;
 using Microsoft.Data.Sqlite;
 
@@ -41,7 +43,8 @@ public class SessionManager : IDisposable
         bool isPublic = true,
         int? customWidth = null,
         int? customHeight = null,
-        int? timerSeconds = null
+        int? timerSeconds = null,
+        string? variant = "standard"
     )
     {
         var session = new GameSession(
@@ -53,7 +56,8 @@ public class SessionManager : IDisposable
             isPublic: isPublic,
             customWidth: customWidth,
             customHeight: customHeight,
-            timerSeconds: timerSeconds
+            timerSeconds: timerSeconds,
+            variant: variant
         );
         _sessions[session.Id] = session;
         _roomCodeToSessionId[session.RoomCode] = session.Id;
@@ -75,6 +79,17 @@ public class SessionManager : IDisposable
                     room_code TEXT NOT NULL,
                     data TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS leaderboard (
+                    entry_key TEXT PRIMARY KEY,
+                    game_type TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    score INTEGER NOT NULL,
+                    duration_seconds INTEGER NOT NULL,
+                    moves INTEGER NOT NULL,
+                    puzzle_date TEXT NOT NULL,
+                    created_at TEXT NOT NULL
                 );
                 """;
             cmd.ExecuteNonQuery();
@@ -135,12 +150,198 @@ public class SessionManager : IDisposable
                 cmd.Parameters.AddWithValue("$data", json);
                 cmd.Parameters.AddWithValue("$updatedAt", DateTime.UtcNow.ToString("O"));
                 cmd.ExecuteNonQuery();
+
+                if (session.Status == "Finished" && !string.IsNullOrWhiteSpace(session.Winner))
+                {
+                    RecordLeaderboardEntryInternal(conn, session);
+                }
             }
         }
         catch
         {
             // Ignore persistence errors to keep gameplay responsive
         }
+    }
+
+    private static void RecordLeaderboardEntryInternal(SqliteConnection conn, GameSession session)
+    {
+        string entryKey = $"{session.Id}_g{session.GameNumber}";
+        string playerName = session.Winner!;
+        int durationSeconds = Math.Max(1, (int)Math.Round((DateTime.UtcNow - session.CreatedAt).TotalSeconds));
+        int score = CalculateWinnerScore(session);
+        string puzzleDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT OR IGNORE INTO leaderboard (
+                entry_key, game_type, mode, player_name, score, duration_seconds, moves, puzzle_date, created_at
+            )
+            VALUES (
+                $entryKey, $gameType, $mode, $playerName, $score, $durationSeconds, $moves, $puzzleDate, $createdAt
+            );
+            """;
+        cmd.Parameters.AddWithValue("$entryKey", entryKey);
+        cmd.Parameters.AddWithValue("$gameType", session.GameType);
+        cmd.Parameters.AddWithValue("$mode", session.Mode);
+        cmd.Parameters.AddWithValue("$playerName", playerName);
+        cmd.Parameters.AddWithValue("$score", score);
+        cmd.Parameters.AddWithValue("$durationSeconds", durationSeconds);
+        cmd.Parameters.AddWithValue("$moves", session.MoveCount);
+        cmd.Parameters.AddWithValue("$puzzleDate", puzzleDate);
+        cmd.Parameters.AddWithValue("$createdAt", DateTime.UtcNow.ToString("O"));
+        cmd.ExecuteNonQuery();
+    }
+
+    private static int CalculateWinnerScore(GameSession session)
+    {
+        var winnerPlayer = session.Players.FirstOrDefault(p => string.Equals(p.Name, session.Winner, StringComparison.Ordinal));
+        if (session.GameLogic is IScoredGameLogic scored && winnerPlayer != null)
+        {
+            return scored.GetScore(winnerPlayer);
+        }
+
+        if (session.GameType == "othello" && winnerPlayer != null)
+        {
+            string sym = session.GameLogic.GetPiece(winnerPlayer).Value;
+            int count = 0;
+            for (int x = 0; x < session.Board.Width; x++)
+            {
+                for (int y = 0; y < session.Board.Height; y++)
+                {
+                    if (session.Board.PieceAt(x, y)?.Value == sym)
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count * 10;
+        }
+
+        return Math.Max(10, 200 - session.MoveCount * 2);
+    }
+
+    public List<LeaderboardEntryDto> GetLeaderboard(string? gameType = null, string? mode = null, int limit = 25)
+    {
+        var list = new List<LeaderboardEntryDto>();
+        bool filterGame = !string.IsNullOrWhiteSpace(gameType) && !string.Equals(gameType, "all", StringComparison.OrdinalIgnoreCase);
+        bool filterMode = !string.IsNullOrWhiteSpace(mode) && !string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase);
+
+        string whereClause = "";
+        if (filterGame && filterMode)
+        {
+            whereClause = "WHERE game_type = $gameType AND mode = $mode";
+        }
+        else if (filterGame)
+        {
+            whereClause = "WHERE game_type = $gameType";
+        }
+        else if (filterMode)
+        {
+            whereClause = "WHERE mode = $mode";
+        }
+
+        bool isPuzzleOrder = string.Equals(mode, "daily", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(gameType, "sudoku", StringComparison.OrdinalIgnoreCase);
+
+        string orderClause = isPuzzleOrder
+            ? "ORDER BY score DESC, duration_seconds ASC, moves ASC"
+            : "ORDER BY score DESC, duration_seconds ASC, created_at DESC";
+
+        lock (_dbLock)
+        {
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT player_name, game_type, mode, score, duration_seconds, moves, puzzle_date, created_at
+                FROM leaderboard
+                {whereClause}
+                {orderClause}
+                LIMIT $limit;
+                """;
+            if (filterGame) cmd.Parameters.AddWithValue("$gameType", gameType!.Trim().ToLowerInvariant());
+            if (filterMode) cmd.Parameters.AddWithValue("$mode", mode!.Trim().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 100));
+
+            using var reader = cmd.ExecuteReader();
+            int rank = 1;
+            while (reader.Read())
+            {
+                string createdRaw = reader.GetString(7);
+                list.Add(new LeaderboardEntryDto(
+                    Rank: rank++,
+                    PlayerName: reader.GetString(0),
+                    GameType: reader.GetString(1),
+                    Mode: reader.GetString(2),
+                    Score: reader.GetInt32(3),
+                    DurationSeconds: reader.GetInt32(4),
+                    Moves: reader.GetInt32(5),
+                    PuzzleDate: reader.GetString(6),
+                    TimeAgo: FormatTimeAgo(createdRaw)
+                ));
+            }
+        }
+
+        return list;
+    }
+
+    public List<PlayerStandingDto> GetPlayerStandings(string? gameType = null, int limit = 15)
+    {
+        var list = new List<PlayerStandingDto>();
+        bool filterGame = !string.IsNullOrWhiteSpace(gameType) && !string.Equals(gameType, "all", StringComparison.OrdinalIgnoreCase);
+        string whereClause = filterGame ? "WHERE game_type = $gameType" : "";
+
+        lock (_dbLock)
+        {
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT player_name,
+                       COUNT(*) AS wins,
+                       MAX(score) AS best_score,
+                       SUM(score) AS total_score,
+                       MIN(duration_seconds) AS fastest_sec
+                FROM leaderboard
+                {whereClause}
+                GROUP BY player_name
+                ORDER BY wins DESC, total_score DESC, fastest_sec ASC
+                LIMIT $limit;
+                """;
+            if (filterGame) cmd.Parameters.AddWithValue("$gameType", gameType!.Trim().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 50));
+
+            using var reader = cmd.ExecuteReader();
+            int rank = 1;
+            while (reader.Read())
+            {
+                int wins = reader.GetInt32(1);
+                list.Add(new PlayerStandingDto(
+                    Rank: rank++,
+                    PlayerName: reader.GetString(0),
+                    Wins: wins,
+                    GamesPlayed: wins,
+                    BestScore: reader.GetInt32(2),
+                    TotalScore: reader.GetInt32(3),
+                    FastestWinSeconds: reader.GetInt32(4)
+                ));
+            }
+        }
+
+        return list;
+    }
+
+    private static string FormatTimeAgo(string isoDate)
+    {
+        if (!DateTime.TryParse(isoDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return "recently";
+        }
+        var span = DateTime.UtcNow - dt.ToUniversalTime();
+        if (span.TotalSeconds < 60) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
     }
 
     public IEnumerable<RoomSummaryDto> GetAvailableRooms()

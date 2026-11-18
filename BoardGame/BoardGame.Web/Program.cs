@@ -83,7 +83,8 @@ app.MapPost("/api/session/new", (CreateSessionRequest req, SessionManager sm) =>
         isPublic: req.IsPublic ?? true,
         customWidth: req.CustomWidth,
         customHeight: req.CustomHeight,
-        timerSeconds: req.TimerSeconds
+        timerSeconds: req.TimerSeconds,
+        variant: req.Variant
     );
     return Results.Ok(new
     {
@@ -95,6 +96,16 @@ app.MapPost("/api/session/new", (CreateSessionRequest req, SessionManager sm) =>
 app.MapGet("/api/rooms", (SessionManager sm) =>
 {
     return Results.Ok(sm.GetAvailableRooms());
+});
+
+app.MapGet("/api/leaderboard", (string? gameType, string? mode, SessionManager sm) =>
+{
+    return Results.Ok(new
+    {
+        entries = sm.GetLeaderboard(gameType, mode),
+        standings = sm.GetPlayerStandings(gameType),
+        dailyDate = DateTime.UtcNow.ToString("yyyy-MM-dd")
+    });
 });
 
 app.MapGet("/api/session/{id}", (string id, SessionManager sm) =>
@@ -109,7 +120,30 @@ app.MapPost("/api/session/{id}/move", (string id, MoveRequest req, SessionManage
     var session = sm.GetSession(id);
     if (session == null) return Results.NotFound(new { error = "Session not found" });
 
-    var (success, error) = session.MakeMove(req.X, req.Y, req.PlayerToken);
+    var (success, error) = session.MakeMove(
+        req.X,
+        req.Y,
+        req.PlayerToken,
+        req.ToX,
+        req.ToY,
+        req.Placements,
+        req.IsPass ?? false,
+        req.Digit
+    );
+    if (!success)
+    {
+        return Results.BadRequest(new { error, session = session.ToDto() });
+    }
+
+    return Results.Ok(new { success = true, session = session.ToDto() });
+});
+
+app.MapPost("/api/session/{id}/ai-step", (string id, SessionManager sm) =>
+{
+    var session = sm.GetSession(id);
+    if (session == null) return Results.NotFound(new { error = "Session not found" });
+
+    var (success, error) = session.StepAiMove();
     if (!success)
     {
         return Results.BadRequest(new { error, session = session.ToDto() });
