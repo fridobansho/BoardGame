@@ -64,6 +64,7 @@ public class GameSession
 
     public bool IsPublic { get; set; } = true;
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
 
     private readonly Stack<GameSnapshot> _history = new();
 
@@ -116,13 +117,9 @@ public class GameSession
         List<MoveStepDto> MoveHistory,
         int P1GamePoints = 0,
         int P2GamePoints = 0,
-        List<string>? P1Rack = null,
-        List<string>? P2Rack = null,
-        List<string>? TileBag = null,
-        int ConsecutivePasses = 0,
-        int CheckersNoProgressMoves = 0,
         string Variant = "standard",
-        Dictionary<string, string>? CustomState = null
+        Dictionary<string, string>? CustomState = null,
+        DateTime? UpdatedAt = null
     );
 
     public PersistedSession ExportPersistedState()
@@ -183,13 +180,9 @@ public class GameSession
                 MoveHistory.ToList(),
                 p1GamePts,
                 p2GamePts,
-                null,
-                null,
-                null,
-                0,
-                0,
                 Variant,
-                customState
+                customState,
+                UpdatedAt
             );
         }
     }
@@ -229,6 +222,7 @@ public class GameSession
         session.Player1Predictions = state.Player1Predictions;
         session.Player2Predictions = state.Player2Predictions;
         session.CreatedAt = state.CreatedAt;
+        session.UpdatedAt = state.UpdatedAt ?? state.CreatedAt;
         if (state.MoveHistory != null)
         {
             session.MoveHistory.AddRange(state.MoveHistory);
@@ -249,30 +243,9 @@ public class GameSession
             scored.SetScore(session.Players[1], state.P2GamePoints);
         }
 
-        if (session.GameLogic is ICustomStateGameLogic customLogic)
+        if (session.GameLogic is ICustomStateGameLogic customLogic && state.CustomState is { Count: > 0 })
         {
-            if (state.CustomState is { Count: > 0 })
-            {
-                customLogic.ImportCustomState(session.Players, state.CustomState);
-            }
-            else if (session.GameLogic is ScrabbleLogic)
-            {
-                var legacy = new Dictionary<string, string>
-                {
-                    ["consecutivePasses"] = state.ConsecutivePasses.ToString()
-                };
-                if (state.P1Rack != null) legacy["p1Rack"] = string.Concat(state.P1Rack);
-                if (state.P2Rack != null) legacy["p2Rack"] = string.Concat(state.P2Rack);
-                if (state.TileBag != null) legacy["tileBag"] = string.Concat(state.TileBag);
-                customLogic.ImportCustomState(session.Players, legacy);
-            }
-            else if (session.GameLogic is CheckersLogic && state.CheckersNoProgressMoves > 0)
-            {
-                customLogic.ImportCustomState(session.Players, new Dictionary<string, string>
-                {
-                    ["noProgressMoves"] = state.CheckersNoProgressMoves.ToString()
-                });
-            }
+            customLogic.ImportCustomState(session.Players, state.CustomState);
         }
 
         return session;
@@ -307,131 +280,20 @@ public class GameSession
             (Mode == "daily" ? "Daily Challenge" :
             (Mode == "solo" ? "Solo" : "Player 2"))));
 
-        switch (GameType)
-        {
-            case "connect4":
-                int c4Width = customWidth.HasValue && customWidth.Value >= 4 && customWidth.Value <= 10 ? customWidth.Value : 7;
-                int c4Height = customHeight.HasValue && customHeight.Value >= 4 && customHeight.Value <= 10 ? customHeight.Value : 6;
-                Board = new Board(c4Width, c4Height);
-                GameLogic = new ConnectFourLogic
-                {
-                    TargetLength = Variant == "connect5" ? 5 : 4
-                };
-                break;
-            case "chomp":
-                int chompWidth = customWidth.HasValue && customWidth.Value >= 2 && customWidth.Value <= 10 ? customWidth.Value : 5;
-                int chompHeight = customHeight.HasValue && customHeight.Value >= 2 && customHeight.Value <= 10 ? customHeight.Value : 4;
-                Board = new Board(chompWidth, chompHeight);
-                GameLogic = new ChompLogic();
-                break;
-            case "gomoku":
-                int gomokuSize = customWidth.HasValue && customWidth.Value >= 9 && customWidth.Value <= 19 ? customWidth.Value : 15;
-                Board = new Board(gomokuSize, gomokuSize);
-                GameLogic = new GomokuLogic
-                {
-                    ExactFiveOnly = Variant == "exact5"
-                };
-                break;
-            case "othello":
-                Board = new Board(8, 8);
-                GameLogic = new OthelloLogic
-                {
-                    FewerDiscsWins = Variant == "reversed"
-                };
-                break;
-            case "nim":
-                Board = new Board(7, 4);
-                GameLogic = new NimLogic
-                {
-                    IsMisere = Variant == "misere"
-                };
-                break;
-            case "hex":
-                int hexSize = customWidth.HasValue && customWidth.Value >= 5 && customWidth.Value <= 11 ? customWidth.Value : 7;
-                Board = new Board(hexSize, hexSize);
-                GameLogic = new HexLogic();
-                break;
-            case "checkers":
-                Board = new Board(CheckersLogic.DefaultSize, CheckersLogic.DefaultSize);
-                GameLogic = new CheckersLogic
-                {
-                    MandatoryCapture = Variant != "casual",
-                    IsGiveaway = Variant == "giveaway"
-                };
-                break;
-            case "scrabble":
-                Board = new Board(ScrabbleLogic.DefaultSize, ScrabbleLogic.DefaultSize);
-                GameLogic = new ScrabbleLogic
-                {
-                    IsShortBag = Variant == "blitz",
-                    DoubleBonuses = Variant == "double_bonus"
-                };
-                break;
-            case "sudoku":
-                Board = new Board(SudokuLogic.DefaultSize, SudokuLogic.DefaultSize);
-                bool isDaily = Mode == "daily";
-                int emptyCount = Variant switch
-                {
-                    "easy_puzzle" => 28,
-                    "hard_puzzle" => 50,
-                    _ => isDaily ? 40 : (AiDifficulty == "easy" ? 32 : 42)
-                };
-                GameLogic = isDaily
-                    ? SudokuLogic.CreateDaily()
-                    : new SudokuLogic(seed: null, emptyCells: emptyCount);
-                break;
-            case "breakthrough":
-                int btSize = customWidth.HasValue && customWidth.Value >= 6 && customWidth.Value <= 10 ? customWidth.Value : BreakthroughLogic.DefaultSize;
-                Board = new Board(btSize, btSize);
-                GameLogic = new BreakthroughLogic
-                {
-                    IsMisere = Variant == "misere"
-                };
-                break;
-            case "mancala":
-                Board = new Board(MancalaLogic.PitCountPerSide, 2);
-                GameLogic = new MancalaLogic
-                {
-                    InitialStonesPerPit = Variant == "quick" ? 3 : 4,
-                    IsMisere = Variant == "misere"
-                };
-                break;
-            case "wordle":
-                Board = new Board(WordleLogic.WordLength, WordleLogic.MaxGuesses);
-                GameLogic = Mode == "daily"
-                    ? WordleLogic.CreateDaily()
-                    : new WordleLogic();
-                if (GameLogic is WordleLogic wl)
-                {
-                    wl.AllowAnyLetters = Variant == "any_word";
-                }
-                break;
-            case "minesweeper":
-                int msW = customWidth.HasValue && customWidth.Value >= 6 && customWidth.Value <= 12 ? customWidth.Value : MinesweeperLogic.DefaultSize;
-                int msH = customHeight.HasValue && customHeight.Value >= 6 && customHeight.Value <= 12 ? customHeight.Value : msW;
-                int defaultMines = msW <= 6 ? 5 : (msW >= 12 ? 22 : MinesweeperLogic.DefaultMines);
-                int mines = Variant == "hard_puzzle"
-                    ? (int)Math.Round(defaultMines * 1.5)
-                    : (Variant == "easy_puzzle" ? Math.Max(3, defaultMines / 2) : defaultMines);
-                Board = new Board(msW, msH);
-                GameLogic = Mode == "daily"
-                    ? new MinesweeperLogic(MinesweeperLogic.GetDailySeed(), mines)
-                    : new MinesweeperLogic(null, mines);
-                break;
-            case "tictactoe":
-            default:
-                GameType = "tictactoe";
-                int tttSize = customWidth.HasValue && customWidth.Value >= 3 && customWidth.Value <= 5 ? customWidth.Value : 3;
-                Board = new Board(tttSize, tttSize);
-                GameLogic = new TicTacToeLogic();
-                break;
-        }
+        (GameType, Board, GameLogic) = GameFactory.CreateGame(
+            gameType,
+            Mode,
+            AiDifficulty,
+            Variant,
+            customWidth,
+            customHeight
+        );
 
         IPlayer p1 = Mode == "ai-vs-ai"
-            ? CreateAiPlayer(GameType, AiDifficulty, $"{player1Name} (Bot 1)", Board.Width)
+            ? GameFactory.CreateAiPlayer(GameType, AiDifficulty, $"{player1Name} (Bot 1)", Board.Width)
             : new WebHumanPlayer(player1Name, Player1Token);
         IPlayer p2 = (Mode == "vs-ai" || Mode == "ai-vs-ai")
-            ? CreateAiPlayer(GameType, AiDifficulty, Mode == "ai-vs-ai" ? "AI Bot 2" : player2Name, Board.Width)
+            ? GameFactory.CreateAiPlayer(GameType, AiDifficulty, Mode == "ai-vs-ai" ? "AI Bot 2" : player2Name, Board.Width)
             : new WebHumanPlayer(player2Name, Player2Token);
 
         Players.Add(p1);
@@ -462,28 +324,6 @@ public class GameSession
             Grid: CloneGrid(Board),
             LastMoveText: "Game started"
         ));
-    }
-
-    private static IPlayer CreateAiPlayer(string gameType, string difficulty, string name, int boardWidth = 3)
-    {
-        return gameType switch
-        {
-            "connect4" => difficulty == "smart" ? new ConnectFourPlayer(name) : new RandomConnectFourPlayer(name),
-            "chomp" => difficulty == "smart" ? new SmartChompPlayer(name) : new ChompPlayer(name),
-            "gomoku" => difficulty == "smart" ? new SmartGomokuPlayer(name) : new RandomGomokuPlayer(name),
-            "othello" => difficulty == "smart" ? new SmartOthelloPlayer(name) : new RandomOthelloPlayer(name),
-            "nim" => difficulty == "smart" ? new SmartNimPlayer(name) : new RandomNimPlayer(name),
-            "hex" => difficulty == "smart" ? new SmartHexPlayer(name) : new RandomHexPlayer(name),
-            "checkers" => difficulty == "smart" ? new SmartCheckersPlayer(name) : new RandomCheckersPlayer(name),
-            "scrabble" => difficulty == "smart" ? new SmartScrabblePlayer(name) : new RandomScrabblePlayer(name),
-            "sudoku" => difficulty == "smart" ? new SmartSudokuPlayer(name) : new RandomSudokuPlayer(name),
-            "breakthrough" => difficulty == "smart" ? new SmartBreakthroughPlayer(name) : new RandomBreakthroughPlayer(name),
-            "mancala" => difficulty == "smart" ? new SmartMancalaPlayer(name) : new RandomMancalaPlayer(name),
-            "tictactoe" => difficulty == "smart"
-                ? (boardWidth == 3 ? new MinimaxPlayer(name) : new SmartNxNTicTacToePlayer(name))
-                : new SimplePlayer(name),
-            _ => new SimplePlayer(name)
-        };
     }
 
     private static string GenerateRoomCode()
@@ -518,6 +358,7 @@ public class GameSession
                 LastMoveText = $"{timedOutPlayer.Name} ran out of time! {otherPlayer.Name} wins.";
                 if (1 - CurrentTurnIndex == 0) Player1Score++; else Player2Score++;
                 TurnExpiresAt = null;
+                UpdatedAt = DateTime.UtcNow;
                 NotifyChanged();
                 return true;
             }
@@ -559,6 +400,7 @@ public class GameSession
             Status = "InProgress";
             playerToken = Player2Token;
             ResetTurnTimer();
+            UpdatedAt = DateTime.UtcNow;
             NotifyChanged();
             return true;
         }
@@ -724,17 +566,7 @@ public class GameSession
 
             if (!IsMoveValidForLogic(currentPlayer, move))
             {
-                string invalidMsg = GameType switch
-                {
-                    "checkers" => "Invalid move. Captures are mandatory when available!",
-                    "breakthrough" => "Invalid move. Pieces move 1 square forward or diagonally forward.",
-                    "scrabble" => "Invalid word placement. Check dictionary, center/connection, and rack tiles.",
-                    "wordle" => "Enter a valid 5-letter dictionary word.",
-                    "sudoku" => "Invalid digit placement. Conflicts with row/column/box or breaks solvability.",
-                    "mancala" => "Select a non-empty pit on your own side.",
-                    _ => "Invalid move."
-                };
-                return (false, invalidMsg);
+                return (false, GameFactory.GetInvalidMoveMessage(GameType));
             }
 
             SaveSnapshot();
@@ -780,6 +612,7 @@ public class GameSession
                 TurnExpiresAt = null;
             }
 
+            UpdatedAt = DateTime.UtcNow;
             NotifyChanged();
             return (true, null);
         }
@@ -799,6 +632,7 @@ public class GameSession
             }
 
             ExecuteAiMove(CurrentTurnIndex);
+            UpdatedAt = DateTime.UtcNow;
             NotifyChanged();
             return (true, null);
         }
@@ -1093,6 +927,7 @@ public class GameSession
             }
 
             ResetTurnTimer();
+            UpdatedAt = DateTime.UtcNow;
             NotifyChanged();
             return (true, null);
         }
@@ -1253,7 +1088,28 @@ public class GameSession
                 ExecuteAiMove();
             }
 
+            UpdatedAt = DateTime.UtcNow;
             NotifyChanged();
+        }
+    }
+
+    public string? GetTokenForPlayerName(string? playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName)) return null;
+        string cleanName = playerName.Trim();
+        lock (_lock)
+        {
+            if (Players.Count > 0 && Players[0] is WebHumanPlayer p1 &&
+                string.Equals(p1.Name?.Trim(), cleanName, StringComparison.OrdinalIgnoreCase))
+            {
+                return Player1Token;
+            }
+            if (Players.Count > 1 && Players[1] is WebHumanPlayer p2 &&
+                string.Equals(p2.Name?.Trim(), cleanName, StringComparison.OrdinalIgnoreCase))
+            {
+                return Player2Token;
+            }
+            return null;
         }
     }
 
@@ -1404,27 +1260,4 @@ public class WebHumanPlayer : IPlayer
     }
 
     public ILocation GetMove(IBoard board) => new Location(0, 0);
-}
-
-public class RandomConnectFourPlayer : IPlayer
-{
-    private static readonly Random Rnd = new();
-    public string Name { get; }
-
-    public RandomConnectFourPlayer(string name = "Bot (Easy)")
-    {
-        Name = name;
-    }
-
-    public ILocation GetMove(IBoard board)
-    {
-        if (board == null) return new Location(0, 0);
-        var valid = new List<int>();
-        for (int x = 0; x < board.Width; x++)
-        {
-            if (board.PieceAt(x, 0).Value == BlankPiece.BlankValue) valid.Add(x);
-        }
-        if (valid.Count == 0) return new Location(0, 0);
-        return new Location(valid[Rnd.Next(valid.Count)], 0);
-    }
 }

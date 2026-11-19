@@ -15,6 +15,8 @@ public class SessionManager : IDisposable
     private readonly string _connectionString;
     private readonly object _dbLock = new();
 
+    public event Action<string, GameSession, string>? OnPlayerSessionChanged;
+
     public SessionManager(string? dbPath = null)
     {
         dbPath ??= Path.Combine(AppContext.BaseDirectory, "boardgame.db");
@@ -63,7 +65,27 @@ public class SessionManager : IDisposable
         _roomCodeToSessionId[session.RoomCode] = session.Id;
         session.OnStateChanged += () => SaveSession(session);
         SaveSession(session);
+
+        if (session.Players.Count > 0 && session.Players[0] is WebHumanPlayer p1)
+        {
+            NotifyPlayerSessionChanged(p1.Name, session, session.Player1Token);
+        }
+        if (session.Players.Count > 1 && session.Players[1] is WebHumanPlayer p2 && session.Mode != "room")
+        {
+            var p1NameTrimmed = (session.Players[0] as WebHumanPlayer)?.Name?.Trim();
+            if (!string.Equals(p1NameTrimmed, p2.Name?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                NotifyPlayerSessionChanged(p2.Name, session, session.Player2Token);
+            }
+        }
+
         return session;
+    }
+
+    public void NotifyPlayerSessionChanged(string? playerName, GameSession session, string playerToken)
+    {
+        if (string.IsNullOrWhiteSpace(playerName)) return;
+        OnPlayerSessionChanged?.Invoke(playerName.Trim(), session, playerToken);
     }
 
     private void InitializeDatabase()
@@ -367,6 +389,22 @@ public class SessionManager : IDisposable
             return GetSession(sessionId);
         }
         return null;
+    }
+
+    public (GameSession Session, string PlayerToken)? GetLatestSessionForPlayer(string? playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName)) return null;
+        string cleanName = playerName.Trim();
+
+        var match = _sessions.Values
+            .Select(s => (Session: s, Token: s.GetTokenForPlayerName(cleanName)))
+            .Where(x => x.Token != null)
+            .OrderByDescending(x => x.Session.UpdatedAt)
+            .ThenByDescending(x => x.Session.CreatedAt)
+            .FirstOrDefault();
+
+        if (match.Session == null || match.Token == null) return null;
+        return (match.Session, match.Token);
     }
 
     public void Dispose()

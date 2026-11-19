@@ -239,6 +239,7 @@ app.MapPost("/api/room/join", (JoinRoomRequest req, SessionManager sm) =>
 
     if (session.JoinRoomAsGuest(req.PlayerName ?? "Guest", out var token))
     {
+        sm.NotifyPlayerSessionChanged(req.PlayerName ?? "Guest", session, token);
         return Results.Ok(new
         {
             success = true,
@@ -248,6 +249,77 @@ app.MapPost("/api/room/join", (JoinRoomRequest req, SessionManager sm) =>
     }
 
     return Results.BadRequest(new { error = "Unable to join room (room may already have two players)." });
+});
+
+app.MapGet("/api/player/session", (string? name, SessionManager sm) =>
+{
+    var match = sm.GetLatestSessionForPlayer(name);
+    if (match == null)
+    {
+        return Results.Ok(new { found = false });
+    }
+
+    return Results.Ok(new
+    {
+        found = true,
+        session = match.Value.Session.ToDto(),
+        playerToken = match.Value.PlayerToken
+    });
+});
+
+app.MapGet("/api/player/stream", async (string? name, HttpContext context, SessionManager sm, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(name))
+    {
+        context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+        return;
+    }
+
+    string targetName = name.Trim();
+    context.Response.Headers.ContentType = "text/event-stream";
+    context.Response.Headers.CacheControl = "no-cache";
+    context.Response.Headers.Connection = "keep-alive";
+
+    async Task SendPlayerSessionAsync(GameSession session, string token)
+    {
+        try
+        {
+            var payload = new
+            {
+                session = session.ToDto(),
+                playerToken = token
+            };
+            var json = JsonSerializer.Serialize(payload, jsonOpts);
+            await context.Response.WriteAsync($"event: session\ndata: {json}\n\n", ct);
+            await context.Response.Body.FlushAsync(ct);
+        }
+        catch { }
+    }
+
+    Action<string, GameSession, string> handler = (playerName, session, token) =>
+    {
+        if (string.Equals(playerName.Trim(), targetName, StringComparison.OrdinalIgnoreCase))
+        {
+            _ = SendPlayerSessionAsync(session, token);
+        }
+    };
+
+    sm.OnPlayerSessionChanged += handler;
+
+    try
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(15000, ct);
+            await context.Response.WriteAsync(": ping\n\n", ct);
+            await context.Response.Body.FlushAsync(ct);
+        }
+    }
+    catch (OperationCanceledException) { }
+    finally
+    {
+        sm.OnPlayerSessionChanged -= handler;
+    }
 });
 
 // Server-Sent Events endpoint for real-time live game state updates

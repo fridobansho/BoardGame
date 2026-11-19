@@ -798,4 +798,55 @@ public class GameSessionShould
         minesweeper.MakeMove(0, 0).Success.ShouldBeTrue();
         minesweeper.ToDto().Player1GamePoints.ShouldBeGreaterThanOrEqualTo(10);
     }
+
+    [Test]
+    public void ResolvePlayerTokenByNameCaseInsensitivelyAndIgnoreAi()
+    {
+        var session = new GameSession("tictactoe", "vs-ai", "smart", "Alice", null);
+
+        session.GetTokenForPlayerName("alice").ShouldBe(session.Player1Token);
+        session.GetTokenForPlayerName("  ALICE  ").ShouldBe(session.Player1Token);
+        session.GetTokenForPlayerName("AI (Smart)").ShouldBeNull();
+        session.GetTokenForPlayerName("Bob").ShouldBeNull();
+    }
+
+    [Test]
+    public void ShareLatestSessionBetweenClientsWithSamePlayerName()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bg_test_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            using var sm = new SessionManager(tempDb);
+            var notifications = new List<(string Name, string SessionId, string Token)>();
+            sm.OnPlayerSessionChanged += (name, sess, tok) => notifications.Add((name, sess.Id, tok));
+
+            var first = sm.CreateSession("tictactoe", "vs-ai", "smart", "Alice", null);
+            var second = sm.CreateSession("connect4", "vs-ai", "smart", "Alice", null);
+            var other = sm.CreateSession("tictactoe", "room", "smart", "Bob", null);
+
+            notifications.Count.ShouldBe(3);
+            notifications[0].ShouldBe(("Alice", first.Id, first.Player1Token));
+            notifications[1].ShouldBe(("Alice", second.Id, second.Player1Token));
+            notifications[2].ShouldBe(("Bob", other.Id, other.Player1Token));
+
+            var latestAlice = sm.GetLatestSessionForPlayer("  alice ");
+            latestAlice.ShouldNotBeNull();
+            latestAlice.Value.Session.Id.ShouldBe(second.Id);
+            latestAlice.Value.PlayerToken.ShouldBe(second.Player1Token);
+
+            // If Alice joins Bob's room as guest, Alice's latest session updates to Bob's room with Player2Token
+            other.JoinRoomAsGuest("Alice", out var guestToken).ShouldBeTrue();
+            var afterJoin = sm.GetLatestSessionForPlayer("Alice");
+            afterJoin.ShouldNotBeNull();
+            afterJoin.Value.Session.Id.ShouldBe(other.Id);
+            afterJoin.Value.PlayerToken.ShouldBe(guestToken);
+            afterJoin.Value.PlayerToken.ShouldBe(other.Player2Token);
+
+            sm.GetLatestSessionForPlayer("Unknown").ShouldBeNull();
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb)) System.IO.File.Delete(tempDb);
+        }
+    }
 }
