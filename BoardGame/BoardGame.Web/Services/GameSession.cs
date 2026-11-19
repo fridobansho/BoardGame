@@ -1,15 +1,12 @@
 namespace BoardGame.Web.Services;
 
 using BoardGame.Library.Implementations;
-using BoardGame.Library.Implementations.Breakthrough;
 using BoardGame.Library.Implementations.Checkers;
 using BoardGame.Library.Implementations.Chomp;
 using BoardGame.Library.Implementations.ConnectFour;
-using BoardGame.Library.Implementations.Gomoku;
 using BoardGame.Library.Implementations.Hex;
 using BoardGame.Library.Implementations.Mancala;
 using BoardGame.Library.Implementations.Minesweeper;
-using BoardGame.Library.Implementations.Nim;
 using BoardGame.Library.Implementations.Othello;
 using BoardGame.Library.Implementations.Scrabble;
 using BoardGame.Library.Implementations.Sudoku;
@@ -236,6 +233,15 @@ public class GameSession
             for (int x = 0; x < state.Width && x < session.Board.Width; x++)
             {
                 var val = state.Grid[y][x];
+                if (string.Equals(state.GameType, "gomoku", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (val == "B") val = "X";
+                    else if (val == "W") val = "O";
+                }
+                else if (string.Equals(state.GameType, "breakthrough", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (val == "W") val = "R";
+                }
                 session.Board.PieceAt(x, y, ResolvePieceFromValue(session.GameType, val));
             }
         }
@@ -276,14 +282,7 @@ public class GameSession
         IsPublic = isPublic;
         TimerSeconds = timerSeconds.HasValue && timerSeconds.Value > 0 ? timerSeconds.Value : 0;
 
-        string player1Name = !string.IsNullOrWhiteSpace(p1Name) ? p1Name.Trim() : "Player 1";
-        string player2Name = !string.IsNullOrWhiteSpace(p2Name) ? p2Name.Trim() : 
-            (Mode == "vs-ai" ? (AiDifficulty == "smart" ? "AI (Smart)" : "AI (Easy)") :
-            (Mode == "ai-vs-ai" ? "AI Bot 2" :
-            (Mode == "daily" ? "Daily Challenge" :
-            (Mode == "solo" ? "Solo" : "Player 2"))));
-
-        (GameType, Board, GameLogic) = GameFactory.CreateGame(
+        (GameType, Variant, Board, GameLogic) = GameFactory.CreateGame(
             gameType,
             Mode,
             AiDifficulty,
@@ -292,18 +291,29 @@ public class GameSession
             customHeight
         );
 
+        if (GameFactory.IsSoloOnlyPuzzle(GameType) && Mode != "daily" && Mode != "solo")
+        {
+            Mode = "solo";
+        }
+
+        string player1Name = !string.IsNullOrWhiteSpace(p1Name) ? p1Name.Trim() : "Player 1";
+        string player2Name = !string.IsNullOrWhiteSpace(p2Name) ? p2Name.Trim() : 
+            (Mode == "vs-ai" ? (AiDifficulty == "smart" ? "AI (Smart)" : "AI (Easy)") :
+            (Mode == "ai-vs-ai" ? "AI Bot 2" :
+            (Mode == "daily" ? "Daily Challenge" :
+            (Mode == "solo" ? "Solo" : "Player 2"))));
+
         IPlayer p1 = Mode == "ai-vs-ai"
-            ? GameFactory.CreateAiPlayer(GameType, AiDifficulty, $"{player1Name} (Bot 1)", Board.Width)
+            ? GameFactory.CreateAiPlayer(GameType, AiDifficulty, $"{player1Name} (Bot 1)", GameLogic)
             : new WebHumanPlayer(player1Name, Player1Token);
         IPlayer p2 = (Mode == "vs-ai" || Mode == "ai-vs-ai")
-            ? GameFactory.CreateAiPlayer(GameType, AiDifficulty, Mode == "ai-vs-ai" ? "AI Bot 2" : player2Name, Board.Width)
+            ? GameFactory.CreateAiPlayer(GameType, AiDifficulty, Mode == "ai-vs-ai" ? "AI Bot 2" : player2Name, GameLogic)
             : new WebHumanPlayer(player2Name, Player2Token);
 
         Players.Add(p1);
         Players.Add(p2);
 
         GameLogic.MapPieces(Players);
-        BindWebAiPlayers();
         GameLogic.InitializeBoard(Board);
 
         RecordInitialHistory();
@@ -346,17 +356,6 @@ public class GameSession
         else
         {
             TurnExpiresAt = null;
-        }
-    }
-
-    private void BindWebAiPlayers()
-    {
-        foreach (var player in Players)
-        {
-            if (player is SmartNxNTicTacToePlayer nxn && GameLogic.PlayerPieces.TryGetValue(player, out var piece))
-            {
-                nxn.AssignedPiece = piece;
-            }
         }
     }
 
@@ -437,7 +436,6 @@ public class GameSession
                 Players[1] = new WebHumanPlayer(cleanName, Player2Token);
                 GameLogic.PlayerPieces.Clear();
                 GameLogic.MapPieces(Players);
-                BindWebAiPlayers();
                 if (GameLogic is ScrabbleLogic && MoveCount == 0)
                 {
                     GameLogic.InitializeBoard(Board);
@@ -558,9 +556,9 @@ public class GameSession
 
         if (toX.HasValue || toY.HasValue)
         {
-            if (GameType != "checkers" && GameType != "breakthrough")
+            if (GameType != "checkers")
             {
-                return (false, "Two-square piece moves are only valid in Checkers and Breakthrough.");
+                return (false, "Two-square piece moves are only valid in Checkers / Breakthrough.");
             }
             if (!toX.HasValue || !toY.HasValue)
             {
@@ -619,7 +617,7 @@ public class GameSession
                 var flagMove = new SudokuMove(x, y, 1);
                 if (!IsMoveValidForLogic(currentPlayer, flagMove))
                 {
-                    return (false, GameFactory.GetInvalidMoveMessage(GameType));
+                    return (false, GameFactory.GetInvalidMoveMessage(GameType, Variant));
                 }
                 ApplyMoveToLogic(currentPlayer, flagMove);
                 LastMoveText = $"{currentPlayer.Name} toggled flag at ({x}, {y})";
@@ -642,7 +640,7 @@ public class GameSession
         }
         else
         {
-            if (GameType == "checkers" || GameType == "breakthrough")
+            if (GameType == "checkers")
             {
                 return (false, "Select a piece and a destination square.");
             }
@@ -676,7 +674,7 @@ public class GameSession
 
         if (!IsMoveValidForLogic(currentPlayer, move))
         {
-            return (false, GameFactory.GetInvalidMoveMessage(GameType));
+            return (false, GameFactory.GetInvalidMoveMessage(GameType, Variant));
         }
 
         SaveSnapshot();
@@ -775,59 +773,10 @@ public class GameSession
             return;
         }
 
-        // Game-specific fallbacks if AI returned an invalid move
-        if (GameType == "checkers")
+        var fallbackMove = GameFactory.SelectFallbackAiMove(GameType, Board, GameLogic, aiPlayer, IsMoveValidForLogic);
+        if (fallbackMove != null && IsMoveValidForLogic(aiPlayer, fallbackMove))
         {
-            string side = GameLogic.GetPiece(aiPlayer).Value;
-            var validMoves = CheckersLogic.GetValidMovesForSide(Board, side);
-            if (validMoves.Count > 0)
-            {
-                RecordAndApplyAiMove(aiPlayer, validMoves[0]);
-            }
-            return;
-        }
-
-        if (GameType == "breakthrough")
-        {
-            string side = GameLogic.GetPiece(aiPlayer).Value;
-            var validMoves = BreakthroughLogic.GetValidMovesForSide(Board, side);
-            if (validMoves.Count > 0)
-            {
-                RecordAndApplyAiMove(aiPlayer, validMoves[0]);
-            }
-            return;
-        }
-
-        if (GameType == "scrabble")
-        {
-            RecordAndApplyAiMove(aiPlayer, WordMove.Pass);
-            return;
-        }
-
-        if (GameType == "sudoku")
-        {
-            var fallback = new SmartSudokuPlayer(aiPlayer.Name);
-            fallback.Bind((SudokuLogic)GameLogic);
-            var fallbackMove = fallback.GetMove(Board);
-            if (fallbackMove is SudokuMove && IsMoveValidForLogic(aiPlayer, fallbackMove))
-            {
-                RecordAndApplyAiMove(aiPlayer, fallbackMove);
-            }
-            return;
-        }
-
-        // Fallback: search for first valid single-coordinate move
-        for (int x = 0; x < Board.Width; x++)
-        {
-            for (int y = 0; y < Board.Height; y++)
-            {
-                var loc = new Location(x, y);
-                if (IsMoveValidForLogic(aiPlayer, loc))
-                {
-                    RecordAndApplyAiMove(aiPlayer, loc);
-                    return;
-                }
-            }
+            RecordAndApplyAiMove(aiPlayer, fallbackMove);
         }
     }
 
@@ -1129,12 +1078,6 @@ public class GameSession
         if (winners.Count == 1)
         {
             var winnerPlayer = winners[0];
-            bool invertWinner = (Variant == "misere" && (GameType == "tictactoe" || GameType == "connect4" || GameType == "gomoku" || GameType == "hex"))
-                || (GameType == "chomp" && Variant == "normal");
-            if (invertWinner)
-            {
-                winnerPlayer = Players.First(p => !ReferenceEquals(p, winnerPlayer));
-            }
             Winner = winnerPlayer.Name;
             Status = "Finished";
             if (Winner == Players[0].Name) Player1Score++;
@@ -1197,7 +1140,6 @@ public class GameSession
             }
         }
         GameLogic.MapPieces(Players);
-        BindWebAiPlayers();
         GameLogic.InitializeBoard(Board);
         if (isRematch)
         {

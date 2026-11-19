@@ -7,6 +7,29 @@ namespace BoardGame.Library.Implementations.Chomp
 
     public class ChompLogic : IGameLogic, ICustomStateGameLogic
     {
+        private bool _isRowOnlyNim = false;
+        private bool _isMisere = true;
+
+        public bool IsRowOnlyNim
+        {
+            get => _isRowOnlyNim;
+            set
+            {
+                _isRowOnlyNim = value;
+                UpdateBoundPlayers();
+            }
+        }
+
+        public bool IsMisere
+        {
+            get => _isMisere;
+            set
+            {
+                _isMisere = value;
+                UpdateBoundPlayers();
+            }
+        }
+
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public IPlayer LastPlayerWhoMoved { get; private set; }
@@ -23,11 +46,27 @@ namespace BoardGame.Library.Implementations.Chomp
         {
             ValidatePlayers(players);
             PlayerPieces.Clear();
-            // In Chomp, pieces belong to the board (chocolate / poison), not individual players.
-            // Map each player to the shared Chocolate piece.
+            var sharedPiece = IsRowOnlyNim ? StonePiece.Stone : ChocolatePiece.Chocolate;
             foreach (var player in players)
             {
-                PlayerPieces[player] = ChocolatePiece.Chocolate;
+                PlayerPieces[player] = sharedPiece;
+            }
+            UpdateBoundPlayers();
+        }
+
+        private void UpdateBoundPlayers()
+        {
+            foreach (var player in PlayerPieces.Keys)
+            {
+                if (player is SmartChompPlayer sp)
+                {
+                    sp.IsRowOnlyNim = IsRowOnlyNim;
+                    sp.IsMisere = IsMisere;
+                }
+                else if (player is RandomAiPlayer rp)
+                {
+                    rp.Logic = this;
+                }
             }
         }
 
@@ -43,6 +82,19 @@ namespace BoardGame.Library.Implementations.Chomp
 
             PoisonEaten = false;
             LastPlayerWhoMoved = null;
+
+            if (IsRowOnlyNim)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    int stonesInRow = Math.Min(board.Width, 1 + y * 2);
+                    for (int x = 0; x < board.Width; x++)
+                    {
+                        board.PieceAt(x, y, x < stonesInRow ? StonePiece.Stone : BlankPiece.Blank);
+                    }
+                }
+                return;
+            }
 
             for (int x = 0; x < board.Width; x++)
             {
@@ -66,7 +118,7 @@ namespace BoardGame.Library.Implementations.Chomp
             if (!board.CheckBounds(location.X, location.Y)) return false;
 
             var piece = board.PieceAt(location.X, location.Y);
-            // Any uneaten block (chocolate or poison) is a valid move
+            // Any uneaten block/stone (chocolate, poison, or stone) is a valid move
             return piece != null && piece.Value != BlankPiece.BlankValue;
         }
 
@@ -78,6 +130,16 @@ namespace BoardGame.Library.Implementations.Chomp
             }
 
             LastPlayerWhoMoved = player;
+
+            if (IsRowOnlyNim)
+            {
+                for (int x = location.X; x < board.Width; x++)
+                {
+                    board.PieceAt(x, location.Y, BlankPiece.Blank);
+                }
+                PoisonEaten = !HasAnyPiece(board);
+                return true;
+            }
 
             PoisonEaten = (location.X == 0 && location.Y == 0) || board.PieceAt(0, 0)?.Value == BlankPiece.BlankValue;
 
@@ -93,6 +155,22 @@ namespace BoardGame.Library.Implementations.Chomp
             return true;
         }
 
+        private static bool HasAnyPiece(IBoard board)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                for (int x = 0; x < board.Width; x++)
+                {
+                    var val = board.PieceAt(x, y)?.Value;
+                    if (val != null && val != BlankPiece.BlankValue)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public IPiece GetPiece(IPlayer player)
         {
             if (player != null && PlayerPieces.TryGetValue(player, out var piece))
@@ -106,12 +184,27 @@ namespace BoardGame.Library.Implementations.Chomp
         {
             ValidatePlayers(players);
 
+            if (IsRowOnlyNim)
+            {
+                if (HasAnyPiece(board) || LastPlayerWhoMoved == null)
+                {
+                    return Enumerable.Empty<IPlayer>();
+                }
+
+                if (IsMisere)
+                {
+                    return players.Where(p => !ReferenceEquals(p, LastPlayerWhoMoved));
+                }
+                return new[] { LastPlayerWhoMoved };
+            }
+
             var topLeft = board?.PieceAt(0, 0);
             bool poisonMissing = topLeft == null || topLeft.Value == BlankPiece.BlankValue;
             if (PoisonEaten && poisonMissing && LastPlayerWhoMoved != null)
             {
-                // The player forced to eat (0, 0) loses; the other player wins!
-                var winner = players.First(p => !ReferenceEquals(p, LastPlayerWhoMoved));
+                var winner = IsMisere
+                    ? players.First(p => !ReferenceEquals(p, LastPlayerWhoMoved))
+                    : LastPlayerWhoMoved;
                 return Enumerable.Repeat(winner, 1);
             }
 

@@ -140,7 +140,7 @@ namespace BoardGame.Tests.Implementations.Scrabble
         {
             var board = new Board(15, 15);
             var smart = new SmartScrabblePlayer("Smart");
-            var random = new RandomScrabblePlayer("Random");
+            var random = new RandomAiPlayer("Random");
             var logic = new ScrabbleLogic();
             logic.MapPieces(new IPlayer[] { smart, random });
             logic.InitializeBoard(board);
@@ -156,7 +156,7 @@ namespace BoardGame.Tests.Implementations.Scrabble
         {
             var board = new Board(15, 15);
             var smart = new SmartScrabblePlayer("SmartBot");
-            var random = new RandomScrabblePlayer("RandomBot");
+            var random = new RandomAiPlayer("RandomBot");
             var players = new IPlayer[] { smart, random };
             var logic = new ScrabbleLogic();
 

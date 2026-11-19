@@ -1,5 +1,5 @@
 // ============================================================================
-// Game Board Renderers (all 14 games)
+// Game Board Renderers (11 consolidated games)
 // ============================================================================
 
 export function createBoardRenderer(ctx) {
@@ -43,14 +43,8 @@ export function createBoardRenderer(ctx) {
       case 'chomp':
         renderChomp(session);
         break;
-      case 'gomoku':
-        renderGomoku(session);
-        break;
       case 'othello':
         renderOthello(session);
-        break;
-      case 'nim':
-        renderNim(session);
         break;
       case 'hex':
         renderHex(session);
@@ -63,9 +57,6 @@ export function createBoardRenderer(ctx) {
         break;
       case 'sudoku':
         renderSudoku(session);
-        break;
-      case 'breakthrough':
-        renderBreakthrough(session);
         break;
       case 'mancala':
         renderMancala(session);
@@ -80,74 +71,6 @@ export function createBoardRenderer(ctx) {
         renderConnectFour(session);
         break;
     }
-  }
-
-  function renderBreakthrough(session) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'checkers-wrapper';
-
-    const hint = document.createElement('div');
-    hint.className = 'checkers-hint';
-    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
-    if (!canPlay) {
-      hint.textContent = session.lastMoveText || 'Breakthrough';
-    } else if (ctx.selectedBreakthroughPiece) {
-      hint.textContent = `Pawn (${ctx.selectedBreakthroughPiece.x}, ${ctx.selectedBreakthroughPiece.y}) selected — tap forward square`;
-    } else {
-      hint.textContent = 'Tap one of your pawns, then tap 1 square forward or diagonally forward';
-    }
-    wrapper.appendChild(hint);
-
-    const grid = document.createElement('div');
-    grid.className = 'bt-grid';
-    grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
-
-    for (let y = 0; y < session.height; y++) {
-      for (let x = 0; x < session.width; x++) {
-        const val = (session.grid[y] && session.grid[y][x]) ? session.grid[y][x] : ' ';
-        const isAlt = (x + y) % 2 === 1;
-        const isSelected = ctx.selectedBreakthroughPiece && ctx.selectedBreakthroughPiece.x === x && ctx.selectedBreakthroughPiece.y === y;
-        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
-
-        const cell = document.createElement('button');
-        cell.type = 'button';
-        cell.className = 'bt-cell' +
-          (isAlt ? ' alt-square' : '') +
-          (isSelected ? ' selected' : '') +
-          (isLastMove ? ' last-move' : '');
-
-        if (val === 'W' || val === 'B') {
-          const piece = document.createElement('span');
-          piece.className = val === 'W' ? 'bt-piece-w' : 'bt-piece-b';
-          cell.appendChild(piece);
-        }
-
-        const isOwn = session.currentTurnIndex === 0 ? val === 'W' : val === 'B';
-        if (canPlay) {
-          cell.addEventListener('click', () => {
-            if (isOwn) {
-              ctx.selectedBreakthroughPiece = (ctx.selectedBreakthroughPiece && ctx.selectedBreakthroughPiece.x === x && ctx.selectedBreakthroughPiece.y === y)
-                ? null
-                : { x, y };
-              ctx.playSound('tap');
-              renderBoard(session);
-            } else if (ctx.selectedBreakthroughPiece) {
-              const fromX = ctx.selectedBreakthroughPiece.x;
-              const fromY = ctx.selectedBreakthroughPiece.y;
-              ctx.selectedBreakthroughPiece = null;
-              ctx.submitPieceMove(fromX, fromY, x, y);
-            }
-          });
-        } else {
-          cell.disabled = true;
-        }
-
-        grid.appendChild(cell);
-      }
-    }
-
-    wrapper.appendChild(grid);
-    ctx.boardContainer.appendChild(wrapper);
   }
 
   function renderMancala(session) {
@@ -393,22 +316,13 @@ export function createBoardRenderer(ctx) {
 
     const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
 
-    // HUD
+    // HUD (Sudoku is Solo / Daily Puzzle only)
     const hud = document.createElement('div');
     hud.className = 'sudoku-hud';
-    const isSoloDaily = session.mode === 'daily' || session.mode === 'solo';
-    if (isSoloDaily) {
-      hud.innerHTML = `
-        <span class="scrabble-score-pill active">${ctx.escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0} pts</strong></span>
-        <button type="button" class="btn btn-xs btn-secondary sudoku-lb-btn">🏆 Leaderboard</button>
-      `;
-    } else {
-      hud.innerHTML = `
-        <span class="scrabble-score-pill ${session.currentTurnIndex === 0 ? 'active' : ''}">${ctx.escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0}</strong></span>
-        <button type="button" class="btn btn-xs btn-secondary sudoku-lb-btn">🏆 Ranks</button>
-        <span class="scrabble-score-pill ${session.currentTurnIndex === 1 ? 'active' : ''}">${ctx.escapeHtml(session.player2Name)}: <strong>${session.player2GamePoints || 0}</strong></span>
-      `;
-    }
+    hud.innerHTML = `
+      <span class="scrabble-score-pill active">${ctx.escapeHtml(session.player1Name)}: <strong>${session.player1GamePoints || 0} pts</strong></span>
+      <button type="button" class="btn btn-xs btn-secondary sudoku-lb-btn">🏆 Leaderboard</button>
+    `;
     const lbShortcut = hud.querySelector('.sudoku-lb-btn');
     if (lbShortcut) {
       lbShortcut.addEventListener('click', () => {
@@ -483,7 +397,7 @@ export function createBoardRenderer(ctx) {
   }
 
   function isOwnCheckerPiece(val, turnIndex) {
-    if (turnIndex === 0) return val === 'R' || val === 'RK';
+    if (turnIndex === 0) return val === 'R' || val === 'RK' || val === 'W';
     return val === 'B' || val === 'BK';
   }
 
@@ -491,20 +405,27 @@ export function createBoardRenderer(ctx) {
     const wrapper = document.createElement('div');
     wrapper.className = 'checkers-wrapper';
 
+    const isBreakthrough = session.variant === 'breakthrough' || session.variant === 'breakthrough_misere';
     const hint = document.createElement('div');
     hint.className = 'checkers-hint';
     const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
     if (!canPlay) {
-      hint.textContent = session.lastMoveText || 'Checkers';
+      hint.textContent = session.lastMoveText || (isBreakthrough ? 'Breakthrough' : 'Checkers');
     } else if (ctx.selectedChecker) {
-      hint.textContent = `Piece (${ctx.selectedChecker.x}, ${ctx.selectedChecker.y}) selected — tap destination square`;
+      hint.textContent = isBreakthrough
+        ? `Pawn (${ctx.selectedChecker.x}, ${ctx.selectedChecker.y}) selected — tap forward square`
+        : `Piece (${ctx.selectedChecker.x}, ${ctx.selectedChecker.y}) selected — tap destination square`;
     } else {
-      hint.textContent = 'Tap one of your pieces, then tap destination (captures mandatory)';
+      hint.textContent = isBreakthrough
+        ? 'Tap one of your pawns, then tap 1 square forward or diagonally forward'
+        : (session.variant === 'casual'
+          ? 'Tap one of your pieces, then tap destination (captures optional)'
+          : 'Tap one of your pieces, then tap destination (captures mandatory)');
     }
     wrapper.appendChild(hint);
 
     const grid = document.createElement('div');
-    grid.className = 'checkers-grid';
+    grid.className = 'checkers-grid' + (isBreakthrough ? ' breakthrough-variant' : '');
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
 
     for (let y = 0; y < session.height; y++) {
@@ -521,9 +442,9 @@ export function createBoardRenderer(ctx) {
           (isLastMove ? ' last-move' : '');
         cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
 
-        if (val === 'R' || val === 'RK' || val === 'B' || val === 'BK') {
+        if (val === 'R' || val === 'RK' || val === 'B' || val === 'BK' || val === 'W') {
           const piece = document.createElement('span');
-          const isRed = val === 'R' || val === 'RK';
+          const isRed = val === 'R' || val === 'RK' || val === 'W';
           const isKing = val === 'RK' || val === 'BK';
           piece.className = (isRed ? 'checkers-piece-r' : 'checkers-piece-b') + (isKing ? ' checkers-king' : '');
           if (isKing) {
@@ -532,7 +453,8 @@ export function createBoardRenderer(ctx) {
           cell.appendChild(piece);
         }
 
-        if (canPlay && isDark) {
+        const squarePlayable = isBreakthrough ? canPlay : (canPlay && isDark);
+        if (squarePlayable) {
           cell.addEventListener('click', () => {
             if (isOwnCheckerPiece(val, session.currentTurnIndex)) {
               if (ctx.selectedChecker && ctx.selectedChecker.x === x && ctx.selectedChecker.y === y) {
@@ -542,7 +464,7 @@ export function createBoardRenderer(ctx) {
               }
               ctx.playSound('tap');
               renderBoard(session);
-            } else if (ctx.selectedChecker && (val === '' || val === ' ')) {
+            } else if (ctx.selectedChecker && (isBreakthrough || val === '' || val === ' ')) {
               const fromX = ctx.selectedChecker.x;
               const fromY = ctx.selectedChecker.y;
               ctx.selectedChecker = null;
@@ -743,11 +665,11 @@ export function createBoardRenderer(ctx) {
         cell.disabled = !canPlay || (val !== '' && val !== ' ');
         cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
 
-        if (val === 'B') {
+        if (val === 'B' || val === 'X') {
           const stone = document.createElement('span');
           stone.className = 'gomoku-stone-b';
           cell.appendChild(stone);
-        } else if (val === 'W') {
+        } else if (val === 'W' || val === 'O') {
           const stone = document.createElement('span');
           stone.className = 'gomoku-stone-w';
           cell.appendChild(stone);
@@ -828,45 +750,321 @@ export function createBoardRenderer(ctx) {
     ctx.boardContainer.appendChild(grid);
   }
 
-  function renderHex(session) {
-    const grid = document.createElement('div');
-    grid.className = 'hex-grid';
+  function findHexConnectedPath(grid, width, height, symbols, topToBottom) {
+    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1], [1, -1], [-1, 1]];
+    const queue = [];
+    const visited = new Set();
+    const parent = new Map();
 
-    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
+    const matches = (x, y) => {
+      const val = grid[y] && grid[y][x] ? grid[y][x] : '';
+      return symbols.includes(val);
+    };
 
-    for (let y = 0; y < session.height; y++) {
-      const row = document.createElement('div');
-      row.className = 'hex-row';
-      row.style.marginLeft = `${y * 16}px`;
-
-      for (let x = 0; x < session.width; x++) {
-        const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
-        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
-        const cell = document.createElement('button');
-        cell.className = 'hex-cell' + (isLastMove ? ' last-move' : '');
-        cell.disabled = !canPlay || (val !== '' && val !== ' ');
-        cell.setAttribute('aria-label', `Row ${y + 1}, Column ${x + 1}`);
-
-        if (val === 'B') {
-          const stone = document.createElement('span');
-          stone.className = 'gomoku-stone-b';
-          cell.appendChild(stone);
-        } else if (val === 'W') {
-          const stone = document.createElement('span');
-          stone.className = 'gomoku-stone-w';
-          cell.appendChild(stone);
+    if (topToBottom) {
+      for (let x = 0; x < width; x++) {
+        if (matches(x, 0)) {
+          const key = `${x},0`;
+          queue.push([x, 0]);
+          visited.add(key);
         }
-
-        if (canPlay && (val === '' || val === ' ')) {
-          cell.addEventListener('click', () => ctx.submitMove(x, y));
-        }
-
-        row.appendChild(cell);
       }
-      grid.appendChild(row);
+    } else {
+      for (let y = 0; y < height; y++) {
+        if (matches(0, y)) {
+          const key = `0,${y}`;
+          queue.push([0, y]);
+          visited.add(key);
+        }
+      }
     }
 
-    ctx.boardContainer.appendChild(grid);
+    let endKey = null;
+    while (queue.length > 0) {
+      const [cx, cy] = queue.shift();
+      const key = `${cx},${cy}`;
+      if ((topToBottom && cy === height - 1) || (!topToBottom && cx === width - 1)) {
+        endKey = key;
+        break;
+      }
+
+      for (const [dx, dy] of dirs) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        const nKey = `${nx},${ny}`;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited.has(nKey) && matches(nx, ny)) {
+          visited.add(nKey);
+          parent.set(nKey, key);
+          queue.push([nx, ny]);
+        }
+      }
+    }
+
+    const path = new Set();
+    let curr = endKey;
+    while (curr) {
+      path.add(curr);
+      curr = parent.get(curr) || null;
+    }
+    return path;
+  }
+
+  function renderHex(session) {
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const svgEl = (tag, attrs = {}) => {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        el.setAttribute(k, String(v));
+      }
+      return el;
+    };
+
+    const width = Number(session.width) || 7;
+    const height = Number(session.height) || 7;
+    const grid = Array.isArray(session.grid) ? session.grid : [];
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'hex-wrapper';
+
+    // Player & Goal Legend
+    const legend = document.createElement('div');
+    legend.className = 'hex-legend';
+
+    const p1Pill = document.createElement('span');
+    p1Pill.className = 'hex-legend-pill' + (session.status === 'InProgress' && session.currentTurnIndex === 0 ? ' active' : '');
+    p1Pill.innerHTML = `<span class="hex-swatch hex-swatch-b"></span><span>${ctx.escapeHtml(session.player1Name || 'Player 1')}</span><span class="hex-dir">Top ↕ Bottom</span>`;
+
+    const p2Pill = document.createElement('span');
+    p2Pill.className = 'hex-legend-pill' + (session.status === 'InProgress' && session.currentTurnIndex === 1 ? ' active' : '');
+    p2Pill.innerHTML = `<span class="hex-swatch hex-swatch-w"></span><span>${ctx.escapeHtml(session.player2Name || 'Player 2')}</span><span class="hex-dir">Left ↔ Right</span>`;
+
+    legend.appendChild(p1Pill);
+    legend.appendChild(p2Pill);
+    wrapper.appendChild(legend);
+
+    if (session.variant === 'misere') {
+      const hint = document.createElement('div');
+      hint.className = 'hex-variant-hint';
+      hint.textContent = '🔄 Misère: avoid connecting your opposite sides!';
+      wrapper.appendChild(hint);
+    }
+
+    const sizeClass = width <= 5 ? 'hex-size-sm' : width <= 8 ? 'hex-size-md' : 'hex-size-lg';
+    const frame = document.createElement('div');
+    frame.className = `hex-board-frame ${sizeClass}`;
+
+    // Pointy-top hex geometry matching HexLogic.HexNeighbors:
+    // (-1,0), (1,0), (0,-1), (0,1), (1,-1), (-1,1)
+    const R = 24;
+    const SQRT3 = Math.sqrt(3);
+    const hexW = SQRT3 * R;
+    const rowStep = 1.5 * R;
+    const borderM = 13;
+    const pad = 8;
+
+    const cellCenter = (x, y) => [(x + 0.5 * y) * hexW, y * rowStep];
+    const hexPoints = (cx, cy, r) => {
+      const pts = [];
+      for (let k = 0; k < 6; k++) {
+        const angle = (k * 60 - 90) * (Math.PI / 180);
+        pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
+      }
+      return pts;
+    };
+    const cellVertex = (x, y, k) => {
+      const [cx, cy] = cellCenter(x, y);
+      const angle = (k * 60 - 90) * (Math.PI / 180);
+      return [cx + R * Math.cos(angle), cy + R * Math.sin(angle)];
+    };
+    const midpoint = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const ptsAttr = (pts) => pts.map(([px, py]) => `${px.toFixed(2)},${py.toFixed(2)}`).join(' ');
+
+    const yTop = -(R + borderM);
+    const yBot = (height - 1) * rowStep + R + borderM;
+    const tlOut = [-SQRT3 * (R + borderM), yTop];
+    const trOut = [((3 * width - 2) * R + borderM) / SQRT3, yTop];
+    const blOut = [((height - 1) * rowStep - R - borderM) / SQRT3, yBot];
+    const brOut = [((height - 1) * rowStep + 3 * width * R + 3 * borderM) / SQRT3, yBot];
+
+    const mTR = midpoint(cellVertex(width - 1, 0, 0), cellVertex(width - 1, 0, 1));
+    const mBL = midpoint(cellVertex(0, height - 1, 4), cellVertex(0, height - 1, 3));
+
+    const topBorderPts = [tlOut, trOut, mTR];
+    for (let x = width - 1; x >= 0; x--) {
+      topBorderPts.push(cellVertex(x, 0, 0), cellVertex(x, 0, 5));
+    }
+
+    const rightBorderPts = [trOut, brOut];
+    for (let y = height - 1; y >= 0; y--) {
+      rightBorderPts.push(cellVertex(width - 1, y, 2), cellVertex(width - 1, y, 1));
+    }
+    rightBorderPts.push(mTR);
+
+    const bottomBorderPts = [brOut, blOut, mBL];
+    for (let x = 0; x < width; x++) {
+      bottomBorderPts.push(cellVertex(x, height - 1, 3), cellVertex(x, height - 1, 2));
+    }
+
+    const leftBorderPts = [blOut, tlOut];
+    for (let y = 0; y < height; y++) {
+      leftBorderPts.push(cellVertex(0, y, 5), cellVertex(0, y, 4));
+    }
+    leftBorderPts.push(mBL);
+
+    const vbX = tlOut[0] - pad;
+    const vbY = yTop - pad;
+    const vbW = (brOut[0] - tlOut[0]) + 2 * pad;
+    const vbH = (yBot - yTop) + 2 * pad;
+
+    const svg = svgEl('svg', {
+      class: 'hex-board-svg',
+      viewBox: `${vbX.toFixed(2)} ${vbY.toFixed(2)} ${vbW.toFixed(2)} ${vbH.toFixed(2)}`,
+      role: 'grid',
+      'aria-label': `Hex board (${width} by ${height})`
+    });
+
+    // Gradients for 3D stones and mitered borders
+    const defs = svgEl('defs');
+
+    const gradBorderB = svgEl('linearGradient', { id: 'hex-grad-border-b', x1: '0%', y1: '0%', x2: '0%', y2: '100%' });
+    gradBorderB.appendChild(svgEl('stop', { offset: '0%', 'stop-color': '#2d3a4f' }));
+    gradBorderB.appendChild(svgEl('stop', { offset: '100%', 'stop-color': '#0f172a' }));
+    defs.appendChild(gradBorderB);
+
+    const gradBorderW = svgEl('linearGradient', { id: 'hex-grad-border-w', x1: '0%', y1: '0%', x2: '0%', y2: '100%' });
+    gradBorderW.appendChild(svgEl('stop', { offset: '0%', 'stop-color': '#ffffff' }));
+    gradBorderW.appendChild(svgEl('stop', { offset: '100%', 'stop-color': '#cbd5e1' }));
+    defs.appendChild(gradBorderW);
+
+    const gradBlack = svgEl('radialGradient', { id: 'hex-grad-black', cx: '32%', cy: '30%', r: '68%' });
+    gradBlack.appendChild(svgEl('stop', { offset: '0%', 'stop-color': '#64748b' }));
+    gradBlack.appendChild(svgEl('stop', { offset: '55%', 'stop-color': '#1e293b' }));
+    gradBlack.appendChild(svgEl('stop', { offset: '100%', 'stop-color': '#090d16' }));
+    defs.appendChild(gradBlack);
+
+    const gradWhite = svgEl('radialGradient', { id: 'hex-grad-white', cx: '32%', cy: '30%', r: '68%' });
+    gradWhite.appendChild(svgEl('stop', { offset: '0%', 'stop-color': '#ffffff' }));
+    gradWhite.appendChild(svgEl('stop', { offset: '65%', 'stop-color': '#e2e8f0' }));
+    gradWhite.appendChild(svgEl('stop', { offset: '100%', 'stop-color': '#94a3b8' }));
+    defs.appendChild(gradWhite);
+
+    svg.appendChild(defs);
+
+    // Mitered goal edge borders
+    const bordersGroup = svgEl('g', { class: 'hex-borders' });
+    bordersGroup.appendChild(svgEl('polygon', { class: 'hex-border-black', points: ptsAttr(topBorderPts) }));
+    bordersGroup.appendChild(svgEl('polygon', { class: 'hex-border-black', points: ptsAttr(bottomBorderPts) }));
+    bordersGroup.appendChild(svgEl('polygon', { class: 'hex-border-white', points: ptsAttr(leftBorderPts) }));
+    bordersGroup.appendChild(svgEl('polygon', { class: 'hex-border-white', points: ptsAttr(rightBorderPts) }));
+    bordersGroup.appendChild(svgEl('polygon', {
+      class: 'hex-frame-outline',
+      points: ptsAttr([tlOut, trOut, brOut, blOut])
+    }));
+    svg.appendChild(bordersGroup);
+
+    // Hex cells
+    const cellsGroup = svgEl('g', { class: 'hex-cells' });
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const val = grid[y] && grid[y][x] ? grid[y][x] : '';
+        const isBlack = val === 'B' || val === 'X';
+        const isWhite = val === 'W' || val === 'O';
+        const isEmpty = !isBlack && !isWhite;
+        const isPlayable = canPlay && isEmpty;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
+
+        const [cx, cy] = cellCenter(x, y);
+        const stateLabel = isBlack ? 'Black stone' : isWhite ? 'White stone' : 'empty';
+        const cellClasses = ['hex-cell'];
+        if (isPlayable) cellClasses.push('playable');
+        if (!isEmpty) cellClasses.push('occupied');
+        if (isLastMove) cellClasses.push('last-move');
+
+        const cellG = svgEl('g', {
+          class: cellClasses.join(' '),
+          'data-x': x,
+          'data-y': y,
+          role: 'button',
+          'aria-label': `Row ${y + 1}, Column ${x + 1}, ${stateLabel}`,
+          'aria-disabled': String(!isPlayable)
+        });
+
+        cellG.appendChild(svgEl('polygon', {
+          class: 'hex-poly',
+          points: ptsAttr(hexPoints(cx, cy, R))
+        }));
+
+        if (isBlack || isWhite) {
+          cellG.appendChild(svgEl('circle', {
+            class: 'hex-stone-shadow',
+            cx: cx.toFixed(2),
+            cy: (cy + 1.6).toFixed(2),
+            r: (R * 0.62).toFixed(2)
+          }));
+          cellG.appendChild(svgEl('circle', {
+            class: `hex-stone ${isBlack ? 'hex-stone-b' : 'hex-stone-w'}${isLastMove ? ' last-move-stone' : ''}`,
+            cx: cx.toFixed(2),
+            cy: cy.toFixed(2),
+            r: (R * 0.62).toFixed(2)
+          }));
+        }
+
+        if (isPlayable) {
+          cellG.setAttribute('tabindex', '0');
+          cellG.addEventListener('click', () => ctx.submitMove(x, y));
+          cellG.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              ctx.submitMove(x, y);
+            }
+          });
+        }
+
+        cellsGroup.appendChild(cellG);
+      }
+    }
+    svg.appendChild(cellsGroup);
+
+    // Overlay layer (rendered after all cells so strokes are never occluded by adjacent hexes)
+    const overlayGroup = svgEl('g', { class: 'hex-overlay', 'pointer-events': 'none' });
+
+    if (session.status === 'Finished') {
+      let connectedPath = findHexConnectedPath(grid, width, height, ['B', 'X'], true);
+      if (connectedPath.size === 0) {
+        connectedPath = findHexConnectedPath(grid, width, height, ['W', 'O'], false);
+      }
+      for (const key of connectedPath) {
+        const [wx, wy] = key.split(',').map(Number);
+        const [cx, cy] = cellCenter(wx, wy);
+        overlayGroup.appendChild(svgEl('polygon', {
+          class: 'hex-win-ring' + (session.variant === 'misere' ? ' misere' : ''),
+          points: ptsAttr(hexPoints(cx, cy, R - 2.1))
+        }));
+      }
+    }
+
+    if (session.lastMoveX !== null && session.lastMoveX !== undefined &&
+        session.lastMoveY !== null && session.lastMoveY !== undefined &&
+        session.lastMoveX >= 0 && session.lastMoveX < width &&
+        session.lastMoveY >= 0 && session.lastMoveY < height) {
+      const [lx, ly] = cellCenter(session.lastMoveX, session.lastMoveY);
+      overlayGroup.appendChild(svgEl('polygon', {
+        class: 'hex-last-move-ring',
+        points: ptsAttr(hexPoints(lx, ly, R - 1.8))
+      }));
+      overlayGroup.appendChild(svgEl('circle', {
+        class: 'hex-last-move-dot',
+        cx: lx.toFixed(2),
+        cy: ly.toFixed(2),
+        r: (R * 0.28).toFixed(2)
+      }));
+    }
+
+    svg.appendChild(overlayGroup);
+    frame.appendChild(svg);
+    wrapper.appendChild(frame);
+    ctx.boardContainer.appendChild(wrapper);
   }
 
   function renderConnectFour(session) {
@@ -932,6 +1130,11 @@ export function createBoardRenderer(ctx) {
   }
 
   function renderTicTacToe(session) {
+    if (session.width >= 9 || session.variant === 'gomoku' || session.variant === 'exact5') {
+      renderGomoku(session);
+      return;
+    }
+
     const grid = document.createElement('div');
     grid.className = 'ttt-grid';
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
@@ -971,6 +1174,12 @@ export function createBoardRenderer(ctx) {
   }
 
   function renderChomp(session) {
+    if (session.variant === 'nim' || session.variant === 'nim_misere' ||
+        (Array.isArray(session.grid) && session.grid.some(row => Array.isArray(row) && row.includes('S')))) {
+      renderNim(session);
+      return;
+    }
+
     const grid = document.createElement('div');
     grid.className = 'chomp-grid';
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;

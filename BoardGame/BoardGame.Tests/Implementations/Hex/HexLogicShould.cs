@@ -1,7 +1,6 @@
 namespace BoardGame.Tests.Implementations.Hex
 {
     using BoardGame.Library.Implementations;
-    using BoardGame.Library.Implementations.Gomoku;
     using BoardGame.Library.Implementations.Hex;
     using BoardGame.Library.Implementations.TicTacToe;
     using BoardGame.Library.Interfaces;
@@ -90,7 +89,7 @@ namespace BoardGame.Tests.Implementations.Hex
         {
             var board = new Board(5, 5);
             var smart = new SmartHexPlayer("Smart");
-            var random = new RandomHexPlayer("Random");
+            var random = new RandomAiPlayer("Random");
             var players = new IPlayer[] { smart, random };
             _logic.MapPieces(players);
             _logic.InitializeBoard(board);

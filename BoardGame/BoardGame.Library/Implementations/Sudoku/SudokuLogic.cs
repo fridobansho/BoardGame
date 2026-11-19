@@ -97,22 +97,9 @@ namespace BoardGame.Library.Implementations.Sudoku
             {
                 PlayerPieces[p] = new Piece($"P{idx++}");
                 _scores[p] = 0;
-                BindPlayer(p);
             }
 
             LastInitializedLogic = this;
-        }
-
-        private void BindPlayer(IPlayer player)
-        {
-            if (player is RandomSudokuPlayer randomPlayer)
-            {
-                randomPlayer.Bind(this);
-            }
-            else if (player is SmartSudokuPlayer smartPlayer)
-            {
-                smartPlayer.Bind(this);
-            }
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)

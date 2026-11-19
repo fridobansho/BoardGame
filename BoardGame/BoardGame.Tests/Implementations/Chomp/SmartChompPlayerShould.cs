@@ -77,5 +77,32 @@ namespace BoardGame.Tests.Implementations.Chomp
             winners.Count.ShouldBe(1);
             winners[0].Name.ShouldBe("Smart");
         }
+
+        [Test]
+        public void FindWinningNimSumMoveAndCompletePlaythrough()
+        {
+            var logic = new ChompLogic { IsRowOnlyNim = true, IsMisere = false };
+            var board = new Board(7, 4);
+            var smart = new SmartChompPlayer("Smart");
+            var random = new RandomAiPlayer("Random");
+            var players = new IPlayer[] { smart, random };
+            logic.MapPieces(players);
+            logic.InitializeBoard(board);
+
+            // Clear rows 0..2 -> row 3 has 7 stones -> nim-sum is 7 -> take all 7 at (0, 3)
+            logic.ApplyMove(board, smart, new Location(0, 0));
+            logic.ApplyMove(board, smart, new Location(0, 1));
+            logic.ApplyMove(board, smart, new Location(0, 2));
+
+            var move = smart.GetMove(board);
+            move.X.ShouldBe(0);
+            move.Y.ShouldBe(3);
+
+            // Full AI vs Random playthrough
+            logic.InitializeBoard(board);
+            var game = new Game(board, players, logic);
+            var winners = new GameRunner(game).RunGame().ToList();
+            winners.Count.ShouldBe(1);
+        }
     }
 }

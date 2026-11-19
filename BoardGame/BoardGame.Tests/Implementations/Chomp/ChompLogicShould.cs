@@ -154,5 +154,46 @@ namespace BoardGame.Tests.Implementations.Chomp
             winners.Count.ShouldBe(1);
             winners[0].ShouldBe(player2); // Player 2 wins because Player 1 ate the poison
         }
+
+        [Test]
+        public void SupportNimRowModeWithOneThreeFiveSevenStones()
+        {
+            var logic = new ChompLogic { IsRowOnlyNim = true, IsMisere = false };
+            var board = new Board(7, 4);
+            var p1 = new Mock<IPlayer>().Object;
+            var p2 = new Mock<IPlayer>().Object;
+            logic.MapPieces(new[] { p1, p2 });
+            logic.InitializeBoard(board);
+
+            int[] expected = { 1, 3, 5, 7 };
+            for (int y = 0; y < 4; y++)
+            {
+                int count = 0;
+                for (int x = 0; x < 7; x++)
+                {
+                    if (board.PieceAt(x, y)?.Value == StonePiece.Stone.Value) count++;
+                }
+                count.ShouldBe(expected[y]);
+            }
+
+            // Clicking (2, 2) removes stones >= 2 in row 2 ONLY (row 3 untouched)
+            logic.ApplyMove(board, p1, new Location(2, 2)).ShouldBeTrue();
+            board.PieceAt(1, 2).Value.ShouldBe(StonePiece.Stone.Value);
+            board.PieceAt(2, 2).Value.ShouldBe(BlankPiece.BlankValue);
+            board.PieceAt(0, 3).Value.ShouldBe(StonePiece.Stone.Value);
+
+            // Clear remaining rows; last player (p2) wins in normal Nim
+            logic.ApplyMove(board, p1, new Location(0, 0)).ShouldBeTrue();
+            logic.ApplyMove(board, p2, new Location(0, 1)).ShouldBeTrue();
+            logic.ApplyMove(board, p1, new Location(0, 2)).ShouldBeTrue();
+            logic.ApplyMove(board, p2, new Location(0, 3)).ShouldBeTrue();
+
+            var winners = logic.GetWinners(board, new[] { p1, p2 }).ToList();
+            winners.Single().ShouldBe(p2);
+
+            // Misere Nim inverts to p1
+            logic.IsMisere = true;
+            logic.GetWinners(board, new[] { p1, p2 }).Single().ShouldBe(p1);
+        }
     }
 }

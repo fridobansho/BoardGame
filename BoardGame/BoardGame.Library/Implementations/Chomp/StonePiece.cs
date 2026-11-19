@@ -1,4 +1,4 @@
-namespace BoardGame.Library.Implementations.Nim
+namespace BoardGame.Library.Implementations.Chomp
 {
     public class StonePiece : Piece
     {

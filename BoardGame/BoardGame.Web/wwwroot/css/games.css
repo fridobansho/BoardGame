@@ -112,43 +112,232 @@
 }
 
 /* Hex Board */
-.hex-grid {
+.board-container.hex-mode {
+  max-width: 560px;
+}
+
+.hex-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  background: #1e293b;
-  border: 3px solid #334155;
-  border-radius: 12px;
-  overflow-x: auto;
-  max-width: 95vw;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
-.hex-row {
-  display: flex;
-  gap: 4px;
-}
-
-.hex-cell {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid #475569;
-  background: #334155;
+.hex-legend {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  padding: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.hex-legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+.hex-legend-pill.active {
+  border-color: var(--accent-indigo);
+  color: var(--text-primary);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.35);
+}
+
+.hex-dir {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #38bdf8;
+  opacity: 0.9;
+}
+
+.hex-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
-.hex-cell:hover:not(:disabled) {
-  background: #475569;
+.hex-swatch-b {
+  background: radial-gradient(circle at 32% 30%, #64748b, #0f172a);
+  border: 1px solid #475569;
 }
 
-.hex-cell.last-move {
-  box-shadow: inset 0 0 0 2px #facc15;
+.hex-swatch-w {
+  background: radial-gradient(circle at 32% 30%, #ffffff, #cbd5e1);
+  border: 1px solid #94a3b8;
+}
+
+.hex-variant-hint {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #fda4af;
+  text-align: center;
+}
+
+.hex-board-frame {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 10px 8px;
+  overflow-x: auto;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.hex-board-frame.hex-size-sm {
+  max-width: 440px;
+}
+
+.hex-board-frame.hex-size-md {
+  max-width: 520px;
+}
+
+.hex-board-frame.hex-size-lg {
+  max-width: 560px;
+}
+
+.hex-board-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+  touch-action: manipulation;
+}
+
+@media (max-width: 480px) {
+  .hex-board-frame.hex-size-lg .hex-board-svg {
+    min-width: 430px;
+  }
+}
+
+.hex-border-black {
+  fill: url(#hex-grad-border-b);
+  stroke: #475569;
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.hex-border-white {
+  fill: url(#hex-grad-border-w);
+  stroke: #94a3b8;
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.hex-frame-outline {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.45);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.hex-poly {
+  fill: #3b4b63;
+  stroke: #1e293b;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition: fill 0.14s ease;
+}
+
+.hex-cell.occupied .hex-poly {
+  fill: #334155;
+}
+
+.hex-cell.playable {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .hex-cell.playable:hover .hex-poly {
+    fill: #546987;
+  }
+}
+
+.hex-cell.playable:focus-visible {
+  outline: none;
+}
+
+.hex-cell.playable:focus-visible .hex-poly {
+  fill: #546987;
+  stroke: #38bdf8;
+  stroke-width: 2.5;
+}
+
+.board-container.spectator-mode .hex-cell {
+  cursor: default !important;
+}
+
+.hex-stone-shadow {
+  fill: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.hex-stone {
+  pointer-events: none;
+}
+
+.hex-stone-b {
+  fill: url(#hex-grad-black);
+  stroke: #475569;
+  stroke-width: 1.1;
+}
+
+.hex-stone-w {
+  fill: url(#hex-grad-white);
+  stroke: #94a3b8;
+  stroke-width: 1.1;
+}
+
+.hex-stone.last-move-stone {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexStonePop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes hexStonePop {
+  0% {
+    transform: scale(0.45);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.hex-last-move-ring {
+  fill: none;
+  stroke: #38bdf8;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+
+.hex-last-move-dot {
+  fill: #38bdf8;
+  stroke: #0f172a;
+  stroke-width: 1.2;
+}
+
+.hex-win-ring {
+  fill: none;
+  stroke: #facc15;
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+}
+
+.hex-win-ring.misere {
+  stroke: #f43f5e;
 }
 
 /* Checkers Board */
@@ -201,6 +390,14 @@
 
 .checkers-cell.dark-square:hover:not(:disabled) {
   filter: brightness(1.12);
+}
+
+.checkers-grid.breakthrough-variant .checkers-cell.light-square:not(:disabled) {
+  cursor: pointer;
+}
+
+.checkers-grid.breakthrough-variant .checkers-cell.light-square:hover:not(:disabled) {
+  filter: brightness(0.95);
 }
 
 .checkers-cell.selected {

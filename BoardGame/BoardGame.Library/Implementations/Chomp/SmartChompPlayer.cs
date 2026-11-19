@@ -10,6 +10,8 @@ namespace BoardGame.Library.Implementations.Chomp
         private static readonly ConcurrentDictionary<string, bool> Memo = new ConcurrentDictionary<string, bool>();
 
         public string Name { get; }
+        public bool IsRowOnlyNim { get; set; } = false;
+        public bool IsMisere { get; set; } = true;
 
         public SmartChompPlayer() : this(nameof(SmartChompPlayer))
         {
@@ -23,6 +25,17 @@ namespace BoardGame.Library.Implementations.Chomp
         public ILocation GetMove(IBoard board)
         {
             if (board == null) return new Location(0, 0);
+
+            if (IsRowOnlyNim || BoardHasStones(board))
+            {
+                return GetNimMove(board);
+            }
+
+            if (!IsMisere && board.PieceAt(0, 0)?.Value != BlankPiece.BlankValue)
+            {
+                // Normal Chomp: eating (0, 0) clears the bar and wins immediately
+                return new Location(0, 0);
+            }
 
             // Compute current column heights
             int[] heights = new int[board.Width];
@@ -82,10 +95,88 @@ namespace BoardGame.Library.Implementations.Chomp
             return candidateMoves[candidateMoves.Count - 1];
         }
 
+        private static bool BoardHasStones(IBoard board)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                for (int x = 0; x < board.Width; x++)
+                {
+                    if (board.PieceAt(x, y)?.Value == StonePiece.Stone.Value)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private ILocation GetNimMove(IBoard board)
+        {
+            var rowCounts = new int[board.Height];
+            int nimSum = 0;
+            int rowsWithGt1 = 0;
+            int rowsWith1 = 0;
+            int bigRow = -1;
+
+            for (int y = 0; y < board.Height; y++)
+            {
+                int count = 0;
+                for (int x = 0; x < board.Width; x++)
+                {
+                    if (board.PieceAt(x, y)?.Value == StonePiece.Stone.Value)
+                    {
+                        count++;
+                    }
+                }
+                rowCounts[y] = count;
+                nimSum ^= count;
+                if (count > 1)
+                {
+                    rowsWithGt1++;
+                    bigRow = y;
+                }
+                else if (count == 1)
+                {
+                    rowsWith1++;
+                }
+            }
+
+            if (IsMisere && rowsWithGt1 == 1)
+            {
+                // Misere endgame: leave an odd number of size-1 heaps
+                int target = (rowsWith1 % 2 == 0) ? 1 : 0;
+                return new Location(target, bigRow);
+            }
+
+            if (nimSum != 0)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    int target = rowCounts[y] ^ nimSum;
+                    if (target < rowCounts[y])
+                    {
+                        return new Location(target, y);
+                    }
+                }
+            }
+
+            // Losing position (nimSum == 0): remove 1 stone from the largest row
+            int bestRow = -1;
+            int maxCount = 0;
+            for (int y = 0; y < board.Height; y++)
+            {
+                if (rowCounts[y] > maxCount)
+                {
+                    maxCount = rowCounts[y];
+                    bestRow = y;
+                }
+            }
+
+            return bestRow >= 0 ? new Location(maxCount - 1, bestRow) : new Location(0, 0);
+        }
+
         private static bool IsWinningState(int[] heights)
         {
-            // If only poison block remains at (0,0), next player must eat poison and lose!
-            // Therefore, state where only (0,0) remains is NOT a winning state for the player to move (it is losing).
             bool onlyPoison = (heights[0] == 1);
             if (onlyPoison)
             {
@@ -100,7 +191,6 @@ namespace BoardGame.Library.Implementations.Chomp
                 if (onlyPoison) return false;
             }
 
-            // If board is empty, nothing left
             if (heights[0] == 0) return false;
 
             string key = string.Join(",", heights);
@@ -109,7 +199,6 @@ namespace BoardGame.Library.Implementations.Chomp
                 return cached;
             }
 
-            // Check all valid moves from this state (excluding (0,0) which is an instant loss)
             for (int x = 0; x < heights.Length; x++)
             {
                 for (int y = 0; y < heights[x]; y++)

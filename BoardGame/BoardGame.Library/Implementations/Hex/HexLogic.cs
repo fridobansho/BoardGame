@@ -1,6 +1,5 @@
 namespace BoardGame.Library.Implementations.Hex
 {
-    using Gomoku;
     using Interfaces;
     using System;
     using System.Collections.Generic;
@@ -12,6 +11,18 @@ namespace BoardGame.Library.Implementations.Hex
         {
             (-1, 0), (1, 0), (0, -1), (0, 1), (1, -1), (-1, 1)
         };
+
+        private bool _isMisere = false;
+
+        public bool IsMisere
+        {
+            get => _isMisere;
+            set
+            {
+                _isMisere = value;
+                UpdateBoundPlayers();
+            }
+        }
 
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
@@ -29,8 +40,23 @@ namespace BoardGame.Library.Implementations.Hex
             PlayerPieces.Add(p1, BlackPiece.Black);
             PlayerPieces.Add(p2, WhitePiece.White);
 
-            if (p1 is SmartHexPlayer h1) h1.AssignedSymbol = BlackPiece.Black.Value;
-            if (p2 is SmartHexPlayer h2) h2.AssignedSymbol = WhitePiece.White.Value;
+            UpdateBoundPlayers();
+        }
+
+        private void UpdateBoundPlayers()
+        {
+            foreach (var kvp in PlayerPieces)
+            {
+                if (kvp.Key is SmartHexPlayer h)
+                {
+                    h.AssignedSymbol = kvp.Value.Value;
+                    h.IsMisere = IsMisere;
+                }
+                else if (kvp.Key is RandomAiPlayer r)
+                {
+                    r.Logic = this;
+                }
+            }
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)
@@ -90,18 +116,18 @@ namespace BoardGame.Library.Implementations.Hex
 
             if (HasConnectedPath(board, GetPiece(p1).Value, topToBottom: true))
             {
-                return new[] { p1 };
+                return IsMisere ? new[] { p2 } : new[] { p1 };
             }
 
             if (HasConnectedPath(board, GetPiece(p2).Value, topToBottom: false))
             {
-                return new[] { p2 };
+                return IsMisere ? new[] { p1 } : new[] { p2 };
             }
 
             return Enumerable.Empty<IPlayer>();
         }
 
-        private static bool HasConnectedPath(IBoard board, string symbol, bool topToBottom)
+        internal static bool HasConnectedPath(IBoard board, string symbol, bool topToBottom)
         {
             var queue = new Queue<(int x, int y)>();
             var visited = new HashSet<(int x, int y)>();

@@ -234,13 +234,13 @@ namespace BoardGame.Library.Implementations.Scrabble
 
         private void BindPlayer(IPlayer player)
         {
-            if (player is RandomScrabblePlayer randomPlayer)
-            {
-                randomPlayer.Bind(this);
-            }
-            else if (player is SmartScrabblePlayer smartPlayer)
+            if (player is SmartScrabblePlayer smartPlayer)
             {
                 smartPlayer.Bind(this);
+            }
+            else if (player is RandomAiPlayer randomPlayer)
+            {
+                randomPlayer.Logic = this;
             }
         }
 

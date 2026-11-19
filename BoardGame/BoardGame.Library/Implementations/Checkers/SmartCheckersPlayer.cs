@@ -11,6 +11,7 @@ namespace BoardGame.Library.Implementations.Checkers
         internal string AssignedSymbol { get; set; }
         internal bool MandatoryCapture { get; set; } = true;
         internal bool IsGiveaway { get; set; } = false;
+        internal bool IsBreakthrough { get; set; } = false;
 
         public string Name { get; }
 
@@ -24,15 +25,20 @@ namespace BoardGame.Library.Implementations.Checkers
         {
             if (board == null) return new Location(0, 0);
 
-            string side = _symbol ?? AssignedSymbol ?? RandomCheckersPlayer.InferSide(board);
+            string side = _symbol ?? AssignedSymbol ?? CheckersLogic.InferSide(board);
             string oppSide = side == RedCheckerPiece.Red.Value
                 ? BlackCheckerPiece.Black.Value
                 : RedCheckerPiece.Red.Value;
 
-            var validMoves = CheckersLogic.GetValidMovesForSide(board, side, MandatoryCapture);
+            var validMoves = CheckersLogic.GetValidMovesForSide(board, side, MandatoryCapture, IsBreakthrough);
             if (validMoves.Count == 0)
             {
                 return new Location(-1, -1);
+            }
+
+            if (IsBreakthrough)
+            {
+                return SelectBreakthroughMove(board, validMoves, side, oppSide, IsGiveaway);
             }
 
             PieceMove bestMove = validMoves[0];
@@ -41,11 +47,67 @@ namespace BoardGame.Library.Implementations.Checkers
 
             foreach (var move in validMoves)
             {
-                int score = EvaluateMove(board, simBoard, move, side, oppSide, MandatoryCapture, IsGiveaway);
+                int score = EvaluateMove(board, simBoard, move, side, oppSide, IsGiveaway);
                 if (score > bestScore || (score == bestScore && _random.Next(2) == 0))
                 {
                     bestScore = score;
                     bestMove = move;
+                }
+            }
+
+            return bestMove;
+        }
+
+        private PieceMove SelectBreakthroughMove(
+            IBoard board,
+            System.Collections.Generic.List<PieceMove> moves,
+            string side,
+            string oppSide,
+            bool isGiveaway)
+        {
+            int goalY = side == RedCheckerPiece.Red.Value ? 0 : board.Height - 1;
+            int enemyGoalY = side == RedCheckerPiece.Red.Value ? board.Height - 1 : 0;
+
+            int bestScore = int.MinValue;
+            PieceMove bestMove = moves[0];
+
+            foreach (var m in moves)
+            {
+                int score = _random.Next(0, 4);
+                string targetVal = board.PieceAt(m.ToX, m.ToY)?.Value ?? BlankPiece.BlankValue;
+
+                if (m.ToY == goalY)
+                {
+                    score += 10000;
+                }
+
+                if (targetVal == oppSide)
+                {
+                    score += 80;
+                    int distFromOurHome = Math.Abs(m.ToY - enemyGoalY);
+                    score += Math.Max(0, (board.Height - distFromOurHome) * 6);
+                    if (distFromOurHome <= 1) score += 250;
+                }
+
+                int progress = side == RedCheckerPiece.Red.Value ? (board.Height - 1 - m.ToY) : m.ToY;
+                score += progress * 10;
+
+                int supportY = side == RedCheckerPiece.Red.Value ? m.ToY + 1 : m.ToY - 1;
+                if (supportY >= 0 && supportY < board.Height)
+                {
+                    if (m.ToX - 1 >= 0 && board.PieceAt(m.ToX - 1, supportY)?.Value == side) score += 12;
+                    if (m.ToX + 1 < board.Width && board.PieceAt(m.ToX + 1, supportY)?.Value == side) score += 12;
+                }
+
+                if (isGiveaway)
+                {
+                    score = -score;
+                }
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestMove = m;
                 }
             }
 
@@ -58,7 +120,6 @@ namespace BoardGame.Library.Implementations.Checkers
             PieceMove move,
             string side,
             string oppSide,
-            bool mandatoryCapture,
             bool isGiveaway)
         {
             int score = 0;
@@ -81,7 +142,6 @@ namespace BoardGame.Library.Implementations.Checkers
                 score += 120;
             }
 
-            // Copy board state into simBoard and simulate move
             for (int x = 0; x < origBoard.Width; x++)
             {
                 for (int y = 0; y < origBoard.Height; y++)
@@ -103,14 +163,12 @@ namespace BoardGame.Library.Implementations.Checkers
                 score -= maxOppLoss;
             }
 
-            // Prefer winning immediately if opponent has no legal moves left (avoid re-running GetCaptureMovesForSide)
             bool oppHasMoves = oppCaptures.Count > 0 || CheckersLogic.HasStepMovesForSide(simBoard, oppSide);
             if (!oppHasMoves)
             {
                 score += 10000;
             }
 
-            // Center control and advancing non-kings forward
             int centerDist = Math.Abs(move.ToX - origBoard.Width / 2);
             score += (4 - centerDist) * 5;
 
@@ -122,7 +180,6 @@ namespace BoardGame.Library.Implementations.Checkers
                 score += advancement * 8;
             }
 
-            // Slight edge safety bonus
             if (move.ToX == 0 || move.ToX == origBoard.Width - 1)
             {
                 score += 12;

@@ -11,12 +11,13 @@ import {
   getCategoryForGame,
   supportsDailyMode,
   supportsSoloMode,
-  supportsAiVsAiMode
+  supportsAiVsAiMode,
+  supportsHeadToHeadMode
 } from './game-registry.js';
 import { initAudio, playSoundEffect, triggerHaptic, startConfetti as runConfetti } from './audio-fx.js';
 import { renderSimpleQR } from './qr.js';
 import { getStats, saveStats, unlockTrophy, recordGameResult as recordStatsResult, renderStatsUI as renderStatsPanel } from './stats.js';
-import { createBoardRenderer } from './renderers.js';
+import { createBoardRenderer } from './renderers.js?v=2';
 
 // ============================================================================
 // BoardGame Web Client
@@ -38,7 +39,7 @@ import { createBoardRenderer } from './renderers.js';
   let clientTheme = localStorage.getItem('bg_theme') || 'nebula';
   let clientBoardTheme = localStorage.getItem('bg_board_theme') || 'auto';
   let clientPieceTheme = localStorage.getItem('bg_piece_theme') || 'auto';
-  let clientFavGame = localStorage.getItem('bg_fav_game') || 'connect4';
+  let clientFavGame = resolveGameId(localStorage.getItem('bg_fav_game')) || 'connect4';
   let clientDefaultMode = localStorage.getItem('bg_default_mode') || 'pass-and-play';
   let clientDefaultRole = localStorage.getItem('bg_default_role') || 'play';
   let clientSoundPack = localStorage.getItem('bg_sound_pack') || 'arcade';
@@ -64,7 +65,6 @@ import { createBoardRenderer } from './renderers.js';
   let replayAutoPlayTimer = null;
   let hasVotedPrediction = false;
   let selectedChecker = null;
-  let selectedBreakthroughPiece = null;
   let wordleCurrentGuess = '';
   let minesweeperFlagMode = false;
   let aiExhibitionTimer = null;
@@ -240,8 +240,6 @@ import { createBoardRenderer } from './renderers.js';
     set aiExhibitionPaused(v) { aiExhibitionPaused = v; },
     get selectedChecker() { return selectedChecker; },
     set selectedChecker(v) { selectedChecker = v; },
-    get selectedBreakthroughPiece() { return selectedBreakthroughPiece; },
-    set selectedBreakthroughPiece(v) { selectedBreakthroughPiece = v; },
     get wordleCurrentGuess() { return wordleCurrentGuess; },
     set wordleCurrentGuess(v) { wordleCurrentGuess = v; },
     get minesweeperFlagMode() { return minesweeperFlagMode; },
@@ -414,7 +412,7 @@ import { createBoardRenderer } from './renderers.js';
   function resolvePreferredVariant(opts) {
     if (!opts || opts.length === 0) return 'standard';
     if (clientDefaultVariant === 'misere') {
-      const m = opts.find(o => o.id === 'misere' || o.id === 'reversed' || o.id === 'giveaway' || o.id === 'normal');
+      const m = opts.find(o => o.id === 'misere' || o.id === 'reversed' || o.id === 'giveaway' || o.id === 'nim_misere' || o.id === 'breakthrough_misere' || o.id === 'normal');
       if (m) return m.id;
     } else if (clientDefaultVariant === 'casual') {
       const c = opts.find(o => o.id === 'casual' || o.id === 'blitz' || o.id === 'easy_puzzle' || o.id === 'connect5' || o.id === 'exact5');
@@ -442,6 +440,13 @@ import { createBoardRenderer } from './renderers.js';
         btn.classList.add('active');
         selectedVariant = opt.id;
         if (variantDescHint) variantDescHint.textContent = opt.desc;
+        if (game === 'tictactoe' && (opt.id === 'gomoku' || opt.id === 'exact5') && (selectedGridWidth || 3) < 9) {
+          selectedGridWidth = 15;
+          selectedGridHeight = 15;
+          updateGridSizePills(game);
+        } else if (game === 'chomp') {
+          updateGridSizePills(game);
+        }
         syncPillGroupSelect(groupVariant);
         playSound('tap');
       });
@@ -539,6 +544,8 @@ import { createBoardRenderer } from './renderers.js';
   function updateModeSectionsVisibility(mode = selectedMode) {
     if (secAiDiff) secAiDiff.classList.toggle('hidden', mode !== 'vs-ai' && mode !== 'ai-vs-ai');
     if (secRoom) secRoom.classList.toggle('hidden', mode !== 'room');
+    const secTurnTimer = document.getElementById('sec-turn-timer');
+    if (secTurnTimer) secTurnTimer.classList.toggle('hidden', mode === 'solo' || mode === 'daily');
     updatePlayer2InputVisibility(mode);
   }
 
@@ -548,25 +555,36 @@ import { createBoardRenderer } from './renderers.js';
     const dailyAllowed = supportsDailyMode(game);
     const soloAllowed = supportsSoloMode(game);
     const aiVsAiAllowed = supportsAiVsAiMode(game);
+    const headToHeadAllowed = supportsHeadToHeadMode(game);
+    const passBtn = modeGroup.querySelector('.pill-btn[data-mode="pass-and-play"]');
+    const roomBtn = modeGroup.querySelector('.pill-btn[data-mode="room"]');
     const dailyBtn = modeGroup.querySelector('.pill-btn[data-mode="daily"]');
     const soloBtn = modeGroup.querySelector('.pill-btn[data-mode="solo"]');
     const aiBtn = modeGroup.querySelector('.pill-btn[data-mode="vs-ai"]');
     const aiVsAiBtn = modeGroup.querySelector('.pill-btn[data-mode="ai-vs-ai"]');
+    if (passBtn) passBtn.classList.toggle('hidden', !headToHeadAllowed);
+    if (roomBtn) roomBtn.classList.toggle('hidden', !headToHeadAllowed);
     if (dailyBtn) dailyBtn.classList.toggle('hidden', !dailyAllowed);
     if (soloBtn) soloBtn.classList.toggle('hidden', !soloAllowed);
     if (aiBtn) aiBtn.classList.toggle('hidden', !aiVsAiAllowed);
     if (aiVsAiBtn) aiVsAiBtn.classList.toggle('hidden', !aiVsAiAllowed);
 
-    const invalidMode = (!dailyAllowed && selectedMode === 'daily') ||
-                        (!soloAllowed && selectedMode === 'solo') ||
-                        (!aiVsAiAllowed && (selectedMode === 'vs-ai' || selectedMode === 'ai-vs-ai'));
-    if (invalidMode) {
-      const fallback = (clientDefaultMode === 'daily' && !dailyAllowed) ||
-                       (clientDefaultMode === 'solo' && !soloAllowed) ||
-                       ((clientDefaultMode === 'vs-ai' || clientDefaultMode === 'ai-vs-ai') && !aiVsAiAllowed)
-        ? 'pass-and-play'
-        : clientDefaultMode;
-      selectedMode = fallback || 'pass-and-play';
+    const modeAllowed = {
+      'pass-and-play': headToHeadAllowed,
+      'room': headToHeadAllowed,
+      'vs-ai': aiVsAiAllowed,
+      'ai-vs-ai': aiVsAiAllowed,
+      'solo': soloAllowed,
+      'daily': dailyAllowed
+    };
+    if (!modeAllowed[selectedMode]) {
+      let fallback = headToHeadAllowed ? 'pass-and-play' : (soloAllowed ? 'solo' : 'daily');
+      if (modeAllowed[clientDefaultMode]) {
+        fallback = clientDefaultMode;
+      } else if (!headToHeadAllowed && clientDefaultMode === 'daily' && dailyAllowed) {
+        fallback = 'daily';
+      }
+      selectedMode = fallback;
       modeGroup.querySelectorAll('.pill-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === selectedMode);
       });
@@ -581,22 +599,30 @@ import { createBoardRenderer } from './renderers.js';
     const dailyAllowed = supportsDailyMode(favGame);
     const soloAllowed = supportsSoloMode(favGame);
     const aiVsAiAllowed = supportsAiVsAiMode(favGame);
+    const headToHeadAllowed = supportsHeadToHeadMode(favGame);
+    const passBtn = settingModeGroup.querySelector('.pill-btn[data-mode="pass-and-play"]');
+    const roomBtn = settingModeGroup.querySelector('.pill-btn[data-mode="room"]');
     const dailyBtn = settingModeGroup.querySelector('.pill-btn[data-mode="daily"]');
     const soloBtn = settingModeGroup.querySelector('.pill-btn[data-mode="solo"]');
     const aiBtn = settingModeGroup.querySelector('.pill-btn[data-mode="vs-ai"]');
     const aiVsAiBtn = settingModeGroup.querySelector('.pill-btn[data-mode="ai-vs-ai"]');
+    if (passBtn) passBtn.classList.toggle('hidden', !headToHeadAllowed);
+    if (roomBtn) roomBtn.classList.toggle('hidden', !headToHeadAllowed);
     if (dailyBtn) dailyBtn.classList.toggle('hidden', !dailyAllowed);
     if (soloBtn) soloBtn.classList.toggle('hidden', !soloAllowed);
     if (aiBtn) aiBtn.classList.toggle('hidden', !aiVsAiAllowed);
     if (aiVsAiBtn) aiVsAiBtn.classList.toggle('hidden', !aiVsAiAllowed);
 
-    const activeHidden = (dailyBtn && !dailyAllowed && dailyBtn.classList.contains('active')) ||
+    const activeHidden = (passBtn && !headToHeadAllowed && passBtn.classList.contains('active')) ||
+                         (roomBtn && !headToHeadAllowed && roomBtn.classList.contains('active')) ||
+                         (dailyBtn && !dailyAllowed && dailyBtn.classList.contains('active')) ||
                          (soloBtn && !soloAllowed && soloBtn.classList.contains('active')) ||
                          (aiBtn && !aiVsAiAllowed && aiBtn.classList.contains('active')) ||
                          (aiVsAiBtn && !aiVsAiAllowed && aiVsAiBtn.classList.contains('active'));
     if (activeHidden) {
+      const fallbackMode = headToHeadAllowed ? 'pass-and-play' : (soloAllowed ? 'solo' : 'daily');
       settingModeGroup.querySelectorAll('.pill-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.mode === 'pass-and-play');
+        b.classList.toggle('active', b.dataset.mode === fallbackMode);
       });
     }
     syncPillGroupSelect(settingModeGroup);
@@ -652,7 +678,7 @@ import { createBoardRenderer } from './renderers.js';
     const secGridSize = document.getElementById('sec-grid-size');
     if (!groupGridSize) return;
     const opts = GRID_OPTIONS[game];
-    if (!opts) {
+    if (!opts || (game === 'chomp' && (selectedVariant === 'nim' || selectedVariant === 'nim_misere'))) {
       if (secGridSize) secGridSize.style.display = 'none';
       selectedGridWidth = null;
       selectedGridHeight = null;
@@ -860,7 +886,7 @@ import { createBoardRenderer } from './renderers.js';
     for (let y = 0; y < height; y++) {
       grid.push(new Array(width).fill(' '));
     }
-    if (gameType === 'chomp') {
+    if (gameType === 'chomp' && session.variant !== 'nim' && session.variant !== 'nim_misere') {
       grid[0][0] = 'P';
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -1203,15 +1229,20 @@ import { createBoardRenderer } from './renderers.js';
   function buildDirectGameUrl(baseOrigin, config = {}) {
     const origin = (baseOrigin || window.location.origin).replace(/\/$/, '');
     const game = resolveGameId(config.game || selectedGame) || 'connect4';
-    let mode = config.mode || selectedMode || 'pass-and-play';
+    const headToHeadAllowed = supportsHeadToHeadMode(game);
+    const defaultFallback = headToHeadAllowed ? 'pass-and-play' : 'solo';
+    let mode = config.mode || selectedMode || defaultFallback;
+    if (!headToHeadAllowed && (mode === 'pass-and-play' || mode === 'room')) {
+      mode = defaultFallback;
+    }
     if (mode === 'daily' && !supportsDailyMode(game)) {
-      mode = 'pass-and-play';
+      mode = defaultFallback;
     }
     if (mode === 'solo' && !supportsSoloMode(game)) {
-      mode = 'pass-and-play';
+      mode = defaultFallback;
     }
     if ((mode === 'vs-ai' || mode === 'ai-vs-ai') && !supportsAiVsAiMode(game)) {
-      mode = 'pass-and-play';
+      mode = defaultFallback;
     }
     const urlParams = new URLSearchParams();
     urlParams.set('game', game);
@@ -1269,24 +1300,39 @@ import { createBoardRenderer } from './renderers.js';
       pass: 'pass-and-play',
       wifi: 'room'
     };
-    let m = (rawMode || 'pass-and-play').trim().toLowerCase();
+    const headToHeadAllowed = supportsHeadToHeadMode(g);
+    const defaultFallback = headToHeadAllowed ? 'pass-and-play' : 'solo';
+    let m = (rawMode || defaultFallback).trim().toLowerCase();
     m = modeAliases[m] || m;
     const validModes = new Set(['pass-and-play', 'vs-ai', 'room', 'ai-vs-ai', 'solo', 'daily']);
     if (!validModes.has(m)) {
-      m = 'pass-and-play';
+      m = defaultFallback;
+    }
+    if (!headToHeadAllowed && (m === 'pass-and-play' || m === 'room')) {
+      m = defaultFallback;
     }
     if (m === 'daily' && !supportsDailyMode(g)) {
-      m = 'pass-and-play';
+      m = defaultFallback;
     }
     if (m === 'solo' && !supportsSoloMode(g)) {
-      m = 'pass-and-play';
+      m = defaultFallback;
     }
     if ((m === 'vs-ai' || m === 'ai-vs-ai') && !supportsAiVsAiMode(g)) {
-      m = 'pass-and-play';
+      m = defaultFallback;
     }
 
     const varOpts = VARIANT_OPTIONS[g] || [];
-    const rawVariant = (params.get('variant') || '').trim().toLowerCase();
+    const rawGameKey = (rawGame || '').trim().toLowerCase();
+    let rawVariant = (params.get('variant') || '').trim().toLowerCase();
+    if (!rawVariant) {
+      if (rawGameKey === 'gomoku' || rawGameKey === 'five-in-a-row') rawVariant = 'gomoku';
+      else if (rawGameKey === 'nim') rawVariant = 'nim';
+      else if (rawGameKey === 'breakthrough' || rawGameKey === 'bt') rawVariant = 'breakthrough';
+    } else if (rawGameKey === 'nim' && rawVariant === 'misere') {
+      rawVariant = 'nim_misere';
+    } else if ((rawGameKey === 'breakthrough' || rawGameKey === 'bt') && rawVariant === 'misere') {
+      rawVariant = 'breakthrough_misere';
+    }
     const validVar = varOpts.find(v => v.id === rawVariant);
     selectedGame = g;
     selectedMode = m;
@@ -1310,6 +1356,9 @@ import { createBoardRenderer } from './renderers.js';
       if (rawW > 0 && rawH > 0) {
         selectedGridWidth = rawW;
         selectedGridHeight = rawH;
+      } else if (selectedGame === 'tictactoe' && (selectedVariant === 'gomoku' || selectedVariant === 'exact5')) {
+        selectedGridWidth = 15;
+        selectedGridHeight = 15;
       }
     }
 
@@ -1911,7 +1960,6 @@ import { createBoardRenderer } from './renderers.js';
     }
     if (prevId !== session.id || prevMoveCount !== session.moveCount) {
       selectedChecker = null;
-      selectedBreakthroughPiece = null;
       wordleCurrentGuess = '';
       selectedScrabbleTileIndex = null;
       pendingScrabblePlacements = [];
@@ -2027,7 +2075,7 @@ import { createBoardRenderer } from './renderers.js';
 
     // Sound effect on new move
     if (session.moveCount > prevMoveCount) {
-      if (session.gameType === 'chomp') playSound('chomp');
+      if (session.gameType === 'chomp' && session.variant !== 'nim' && session.variant !== 'nim_misere') playSound('chomp');
       else if (session.gameType === 'connect4') playSound('drop');
       else playSound('tap');
     }
@@ -2086,8 +2134,8 @@ import { createBoardRenderer } from './renderers.js';
       triggerHaptic([50, 100, 50, 100, 150]);
       gameOverIcon.textContent = '🏆';
       gameOverTitle.textContent = `${session.winner} Wins!`;
-      gameOverMsg.textContent = session.gameType === 'chomp' 
-        ? 'Ate the poison block! Better luck next time.' 
+      gameOverMsg.textContent = (session.gameType === 'chomp' && session.variant === 'standard')
+        ? 'Ate the poison block! Better luck next time.'
         : 'Congratulations on an amazing match!';
     } else if (session.gameType === 'minesweeper' || session.gameType === 'wordle') {
       playSound('draw');
@@ -2127,6 +2175,8 @@ import { createBoardRenderer } from './renderers.js';
         if (currentSession.variant) {
           selectedVariant = currentSession.variant;
         }
+        selectedGridWidth = currentSession.width || null;
+        selectedGridHeight = currentSession.height || null;
         applyGameCategoryFilter(getCategoryForGame(selectedGame), false);
         updateModeOptionsForGame(selectedGame);
         updateVariantPills(selectedGame, true);
@@ -2163,6 +2213,13 @@ import { createBoardRenderer } from './renderers.js';
     // Open Lobby view
     function openLobby() {
       modalMenu.classList.remove('hidden');
+      if (!supportsHeadToHeadMode(selectedGame)) {
+        selectedGame = 'connect4';
+        applyGameCategoryFilter(getCategoryForGame(selectedGame), false);
+        updateModeOptionsForGame(selectedGame);
+        updateVariantPills(selectedGame);
+        updateGridSizePills(selectedGame);
+      }
       document.querySelectorAll('#group-mode .pill-btn').forEach(b => b.classList.remove('active'));
       const roomPill = document.querySelector('#group-mode .pill-btn[data-mode="room"]');
       if (roomPill) roomPill.classList.add('active');
@@ -2895,6 +2952,7 @@ import { createBoardRenderer } from './renderers.js';
     applyGameCategoryFilter(getCategoryForGame(clientFavGame), false);
     applySettingFavCategoryFilter(getCategoryForGame(clientFavGame), false);
     updateVariantPills(clientFavGame);
+    updateGridSizePills(clientFavGame);
     syncAllResponsiveSelects();
 
     connectPlayerStream(clientPlayerName);

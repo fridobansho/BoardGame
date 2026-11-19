@@ -7,6 +7,48 @@ namespace BoardGame.Library.Implementations.TicTacToe
 
     public class TicTacToeLogic : IGameLogic
     {
+        private static readonly (int dx, int dy)[] Directions =
+        {
+            (1, 0),
+            (0, 1),
+            (1, 1),
+            (1, -1)
+        };
+
+        private int _targetLength = 0;
+        private bool _exactTargetOnly = false;
+        private bool _isMisere = false;
+
+        public int TargetLength
+        {
+            get => _targetLength;
+            set
+            {
+                _targetLength = value;
+                UpdateBoundPlayers();
+            }
+        }
+
+        public bool ExactTargetOnly
+        {
+            get => _exactTargetOnly;
+            set
+            {
+                _exactTargetOnly = value;
+                UpdateBoundPlayers();
+            }
+        }
+
+        public bool IsMisere
+        {
+            get => _isMisere;
+            set
+            {
+                _isMisere = value;
+                UpdateBoundPlayers();
+            }
+        }
+
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public TicTacToeLogic()
@@ -23,14 +65,40 @@ namespace BoardGame.Library.Implementations.TicTacToe
             PlayerPieces.Add(p1, XPiece.X);
             PlayerPieces.Add(p2, OPiece.O);
 
-            if (p1 is MinimaxPlayer m1) m1.AssignedPiece = XPiece.X;
-            if (p2 is MinimaxPlayer m2) m2.AssignedPiece = OPiece.O;
+            UpdateBoundPlayers();
+        }
+
+        private void UpdateBoundPlayers()
+        {
+            foreach (var kvp in PlayerPieces)
+            {
+                if (kvp.Key is MinimaxPlayer mp)
+                {
+                    mp.AssignedPiece = kvp.Value;
+                    mp.TargetLength = TargetLength;
+                    mp.ExactTargetOnly = ExactTargetOnly;
+                    mp.IsMisere = IsMisere;
+                }
+                else if (kvp.Key is RandomAiPlayer rp)
+                {
+                    rp.Logic = this;
+                }
+            }
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)
         {
             if (players == null) throw new ArgumentNullException("players");
             if (players.Count() != 2) throw new ArgumentOutOfRangeException("players.Count()");
+        }
+
+        public int GetEffectiveTargetLength(IBoard board)
+        {
+            if (TargetLength > 0) return TargetLength;
+            int maxDim = Math.Max(board?.Width ?? 3, board?.Height ?? 3);
+            if (maxDim <= 3) return maxDim;
+            if (maxDim <= 5) return 4;
+            return 5;
         }
 
         public void InitializeBoard(IBoard board)
@@ -100,7 +168,42 @@ namespace BoardGame.Library.Implementations.TicTacToe
         public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
         {
             ValidatePlayers(players);
+            var playerList = players.ToList();
 
+            if (board.Width <= 3 && board.Height <= 3 && TargetLength == 0 && !ExactTargetOnly)
+            {
+                return GetStandard3x3Winners(board, players, playerList);
+            }
+
+            int target = GetEffectiveTargetLength(board);
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var piece = board.PieceAt(x, y);
+                    if (piece == null || piece.Value == BlankPiece.BlankValue) continue;
+
+                    foreach (var (dx, dy) in Directions)
+                    {
+                        if (HasTargetInARow(board, x, y, dx, dy, piece.Value, target, ExactTargetOnly))
+                        {
+                            var winner = PlayerPieces.FirstOrDefault(kvp => kvp.Value.Value == piece.Value).Key;
+                            if (winner != null)
+                            {
+                                return new[] { ResolveWinner(winner, playerList) };
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!ValidMoves(board)) return players;
+
+            return Enumerable.Empty<IPlayer>();
+        }
+
+        private IEnumerable<IPlayer> GetStandard3x3Winners(IBoard board, IEnumerable<IPlayer> players, List<IPlayer> playerList)
+        {
             // Check verticals
             for (int x = 0; x < board.Width; x++)
             {
@@ -115,7 +218,7 @@ namespace BoardGame.Library.Implementations.TicTacToe
                 }
                 if (TryGetLineWinner(pieces, board.Height, out var winner))
                 {
-                    return Enumerable.Repeat(winner, 1);
+                    return Enumerable.Repeat(ResolveWinner(winner, playerList), 1);
                 }
             }
 
@@ -133,7 +236,7 @@ namespace BoardGame.Library.Implementations.TicTacToe
                 }
                 if (TryGetLineWinner(pieces, board.Width, out var winner))
                 {
-                    return Enumerable.Repeat(winner, 1);
+                    return Enumerable.Repeat(ResolveWinner(winner, playerList), 1);
                 }
             }
 
@@ -151,7 +254,7 @@ namespace BoardGame.Library.Implementations.TicTacToe
                 }
                 if (TryGetLineWinner(mainDiagonal, board.Width, out var mainWinner))
                 {
-                    return Enumerable.Repeat(mainWinner, 1);
+                    return Enumerable.Repeat(ResolveWinner(mainWinner, playerList), 1);
                 }
 
                 var antiDiagonal = new List<IPiece>();
@@ -165,13 +268,65 @@ namespace BoardGame.Library.Implementations.TicTacToe
                 }
                 if (TryGetLineWinner(antiDiagonal, board.Width, out var antiWinner))
                 {
-                    return Enumerable.Repeat(antiWinner, 1);
+                    return Enumerable.Repeat(ResolveWinner(antiWinner, playerList), 1);
                 }
             }
 
             if (!ValidMoves(board)) return players;
 
             return Enumerable.Empty<IPlayer>();
+        }
+
+        private IPlayer ResolveWinner(IPlayer lineMaker, List<IPlayer> playerList)
+        {
+            if (!IsMisere) return lineMaker;
+            return playerList.First(p => !ReferenceEquals(p, lineMaker));
+        }
+
+        internal static bool HasTargetInARow(
+            IBoard board,
+            int startX,
+            int startY,
+            int dx,
+            int dy,
+            string value,
+            int target,
+            bool exactOnly)
+        {
+            int endX = startX + (target - 1) * dx;
+            int endY = startY + (target - 1) * dy;
+            if (!board.CheckBounds(endX, endY))
+            {
+                return false;
+            }
+
+            for (int step = 1; step < target; step++)
+            {
+                var next = board.PieceAt(startX + step * dx, startY + step * dy);
+                if (next == null || next.Value != value)
+                {
+                    return false;
+                }
+            }
+
+            if (exactOnly)
+            {
+                int prevX = startX - dx;
+                int prevY = startY - dy;
+                if (board.CheckBounds(prevX, prevY) && board.PieceAt(prevX, prevY)?.Value == value)
+                {
+                    return false;
+                }
+
+                int afterX = startX + target * dx;
+                int afterY = startY + target * dy;
+                if (board.CheckBounds(afterX, afterY) && board.PieceAt(afterX, afterY)?.Value == value)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private bool TryGetLineWinner(IReadOnlyCollection<IPiece> pieces, int expectedLength, out IPlayer winner)

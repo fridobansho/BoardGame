@@ -9,6 +9,7 @@ namespace BoardGame.Library.Implementations.Mancala
 
         public string Name { get; }
         public int PlayerIndex { get; set; } = 1;
+        internal bool IsMisere { get; set; } = false;
 
         public SmartMancalaPlayer(string name = "Mancala Bot (Smart)")
         {
@@ -26,20 +27,20 @@ namespace BoardGame.Library.Implementations.Mancala
                 int stones = MancalaLogic.GetPitCount(board, x, y);
                 if (stones <= 0) continue;
 
-                int score = _random.Next(0, 3);
+                int heuristicScore = 0;
                 // Distance to own store: for P1 (y=1) is (6 - x), for P2 (y=0) is (x + 1)
                 int distToStore = PlayerIndex == 0 ? (6 - x) : (x + 1);
 
                 // Extra turn landing directly in store
                 if (stones == distToStore || (stones > distToStore && (stones - distToStore) % 13 == 0))
                 {
-                    score += 500;
+                    heuristicScore += 500;
                 }
 
                 // Store gain
                 if (stones >= distToStore)
                 {
-                    score += 40;
+                    heuristicScore += 40;
                 }
 
                 // Simple capture check (within own row before wrapping)
@@ -49,9 +50,11 @@ namespace BoardGame.Library.Implementations.Mancala
                     int opp = MancalaLogic.GetPitCount(board, targetX, 1 - y);
                     if (opp > 0)
                     {
-                        score += 100 + opp * 25;
+                        heuristicScore += 100 + opp * 25;
                     }
                 }
+
+                int score = (IsMisere ? -heuristicScore : heuristicScore) + _random.Next(0, 3);
 
                 if (score > bestScore)
                 {

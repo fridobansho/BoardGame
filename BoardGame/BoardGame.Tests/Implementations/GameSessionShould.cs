@@ -4,10 +4,12 @@ using System.Collections.Generic;
 using System.Linq;
 using BoardGame.Library.Implementations;
 using BoardGame.Library.Implementations.Checkers;
+using BoardGame.Library.Implementations.Chomp;
 using BoardGame.Library.Implementations.Minesweeper;
 using BoardGame.Library.Implementations.Othello;
 using BoardGame.Library.Implementations.Scrabble;
 using BoardGame.Library.Implementations.Sudoku;
+using BoardGame.Library.Implementations.TicTacToe;
 using BoardGame.Library.Implementations.Wordle;
 using BoardGame.Library.Interfaces;
 using BoardGame.Web.Models;
@@ -507,7 +509,7 @@ public class GameSessionShould
     }
 
     [Test]
-    public void SupportSudokuDailyAndVsAiModes()
+    public void SupportSudokuDailyAndSoloAndNormalizeHeadToHeadModes()
     {
         var dailySession = new GameSession("sudoku", "daily", "smart", "Alice", null);
         dailySession.Board.Width.ShouldBe(9);
@@ -535,26 +537,10 @@ public class GameSessionShould
         dailySession.CurrentTurnIndex.ShouldBe(0); // Daily stays on Player 1
         dailySession.ToDto().Player1GamePoints.ShouldBeGreaterThanOrEqualTo(10);
 
-        var aiSession = new GameSession("sudoku", "vs-ai", "smart", "Human", null);
-        var aiLogic = (SudokuLogic)aiSession.GameLogic;
-        int ex = -1, ey = -1;
-        for (int y = 0; y < 9 && ex == -1; y++)
-        {
-            for (int x = 0; x < 9; x++)
-            {
-                if (SudokuLogic.GetDigitAt(aiSession.Board, x, y) == 0)
-                {
-                    ex = x;
-                    ey = y;
-                    break;
-                }
-            }
-        }
-        var (aiOk, aiErr) = aiSession.MakeMove(ex, ey, digit: aiLogic.GetSolutionAt(ex, ey));
-        aiOk.ShouldBeTrue();
-        aiErr.ShouldBeNull();
-        aiSession.MoveCount.ShouldBe(2);
-        aiSession.CurrentTurnIndex.ShouldBe(0);
+        // Puzzles normalize pass-and-play / vs-ai / room / ai-vs-ai strictly to solo
+        new GameSession("sudoku", "vs-ai", "smart", "Human", null).Mode.ShouldBe("solo");
+        new GameSession("wordle", "pass-and-play", "smart", "Human", null).Mode.ShouldBe("solo");
+        new GameSession("minesweeper", "room", "smart", "Human", null).Mode.ShouldBe("solo");
     }
 
     [Test]
@@ -640,10 +626,12 @@ public class GameSessionShould
     }
 
     [Test]
-    public void SupportMisereNimVariant()
+    public void SupportMisereNimVariantViaChompAndLegacyAlias()
     {
-        var session = new GameSession("nim", "pass-and-play", "smart", "Alice", "Bob", variant: "misere");
-        session.Variant.ShouldBe("misere");
+        var session = new GameSession("chomp", "pass-and-play", "smart", "Alice", "Bob", variant: "nim_misere");
+        session.GameType.ShouldBe("chomp");
+        session.Variant.ShouldBe("nim_misere");
+        ((ChompLogic)session.GameLogic).IsRowOnlyNim.ShouldBeTrue();
 
         // Standard 1-3-5-7 heaps: players clear rows 0..3; Bob takes last stone so Alice wins
         session.MakeMove(0, 0).Success.ShouldBeTrue();
@@ -653,6 +641,10 @@ public class GameSessionShould
 
         session.Status.ShouldBe("Finished");
         session.Winner.ShouldBe("Alice");
+
+        var legacy = new GameSession("nim", "pass-and-play", "smart", "Alice", "Bob", variant: "misere");
+        legacy.GameType.ShouldBe("chomp");
+        legacy.Variant.ShouldBe("nim_misere");
     }
 
     [Test]
@@ -738,15 +730,19 @@ public class GameSessionShould
     }
 
     [Test]
-    public void PlayBreakthroughAndAiVsAiExhibitionToCompletion()
+    public void PlayBreakthroughVariantInCheckersAndAiVsAiExhibitionToCompletion()
     {
-        var session = new GameSession("breakthrough", "pass-and-play", "smart", "Alice", "Bob");
+        var session = new GameSession("checkers", "pass-and-play", "smart", "Alice", "Bob", variant: "breakthrough");
+        session.GameType.ShouldBe("checkers");
+        session.Variant.ShouldBe("breakthrough");
         session.Board.Width.ShouldBe(8);
         session.Board.Height.ShouldBe(8);
         session.MakeMove(0, 6, toX: 0, toY: 5).Success.ShouldBeTrue();
-        session.Board.PieceAt(0, 5).Value.ShouldBe("W");
+        session.Board.PieceAt(0, 5).Value.ShouldBe("R");
 
         var aiMatch = new GameSession("breakthrough", "ai-vs-ai", "smart", "Bot", null);
+        aiMatch.GameType.ShouldBe("checkers");
+        aiMatch.Variant.ShouldBe("breakthrough");
         aiMatch.Mode.ShouldBe("ai-vs-ai");
         aiMatch.MakeMove(0, 6, toX: 0, toY: 5).Success.ShouldBeFalse();
 
@@ -897,7 +893,7 @@ public class GameSessionShould
     [Test]
     public void KeepMoveCountAndTurnUnchangedOnMinesweeperFlagToggle()
     {
-        var session = new GameSession("minesweeper", "pass-and-play", "smart", "Alice", "Bob");
+        var session = new GameSession("minesweeper", "solo", "smart", "Alice", null);
 
         session.MakeMove(1, 2, digit: 2).Success.ShouldBeFalse();
         session.MoveCount.ShouldBe(0);
@@ -967,9 +963,9 @@ public class GameSessionShould
         xCount.ShouldBe(0);
 
         var ttt4 = new GameSession("tictactoe", "vs-ai", "smart", "Alice", null, customWidth: 4, customHeight: 4);
-        ((SmartNxNTicTacToePlayer)ttt4.Players[1]).AssignedPiece?.Value.ShouldBe("O");
+        ((MinimaxPlayer)ttt4.Players[1]).AssignedPiece?.Value.ShouldBe("O");
         ttt4.Reset(isRematch: true);
-        ((SmartNxNTicTacToePlayer)ttt4.Players[1]).AssignedPiece?.Value.ShouldBe("O");
+        ((MinimaxPlayer)ttt4.Players[1]).AssignedPiece?.Value.ShouldBe("O");
         ttt4.MoveCount.ShouldBe(1);
         ttt4.CurrentTurnIndex.ShouldBe(0);
     }
@@ -1009,5 +1005,66 @@ public class GameSessionShould
         session.MakeMove(0, 0, playerToken: "").Success.ShouldBeFalse();
         session.MakeMove(0, 0, playerToken: guestToken).Success.ShouldBeFalse();
         session.MakeMove(0, 0, playerToken: session.Player1Token).Success.ShouldBeTrue();
+    }
+
+    [Test]
+    public void SupportConsolidatedTicTacToeGomokuAndExact5Variants()
+    {
+        var gomoku = new GameSession("tictactoe", "vs-ai", "smart", "Alice", null, variant: "gomoku");
+        gomoku.GameType.ShouldBe("tictactoe");
+        gomoku.Variant.ShouldBe("gomoku");
+        gomoku.Board.Width.ShouldBe(15);
+        gomoku.Board.Height.ShouldBe(15);
+        gomoku.MakeMove(7, 7).Success.ShouldBeTrue();
+        gomoku.MoveCount.ShouldBe(2);
+
+        var legacyGomoku = new GameSession("gomoku", "pass-and-play", "smart", "Alice", "Bob");
+        legacyGomoku.GameType.ShouldBe("tictactoe");
+        legacyGomoku.Variant.ShouldBe("gomoku");
+        legacyGomoku.Board.Width.ShouldBe(15);
+
+        var exact5 = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob", customWidth: 15, customHeight: 15, variant: "exact5");
+        ((TicTacToeLogic)exact5.GameLogic).ExactTargetOnly.ShouldBeTrue();
+    }
+
+    [Test]
+    public void SupportEasyRandomAiPlayerAcrossAllHeadToHeadGames()
+    {
+        string[] games = { "connect4", "tictactoe", "chomp", "othello", "hex", "checkers", "mancala", "scrabble" };
+        foreach (var game in games)
+        {
+            var session = new GameSession(game, "ai-vs-ai", "easy", "Bot1", "Bot2");
+            session.Players[0].ShouldBeOfType<RandomAiPlayer>();
+            session.Players[1].ShouldBeOfType<RandomAiPlayer>();
+            session.StepAiMove().Success.ShouldBeTrue();
+            session.MoveCount.ShouldBe(1);
+        }
+    }
+
+    [Test]
+    public void SupportMisereAiAwarenessInConnectFourHexAndMancala()
+    {
+        // Connect4 Misere AI should avoid completing 4-in-a-row on col 0 when col 1 is safe
+        var c4 = new GameSession("connect4", "vs-ai", "smart", "Human", null, variant: "misere");
+        c4.Board.PieceAt(0, 5, BoardGame.Library.Implementations.ConnectFour.YellowPiece.Yellow);
+        c4.Board.PieceAt(0, 4, BoardGame.Library.Implementations.ConnectFour.YellowPiece.Yellow);
+        c4.Board.PieceAt(0, 3, BoardGame.Library.Implementations.ConnectFour.YellowPiece.Yellow);
+        // Human drops in col 1 -> AI moves and must avoid col 0 (which would make 4 Yellows)
+        c4.MakeMove(1, 0).Success.ShouldBeTrue();
+        c4.Board.PieceAt(0, 2).Value.ShouldBe(BlankPiece.BlankValue);
+
+        // Mancala Misere propagates IsMisere
+        var mancala = new GameSession("mancala", "vs-ai", "smart", "Human", null, variant: "misere");
+        ((BoardGame.Library.Implementations.Mancala.MancalaLogic)mancala.GameLogic).IsMisere.ShouldBeTrue();
+
+        // Hex Misere AI avoids completing a Left-to-Right path when other squares remain
+        var hex = new GameSession("hex", "vs-ai", "smart", "Human", null, customWidth: 5, customHeight: 5, variant: "misere");
+        for (int x = 0; x < 4; x++)
+        {
+            hex.Board.PieceAt(x, 2, WhitePiece.White);
+        }
+        hex.MakeMove(0, 0).Success.ShouldBeTrue();
+        hex.Board.PieceAt(4, 2).Value.ShouldBe(BlankPiece.BlankValue);
+        hex.Status.ShouldBe("InProgress");
     }
 }

@@ -366,5 +366,70 @@ namespace BoardGame.Tests.Implementations.TicTacToe
 
             result.ShouldBeFalse();
         }
+
+        [Test]
+        public void DetectFiveInARowAndExactFiveOnlyOnLargeGomokuBoard()
+        {
+            var logic = new TicTacToeLogic { TargetLength = 5 };
+            var board = new Board(15, 15);
+            var p1 = new SimplePlayer("P1");
+            var p2 = new SimplePlayer("P2");
+            logic.MapPieces(new[] { p1, p2 });
+            logic.InitializeBoard(board);
+
+            for (int x = 3; x < 8; x++)
+            {
+                logic.ApplyMove(board, p1, new Location(x, 5)).ShouldBeTrue();
+            }
+
+            var winners = logic.GetWinners(board, new[] { p1, p2 }).ToList();
+            winners.Count.ShouldBe(1);
+            winners[0].ShouldBe(p1);
+
+            // Overline of 6 is ignored when ExactTargetOnly = true
+            logic.ExactTargetOnly = true;
+            logic.ApplyMove(board, p1, new Location(8, 5)).ShouldBeTrue();
+            logic.GetWinners(board, new[] { p1, p2 }).ShouldBeEmpty();
+        }
+
+        [Test]
+        public void DetectFourInARowOffsetDiagonalOnFiveByFiveBoard()
+        {
+            var logic = new TicTacToeLogic();
+            var board = new Board(5, 5);
+            var p1 = new SimplePlayer("P1");
+            var p2 = new SimplePlayer("P2");
+            logic.MapPieces(new[] { p1, p2 });
+            logic.InitializeBoard(board);
+
+            // Offset diagonal (1,0)-(4,3) of length 4
+            for (int i = 0; i < 4; i++)
+            {
+                logic.ApplyMove(board, p1, new Location(1 + i, i)).ShouldBeTrue();
+            }
+
+            var winners = logic.GetWinners(board, new[] { p1, p2 }).ToList();
+            winners.Count.ShouldBe(1);
+            winners[0].ShouldBe(p1);
+        }
+
+        [Test]
+        public void InvertWinnerInMisereMode()
+        {
+            var logic = new TicTacToeLogic { IsMisere = true };
+            var board = new Board(3, 3);
+            var p1 = new SimplePlayer("P1");
+            var p2 = new SimplePlayer("P2");
+            logic.MapPieces(new[] { p1, p2 });
+            logic.InitializeBoard(board);
+
+            logic.ApplyMove(board, p1, new Location(0, 0));
+            logic.ApplyMove(board, p1, new Location(1, 0));
+            logic.ApplyMove(board, p1, new Location(2, 0));
+
+            var winners = logic.GetWinners(board, new[] { p1, p2 }).ToList();
+            winners.Count.ShouldBe(1);
+            winners[0].ShouldBe(p2);
+        }
     }
 }

@@ -9,8 +9,21 @@ namespace BoardGame.Library.Implementations.Mancala
     {
         public const int PitCountPerSide = 6;
 
+        private bool _isMisere = false;
+
         public int InitialStonesPerPit { get; set; } = 4;
-        public bool IsMisere { get; set; } = false;
+        public bool IsMisere
+        {
+            get => _isMisere;
+            set
+            {
+                _isMisere = value;
+                foreach (var player in PlayerPieces.Keys)
+                {
+                    if (player is SmartMancalaPlayer sp) sp.IsMisere = value;
+                }
+            }
+        }
         public bool LastMoveEarnedExtraTurn { get; private set; } = false;
 
         private readonly Dictionary<IPlayer, int> _scores = new();
@@ -39,10 +52,17 @@ namespace BoardGame.Library.Implementations.Mancala
             BindPlayer(list[1], 1);
         }
 
-        private static void BindPlayer(IPlayer player, int playerIndex)
+        private void BindPlayer(IPlayer player, int playerIndex)
         {
-            if (player is RandomMancalaPlayer rp) rp.PlayerIndex = playerIndex;
-            else if (player is SmartMancalaPlayer sp) sp.PlayerIndex = playerIndex;
+            if (player is SmartMancalaPlayer sp)
+            {
+                sp.PlayerIndex = playerIndex;
+                sp.IsMisere = IsMisere;
+            }
+            else if (player is RandomAiPlayer rp)
+            {
+                rp.Logic = this;
+            }
         }
 
         public int GetScore(IPlayer player)

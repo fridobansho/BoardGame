@@ -1,6 +1,5 @@
 namespace BoardGame.Library.Implementations.Othello
 {
-    using Gomoku;
     using Interfaces;
     using System;
     using System.Collections.Generic;
@@ -35,7 +34,7 @@ namespace BoardGame.Library.Implementations.Othello
 
         public ILocation GetMove(IBoard board)
         {
-            var mySymbol = _symbol ?? AssignedSymbol ?? RandomOthelloPlayer.InferMySymbol(board);
+            var mySymbol = _symbol ?? AssignedSymbol ?? OthelloLogic.InferSymbol(board);
             ILocation bestMove = null;
             int bestScore = int.MinValue;
 

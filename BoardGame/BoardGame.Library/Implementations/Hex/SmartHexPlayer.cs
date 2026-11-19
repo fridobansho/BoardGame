@@ -1,6 +1,5 @@
 namespace BoardGame.Library.Implementations.Hex
 {
-    using Gomoku;
     using Interfaces;
     using System;
 
@@ -14,6 +13,7 @@ namespace BoardGame.Library.Implementations.Hex
         private readonly Random _random = new Random();
 
         internal string AssignedSymbol { get; set; }
+        internal bool IsMisere { get; set; } = false;
 
         public string Name { get; }
 
@@ -27,6 +27,8 @@ namespace BoardGame.Library.Implementations.Hex
             string mySymbol = AssignedSymbol ?? InferSymbol(board);
             string oppSymbol = mySymbol == BlackPiece.Black.Value ? WhitePiece.White.Value : BlackPiece.Black.Value;
             bool isTopToBottom = mySymbol == BlackPiece.Black.Value;
+            IPiece myPiece = mySymbol == BlackPiece.Black.Value ? BlackPiece.Black : WhitePiece.White;
+            IBoard simBoard = IsMisere ? CloneBoard(board) : null;
 
             int centerX = board.Width / 2;
             int centerY = board.Height / 2;
@@ -71,7 +73,18 @@ namespace BoardGame.Library.Implementations.Hex
                     if (!isTopToBottom && (x == 0 || x == board.Width - 1)) neighborScore += 8;
 
                     int distFromCenter = Math.Abs(x - centerX) + Math.Abs(y - centerY);
-                    int score = neighborScore - distFromCenter;
+                    int score;
+                    if (IsMisere)
+                    {
+                        simBoard.PieceAt(x, y, myPiece);
+                        bool completesPath = HexLogic.HasConnectedPath(simBoard, mySymbol, isTopToBottom);
+                        simBoard.PieceAt(x, y, BlankPiece.Blank);
+                        score = completesPath ? -1_000_000 : (-neighborScore - distFromCenter);
+                    }
+                    else
+                    {
+                        score = neighborScore - distFromCenter;
+                    }
 
                     if (score > bestScore || (score == bestScore && _random.Next(2) == 0))
                     {
@@ -82,6 +95,19 @@ namespace BoardGame.Library.Implementations.Hex
             }
 
             return bestMove;
+        }
+
+        private static IBoard CloneBoard(IBoard board)
+        {
+            var clone = new Board(board.Width, board.Height);
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    clone.PieceAt(x, y, board.PieceAt(x, y));
+                }
+            }
+            return clone;
         }
 
         private static string InferSymbol(IBoard board)

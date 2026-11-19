@@ -186,7 +186,7 @@ namespace BoardGame.Tests.Implementations.Checkers
         {
             var board = new Board(8, 8);
             var smart = new SmartCheckersPlayer("Red (Smart)");
-            var random = new RandomCheckersPlayer("Black (Easy)");
+            var random = new RandomAiPlayer("Black (Easy)");
             var players = new IPlayer[] { smart, random };
             var logic = new CheckersLogic();
 
@@ -195,6 +195,47 @@ namespace BoardGame.Tests.Implementations.Checkers
 
             var winners = runner.RunGame().ToList();
             winners.ShouldNotBeEmpty();
+        }
+
+        [Test]
+        public void SupportBreakthroughModeMovesCapturesHomeRowWinAndMisere()
+        {
+            var logic = new CheckersLogic { IsBreakthrough = true };
+            var board = new Board(8, 8);
+            var p1 = new SimplePlayer("Red");
+            var p2 = new SimplePlayer("Black");
+            logic.MapPieces(new[] { p1, p2 });
+            logic.InitializeBoard(board);
+
+            // Top 2 rows are Black ("B"), bottom 2 rows are Red ("R")
+            for (int x = 0; x < 8; x++)
+            {
+                for (int y = 0; y < 2; y++) board.PieceAt(x, y).Value.ShouldBe("B");
+                for (int y = 2; y < 6; y++) board.PieceAt(x, y).Value.ShouldBe(BlankPiece.BlankValue);
+                for (int y = 6; y < 8; y++) board.PieceAt(x, y).Value.ShouldBe("R");
+            }
+
+            // Forward and diagonal forward moves allowed; backward/sideways/2-step blocked
+            logic.IsValidMove(board, p1, new PieceMove(2, 6, 2, 5)).ShouldBeTrue();
+            logic.IsValidMove(board, p1, new PieceMove(2, 6, 3, 5)).ShouldBeTrue();
+            logic.IsValidMove(board, p1, new PieceMove(2, 6, 3, 6)).ShouldBeFalse();
+            logic.IsValidMove(board, p1, new PieceMove(2, 6, 2, 4)).ShouldBeFalse();
+
+            // Forward capture blocked, diagonal capture allowed
+            board.PieceAt(3, 5, BlackCheckerPiece.Black);
+            board.PieceAt(4, 5, BlackCheckerPiece.Black);
+            logic.IsValidMove(board, p1, new PieceMove(3, 6, 3, 5)).ShouldBeFalse();
+            logic.ApplyMove(board, p1, new PieceMove(3, 6, 4, 5)).ShouldBeTrue();
+            board.PieceAt(4, 5).Value.ShouldBe("R");
+
+            // Reaching opponent home row wins (or loses in Giveaway/Misere)
+            board.PieceAt(0, 1, RedCheckerPiece.Red);
+            board.PieceAt(0, 0, BlankPiece.Blank);
+            logic.ApplyMove(board, p1, new PieceMove(0, 1, 0, 0)).ShouldBeTrue();
+            logic.GetWinners(board, new[] { p1, p2 }).Single().ShouldBe(p1);
+
+            logic.IsGiveaway = true;
+            logic.GetWinners(board, new[] { p1, p2 }).Single().ShouldBe(p2);
         }
     }
 }

@@ -9,6 +9,7 @@ namespace BoardGame.Library.Implementations.ConnectFour
         public string Name { get; }
         internal string AssignedSymbol { get; set; }
         internal int TargetLength { get; set; } = 4;
+        internal bool IsMisere { get; set; } = false;
 
         public ConnectFourPlayer() : this(nameof(ConnectFourPlayer))
         {
@@ -58,6 +59,56 @@ namespace BoardGame.Library.Implementations.ConnectFour
             IPiece oppPiece = (myPiece.Value == RedPiece.Red.Value) ? (IPiece)YellowPiece.Yellow : RedPiece.Red;
             int target = Math.Max(2, TargetLength);
             var sim = CloneBoard(board);
+            int center = board.Width / 2;
+            int[] columnPreference = GenerateColumnPreference(board.Width, center);
+
+            if (IsMisere)
+            {
+                var safeCols = new List<int>();
+                foreach (var col in validCols)
+                {
+                    int row = ApplyGravity(sim, col, myPiece);
+                    if (row >= 0)
+                    {
+                        bool losesImmediately = HasWon(sim, myPiece, target);
+                        sim.PieceAt(col, row, BlankPiece.Blank);
+                        if (!losesImmediately) safeCols.Add(col);
+                    }
+                }
+
+                if (safeCols.Count == 0)
+                {
+                    return new Location(validCols[0], 0);
+                }
+
+                foreach (var col in columnPreference)
+                {
+                    if (!safeCols.Contains(col)) continue;
+                    int row = ApplyGravity(sim, col, myPiece);
+                    if (row >= 0)
+                    {
+                        bool forcesSelfTrap = false;
+                        if (sim.PieceAt(col, 0).Value == BlankPiece.BlankValue)
+                        {
+                            int nextRow = ApplyGravity(sim, col, oppPiece);
+                            if (nextRow >= 0 && sim.PieceAt(col, 0).Value == BlankPiece.BlankValue)
+                            {
+                                int thirdRow = ApplyGravity(sim, col, myPiece);
+                                if (thirdRow >= 0)
+                                {
+                                    forcesSelfTrap = HasWon(sim, myPiece, target);
+                                    sim.PieceAt(col, thirdRow, BlankPiece.Blank);
+                                }
+                            }
+                            if (nextRow >= 0) sim.PieceAt(col, nextRow, BlankPiece.Blank);
+                        }
+                        sim.PieceAt(col, row, BlankPiece.Blank);
+                        if (!forcesSelfTrap) return new Location(col, 0);
+                    }
+                }
+
+                return new Location(safeCols[0], 0);
+            }
 
             // 1. Can we win this turn in any column?
             foreach (var col in validCols)
@@ -84,8 +135,6 @@ namespace BoardGame.Library.Implementations.ConnectFour
             }
 
             // 3. Center outward preference
-            int center = board.Width / 2;
-            int[] columnPreference = GenerateColumnPreference(board.Width, center);
             foreach (var col in columnPreference)
             {
                 if (validCols.Contains(col))
@@ -148,21 +197,10 @@ namespace BoardGame.Library.Implementations.ConnectFour
 
                     foreach (var (dx, dy) in directions)
                     {
-                        int endX = x + (targetLength - 1) * dx;
-                        int endY = y + (targetLength - 1) * dy;
-                        if (!board.CheckBounds(endX, endY)) continue;
-
-                        bool match = true;
-                        for (int step = 1; step < targetLength; step++)
+                        if (TicTacToe.TicTacToeLogic.HasTargetInARow(board, x, y, dx, dy, piece.Value, targetLength, exactOnly: false))
                         {
-                            if (board.PieceAt(x + step * dx, y + step * dy)?.Value != piece.Value)
-                            {
-                                match = false;
-                                break;
-                            }
+                            return true;
                         }
-
-                        if (match) return true;
                     }
                 }
             }

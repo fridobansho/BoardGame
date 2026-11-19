@@ -160,39 +160,31 @@ namespace BoardGame.Tests.Implementations.Sudoku
         }
 
         [Test]
-        public void SmartPlayerReturnsValidMove()
-        {
-            var smart = new SmartSudokuPlayer("Smart", _logic);
-            var move = smart.GetMove(_board);
-
-            move.ShouldBeAssignableTo<SudokuMove>();
-            _logic.IsValidMove(_board, smart, move).ShouldBeTrue();
-        }
-
-        [Test]
-        public void CompleteFullAiVsAiPlaythroughViaGameRunner()
+        public void RejectInvalidPlacementThatBreaksSolvability()
         {
             var board = new Board(9, 9);
-            var smart = new SmartSudokuPlayer("SmartBot");
-            var random = new RandomSudokuPlayer("RandomBot");
-            var players = new IPlayer[] { smart, random };
             var logic = new SudokuLogic(seed: 42, emptyCells: 30);
+            logic.MapPieces(new[] { _p1 });
+            logic.InitializeBoard(board);
 
-            var game = new Game(board, players, logic);
-            var runner = new GameRunner(game);
-
-            var winners = runner.RunGame().ToList();
-            winners.ShouldNotBeEmpty();
-
-            for (int y = 0; y < 9; y++)
+            int ex = -1, ey = -1;
+            for (int y = 0; y < 9 && ex == -1; y++)
             {
                 for (int x = 0; x < 9; x++)
                 {
-                    SudokuLogic.GetDigitAt(board, x, y).ShouldBeInRange(1, 9);
+                    if (SudokuLogic.GetDigitAt(board, x, y) == 0)
+                    {
+                        ex = x;
+                        ey = y;
+                        break;
+                    }
                 }
             }
 
-            (logic.GetScore(smart) + logic.GetScore(random)).ShouldBeGreaterThan(0);
+            int sol = logic.GetSolutionAt(ex, ey);
+            logic.IsValidMove(board, _p1, new SudokuMove(ex, ey, sol)).ShouldBeTrue();
+            logic.ApplyMove(board, _p1, new SudokuMove(ex, ey, sol)).ShouldBeTrue();
+            logic.GetScore(_p1).ShouldBeGreaterThanOrEqualTo(10);
         }
     }
 }

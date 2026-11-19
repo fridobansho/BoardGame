@@ -1,4 +1,4 @@
-namespace BoardGame.Library.Implementations.Gomoku
+namespace BoardGame.Library.Implementations
 {
     public class BlackPiece : Piece
     {

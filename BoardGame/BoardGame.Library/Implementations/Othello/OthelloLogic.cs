@@ -1,6 +1,5 @@
 namespace BoardGame.Library.Implementations.Othello
 {
-    using Gomoku;
     using Interfaces;
     using System;
     using System.Collections.Generic;
@@ -55,15 +54,30 @@ namespace BoardGame.Library.Implementations.Othello
 
         private void BindPlayer(IPlayer player, string symbol)
         {
-            if (player is RandomOthelloPlayer rp)
-            {
-                rp.AssignedSymbol = symbol;
-            }
-            else if (player is SmartOthelloPlayer sp)
+            if (player is SmartOthelloPlayer sp)
             {
                 sp.AssignedSymbol = symbol;
                 sp.FewerDiscsWins = FewerDiscsWins;
             }
+            else if (player is RandomAiPlayer rp)
+            {
+                rp.Logic = this;
+            }
+        }
+
+        internal static string InferSymbol(IBoard board)
+        {
+            int black = 0, white = 0;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var val = board.PieceAt(x, y)?.Value;
+                    if (val == BlackPiece.Black.Value) black++;
+                    else if (val == WhitePiece.White.Value) white++;
+                }
+            }
+            return black <= white ? BlackPiece.Black.Value : WhitePiece.White.Value;
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)

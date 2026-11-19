@@ -11,6 +11,7 @@ namespace BoardGame.Library.Implementations.ConnectFour
         public const int DefaultHeight = 6;
 
         private int _targetLength = 4;
+        private bool _isMisere = false;
 
         public int TargetLength
         {
@@ -18,13 +19,17 @@ namespace BoardGame.Library.Implementations.ConnectFour
             set
             {
                 _targetLength = value;
-                foreach (var player in PlayerPieces.Keys)
-                {
-                    if (player is ConnectFourPlayer c4)
-                    {
-                        c4.TargetLength = value;
-                    }
-                }
+                UpdateBoundPlayers();
+            }
+        }
+
+        public bool IsMisere
+        {
+            get => _isMisere;
+            set
+            {
+                _isMisere = value;
+                UpdateBoundPlayers();
             }
         }
 
@@ -44,15 +49,23 @@ namespace BoardGame.Library.Implementations.ConnectFour
             PlayerPieces[p1] = RedPiece.Red;
             PlayerPieces[p2] = YellowPiece.Yellow;
 
-            if (p1 is ConnectFourPlayer c1)
+            UpdateBoundPlayers();
+        }
+
+        private void UpdateBoundPlayers()
+        {
+            foreach (var kvp in PlayerPieces)
             {
-                c1.AssignedSymbol = RedPiece.Red.Value;
-                c1.TargetLength = TargetLength;
-            }
-            if (p2 is ConnectFourPlayer c2)
-            {
-                c2.AssignedSymbol = YellowPiece.Yellow.Value;
-                c2.TargetLength = TargetLength;
+                if (kvp.Key is ConnectFourPlayer c4)
+                {
+                    c4.AssignedSymbol = kvp.Value.Value;
+                    c4.TargetLength = TargetLength;
+                    c4.IsMisere = IsMisere;
+                }
+                else if (kvp.Key is RandomAiPlayer rp)
+                {
+                    rp.Logic = this;
+                }
             }
         }
 
@@ -80,7 +93,6 @@ namespace BoardGame.Library.Implementations.ConnectFour
             if (board == null || location == null) return false;
             if (!board.CheckBounds(location.X, 0)) return false;
 
-            // Column location.X must have at least one blank spot (checked at top row y=0)
             var topPiece = board.PieceAt(location.X, 0);
             return topPiece != null && topPiece.Value == BlankPiece.BlankValue;
         }
@@ -91,7 +103,6 @@ namespace BoardGame.Library.Implementations.ConnectFour
 
             var piece = GetPiece(player);
 
-            // Gravity: drop piece into the lowest available row in column location.X
             for (int y = board.Height - 1; y >= 0; y--)
             {
                 var existing = board.PieceAt(location.X, y);
@@ -117,8 +128,8 @@ namespace BoardGame.Library.Implementations.ConnectFour
         public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
         {
             ValidatePlayers(players);
+            var playerList = players.ToList();
 
-            // Check for TargetLength in a row across the board
             int target = Math.Max(2, TargetLength);
             (int dx, int dy)[] directions = { (1, 0), (0, 1), (1, 1), (1, -1) };
 
@@ -131,29 +142,16 @@ namespace BoardGame.Library.Implementations.ConnectFour
 
                     foreach (var (dx, dy) in directions)
                     {
-                        int endX = x + (target - 1) * dx;
-                        int endY = y + (target - 1) * dy;
-                        if (!board.CheckBounds(endX, endY)) continue;
-
-                        bool match = true;
-                        for (int step = 1; step < target; step++)
+                        if (TicTacToe.TicTacToeLogic.HasTargetInARow(board, x, y, dx, dy, piece.Value, target, exactOnly: false))
                         {
-                            if (board.PieceAt(x + step * dx, y + step * dy)?.Value != piece.Value)
-                            {
-                                match = false;
-                                break;
-                            }
-                        }
-
-                        if (match)
-                        {
-                            return new[] { players.First(p => PlayerPieces[p].Value == piece.Value) };
+                            var maker = playerList.First(p => PlayerPieces[p].Value == piece.Value);
+                            var winner = IsMisere ? playerList.First(p => !ReferenceEquals(p, maker)) : maker;
+                            return new[] { winner };
                         }
                     }
                 }
             }
 
-            // Check for draw: top row full with no blank pieces
             bool isFull = true;
             for (int x = 0; x < board.Width; x++)
             {

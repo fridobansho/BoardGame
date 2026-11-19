@@ -3,7 +3,6 @@ namespace BoardGame.Library.Implementations
     using System.Collections.Generic;
     using Enumerations;
     using Interfaces;
-    using Silly;
     using System.Linq;
 
     public class Game : IGame
@@ -16,7 +15,7 @@ namespace BoardGame.Library.Implementations
 
         public IEnumerable<IPlayer> Players { get; }
 
-        public Game() : this(new Board(), new[] { new SillyPlayer(), new SillyPlayer() }, new SillyLogic())
+        public Game() : this(new Board(3, 3), new IPlayer[] { new TicTacToe.SimplePlayer(), new TicTacToe.SimplePlayer() }, new TicTacToe.TicTacToeLogic())
         {
         }
 

@@ -1,7 +1,6 @@
 namespace BoardGame.Tests.Implementations.Othello
 {
     using BoardGame.Library.Implementations;
-    using BoardGame.Library.Implementations.Gomoku;
     using BoardGame.Library.Implementations.Othello;
     using BoardGame.Library.Implementations.TicTacToe;
     using BoardGame.Library.Interfaces;
@@ -68,7 +67,7 @@ namespace BoardGame.Tests.Implementations.Othello
         {
             var board = new Board(8, 8);
             var smart = new SmartOthelloPlayer("Smart", BlackPiece.Black.Value);
-            var random = new RandomOthelloPlayer("Random", WhitePiece.White.Value);
+            var random = new RandomAiPlayer("Random");
             var players = new IPlayer[] { smart, random };
             _logic.MapPieces(players);
             _logic.InitializeBoard(board);

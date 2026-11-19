@@ -12,6 +12,7 @@ namespace BoardGame.Library.Implementations.Checkers
 
         private bool _mandatoryCapture = true;
         private bool _isGiveaway = false;
+        private bool _isBreakthrough = false;
         private string _lastMovedSide;
 
         public bool MandatoryCapture
@@ -34,6 +35,16 @@ namespace BoardGame.Library.Implementations.Checkers
             }
         }
 
+        public bool IsBreakthrough
+        {
+            get => _isBreakthrough;
+            set
+            {
+                _isBreakthrough = value;
+                UpdateBoundPlayers();
+            }
+        }
+
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public int MovesWithoutCaptureOrPromotion { get; set; }
@@ -52,8 +63,7 @@ namespace BoardGame.Library.Implementations.Checkers
             PlayerPieces.Add(p1, RedCheckerPiece.Red);
             PlayerPieces.Add(p2, BlackCheckerPiece.Black);
 
-            AssignPlayerSide(p1, RedCheckerPiece.Red.Value);
-            AssignPlayerSide(p2, BlackCheckerPiece.Black.Value);
+            UpdateBoundPlayers();
         }
 
         private void UpdateBoundPlayers()
@@ -66,16 +76,16 @@ namespace BoardGame.Library.Implementations.Checkers
 
         private void AssignPlayerSide(IPlayer player, string sideSymbol)
         {
-            if (player is RandomCheckersPlayer randomPlayer)
-            {
-                randomPlayer.AssignedSymbol = sideSymbol;
-                randomPlayer.MandatoryCapture = MandatoryCapture;
-            }
-            else if (player is SmartCheckersPlayer smartPlayer)
+            if (player is SmartCheckersPlayer smartPlayer)
             {
                 smartPlayer.AssignedSymbol = sideSymbol;
                 smartPlayer.MandatoryCapture = MandatoryCapture;
                 smartPlayer.IsGiveaway = IsGiveaway;
+                smartPlayer.IsBreakthrough = IsBreakthrough;
+            }
+            else if (player is RandomAiPlayer randomPlayer)
+            {
+                randomPlayer.Logic = this;
             }
         }
 
@@ -98,6 +108,28 @@ namespace BoardGame.Library.Implementations.Checkers
                 {
                     board.PieceAt(x, y, BlankPiece.Blank);
                 }
+            }
+
+            if (IsBreakthrough)
+            {
+                // Black ("B") on top 2 rows moving downward (+Y)
+                for (int y = 0; y < 2 && y < board.Height; y++)
+                {
+                    for (int x = 0; x < board.Width; x++)
+                    {
+                        board.PieceAt(x, y, BlackCheckerPiece.Black);
+                    }
+                }
+
+                // Red ("R") on bottom 2 rows moving upward (-Y)
+                for (int y = Math.Max(0, board.Height - 2); y < board.Height; y++)
+                {
+                    for (int x = 0; x < board.Width; x++)
+                    {
+                        board.PieceAt(x, y, RedCheckerPiece.Red);
+                    }
+                }
+                return;
             }
 
             // Black starts on the top 3 rows and moves downward (+Y)
@@ -123,6 +155,23 @@ namespace BoardGame.Library.Implementations.Checkers
                     }
                 }
             }
+        }
+
+        public static string InferSide(IBoard board)
+        {
+            int redCount = 0;
+            int blackCount = 0;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var val = board.PieceAt(x, y)?.Value;
+                    if (IsPlayerPiece(val, RedCheckerPiece.Red.Value)) redCount++;
+                    else if (IsPlayerPiece(val, BlackCheckerPiece.Black.Value)) blackCount++;
+                }
+            }
+
+            return redCount >= blackCount ? RedCheckerPiece.Red.Value : BlackCheckerPiece.Black.Value;
         }
 
         public static bool IsPlayerPiece(string pieceVal, string playerBaseSymbol)
@@ -183,6 +232,54 @@ namespace BoardGame.Library.Implementations.Checkers
                 yield return (-1, 1);
                 yield return (1, 1);
             }
+        }
+
+        public static bool IsValidBreakthroughMove(IBoard board, string sideSymbol, PieceMove pm)
+        {
+            if (board == null || pm == null || string.IsNullOrEmpty(sideSymbol)) return false;
+            if (!board.CheckBounds(pm.FromX, pm.FromY) || !board.CheckBounds(pm.ToX, pm.ToY)) return false;
+
+            var source = board.PieceAt(pm.FromX, pm.FromY)?.Value;
+            if (!IsPlayerPiece(source, sideSymbol)) return false;
+
+            int expectedDy = sideSymbol == RedCheckerPiece.Red.Value ? -1 : 1;
+            int dy = pm.ToY - pm.FromY;
+            int dx = pm.ToX - pm.FromX;
+            if (dy != expectedDy || Math.Abs(dx) > 1) return false;
+
+            var target = board.PieceAt(pm.ToX, pm.ToY)?.Value ?? BlankPiece.BlankValue;
+            if (dx == 0)
+            {
+                return target == BlankPiece.BlankValue;
+            }
+
+            return !IsPlayerPiece(target, sideSymbol);
+        }
+
+        private static List<PieceMove> GetBreakthroughMovesForSide(IBoard board, string sideSymbol)
+        {
+            var moves = new List<PieceMove>();
+            if (board == null || string.IsNullOrEmpty(sideSymbol)) return moves;
+
+            int dy = sideSymbol == RedCheckerPiece.Red.Value ? -1 : 1;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    if (!IsPlayerPiece(board.PieceAt(x, y)?.Value, sideSymbol)) continue;
+                    int ny = y + dy;
+                    if (ny < 0 || ny >= board.Height) continue;
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        var pm = new PieceMove(x, y, x + dx, ny);
+                        if (IsValidBreakthroughMove(board, sideSymbol, pm))
+                        {
+                            moves.Add(pm);
+                        }
+                    }
+                }
+            }
+            return moves;
         }
 
         public static List<PieceMove> GetCaptureMovesForSide(IBoard board, string sideSymbol)
@@ -261,7 +358,6 @@ namespace BoardGame.Library.Implementations.Checkers
 
                 if (promotedNow)
                 {
-                    // Reaching the king row ends the capture turn in standard Draughts
                     results.Add(nextPath);
                 }
                 else
@@ -305,8 +401,12 @@ namespace BoardGame.Library.Implementations.Checkers
             return false;
         }
 
-        public static bool HasValidMovesForSide(IBoard board, string sideSymbol, bool mandatoryCapture = true)
+        public static bool HasValidMovesForSide(IBoard board, string sideSymbol, bool mandatoryCapture = true, bool isBreakthrough = false)
         {
+            if (isBreakthrough)
+            {
+                return GetBreakthroughMovesForSide(board, sideSymbol).Count > 0;
+            }
             if (HasStepMovesForSide(board, sideSymbol) && !mandatoryCapture)
             {
                 return true;
@@ -318,8 +418,13 @@ namespace BoardGame.Library.Implementations.Checkers
             return HasStepMovesForSide(board, sideSymbol);
         }
 
-        public static List<PieceMove> GetValidMovesForSide(IBoard board, string sideSymbol, bool mandatoryCapture = true)
+        public static List<PieceMove> GetValidMovesForSide(IBoard board, string sideSymbol, bool mandatoryCapture = true, bool isBreakthrough = false)
         {
+            if (isBreakthrough)
+            {
+                return GetBreakthroughMovesForSide(board, sideSymbol);
+            }
+
             var captures = GetCaptureMovesForSide(board, sideSymbol);
             if (mandatoryCapture && captures.Count > 0)
             {
@@ -360,7 +465,7 @@ namespace BoardGame.Library.Implementations.Checkers
             var side = GetSideOfPiece(pieceVal);
             if (side == null) return false;
 
-            return FindMatchingValidMove(board, side, pm, MandatoryCapture) != null;
+            return FindMatchingValidMove(board, side, pm, MandatoryCapture, IsBreakthrough) != null;
         }
 
         public bool IsValidMove(IBoard board, IPlayer player, IMove move)
@@ -372,15 +477,21 @@ namespace BoardGame.Library.Implementations.Checkers
             var pieceVal = board.PieceAt(pm.FromX, pm.FromY)?.Value;
             if (!IsPlayerPiece(pieceVal, side)) return false;
 
-            return FindMatchingValidMove(board, side, pm, MandatoryCapture) != null;
+            return FindMatchingValidMove(board, side, pm, MandatoryCapture, IsBreakthrough) != null;
         }
 
-        private static PieceMove FindMatchingValidMove(IBoard board, string sideSymbol, PieceMove pm, bool mandatoryCapture = true)
+        private static PieceMove FindMatchingValidMove(IBoard board, string sideSymbol, PieceMove pm, bool mandatoryCapture = true, bool isBreakthrough = false)
         {
+            if (isBreakthrough)
+            {
+                return IsValidBreakthroughMove(board, sideSymbol, pm)
+                    ? new PieceMove(pm.FromX, pm.FromY, pm.ToX, pm.ToY)
+                    : null;
+            }
+
             var validMoves = GetValidMovesForSide(board, sideSymbol, mandatoryCapture);
             if (validMoves.Count == 0) return null;
 
-            // Exact full path match when an explicit multi-hop Path is provided
             if (pm.Path != null && pm.Path.Count > 2)
             {
                 foreach (var candidate in validMoves)
@@ -394,7 +505,6 @@ namespace BoardGame.Library.Implementations.Checkers
                 return null;
             }
 
-            // Exact final destination match
             foreach (var candidate in validMoves)
             {
                 if (candidate.FromX == pm.FromX && candidate.FromY == pm.FromY &&
@@ -404,7 +514,6 @@ namespace BoardGame.Library.Implementations.Checkers
                 }
             }
 
-            // First-hop jump match (e.g. from UI click on the first jump landing square in a multi-jump)
             if (Math.Abs(pm.ToX - pm.FromX) == 2 && Math.Abs(pm.ToY - pm.FromY) == 2)
             {
                 foreach (var candidate in validMoves)
@@ -430,7 +539,7 @@ namespace BoardGame.Library.Implementations.Checkers
             var pieceVal = board.PieceAt(pm.FromX, pm.FromY)?.Value;
             if (!IsPlayerPiece(pieceVal, side)) return null;
 
-            return FindMatchingValidMove(board, side, pm, MandatoryCapture);
+            return FindMatchingValidMove(board, side, pm, MandatoryCapture, IsBreakthrough);
         }
 
         public bool ApplyMove(IBoard board, IPlayer player, ILocation location)
@@ -447,8 +556,19 @@ namespace BoardGame.Library.Implementations.Checkers
             var pieceVal = board.PieceAt(pm.FromX, pm.FromY)?.Value;
             if (!IsPlayerPiece(pieceVal, side)) return false;
 
-            var resolvedMove = FindMatchingValidMove(board, side, pm, MandatoryCapture);
+            var resolvedMove = FindMatchingValidMove(board, side, pm, MandatoryCapture, IsBreakthrough);
             if (resolvedMove == null) return false;
+
+            if (IsBreakthrough)
+            {
+                bool isDiagCapture = (board.PieceAt(resolvedMove.ToX, resolvedMove.ToY)?.Value ?? BlankPiece.BlankValue) != BlankPiece.BlankValue;
+                board.PieceAt(resolvedMove.FromX, resolvedMove.FromY, BlankPiece.Blank);
+                IPiece moved = side == RedCheckerPiece.Red.Value ? RedCheckerPiece.Red : BlackCheckerPiece.Black;
+                board.PieceAt(resolvedMove.ToX, resolvedMove.ToY, moved);
+                MovesWithoutCaptureOrPromotion = isDiagCapture ? 0 : MovesWithoutCaptureOrPromotion + 1;
+                _lastMovedSide = side;
+                return true;
+            }
 
             bool isCapture = Math.Abs(resolvedMove.Path[1].X - resolvedMove.Path[0].X) == 2;
             string currentVal = pieceVal;
@@ -524,6 +644,8 @@ namespace BoardGame.Library.Implementations.Checkers
             int blackPieces = 0;
             int redMaterial = 0;
             int blackMaterial = 0;
+            bool redReachedHome = false;
+            bool blackReachedHome = false;
 
             for (int x = 0; x < board.Width; x++)
             {
@@ -534,6 +656,7 @@ namespace BoardGame.Library.Implementations.Checkers
                     {
                         redPieces++;
                         redMaterial += 1;
+                        if (y == 0) redReachedHome = true;
                     }
                     else if (val == RedKingPiece.RedKing.Value)
                     {
@@ -544,6 +667,7 @@ namespace BoardGame.Library.Implementations.Checkers
                     {
                         blackPieces++;
                         blackMaterial += 1;
+                        if (y == board.Height - 1) blackReachedHome = true;
                     }
                     else if (val == BlackKingPiece.BlackKing.Value)
                     {
@@ -553,37 +677,51 @@ namespace BoardGame.Library.Implementations.Checkers
                 }
             }
 
-            if (blackPieces == 0)
+            if (IsBreakthrough)
             {
-                return IsGiveaway ? new[] { p2 } : new[] { p1 };
-            }
-
-            if (redPieces == 0)
-            {
-                return IsGiveaway ? new[] { p1 } : new[] { p2 };
-            }
-
-            if (_lastMovedSide == RedCheckerPiece.Red.Value)
-            {
-                if (!HasValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture))
+                if (redReachedHome || blackPieces == 0)
                 {
                     return IsGiveaway ? new[] { p2 } : new[] { p1 };
                 }
-            }
-            else if (_lastMovedSide == BlackCheckerPiece.Black.Value)
-            {
-                if (!HasValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture))
+                if (blackReachedHome || redPieces == 0)
                 {
                     return IsGiveaway ? new[] { p1 } : new[] { p2 };
                 }
             }
             else
             {
-                if (!HasValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture))
+                if (blackPieces == 0)
                 {
                     return IsGiveaway ? new[] { p2 } : new[] { p1 };
                 }
-                if (!HasValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture))
+
+                if (redPieces == 0)
+                {
+                    return IsGiveaway ? new[] { p1 } : new[] { p2 };
+                }
+            }
+
+            if (_lastMovedSide == RedCheckerPiece.Red.Value)
+            {
+                if (!HasValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture, IsBreakthrough))
+                {
+                    return IsGiveaway ? new[] { p2 } : new[] { p1 };
+                }
+            }
+            else if (_lastMovedSide == BlackCheckerPiece.Black.Value)
+            {
+                if (!HasValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture, IsBreakthrough))
+                {
+                    return IsGiveaway ? new[] { p1 } : new[] { p2 };
+                }
+            }
+            else
+            {
+                if (!HasValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture, IsBreakthrough))
+                {
+                    return IsGiveaway ? new[] { p2 } : new[] { p1 };
+                }
+                if (!HasValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture, IsBreakthrough))
                 {
                     return IsGiveaway ? new[] { p1 } : new[] { p2 };
                 }
