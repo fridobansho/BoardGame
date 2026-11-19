@@ -27,6 +27,7 @@ namespace BoardGame.Library.Implementations.Sudoku
             if (board == null) return new Location(-1, -1);
 
             var logic = _logic ?? SudokuLogic.LastInitializedLogic ?? new SudokuLogic();
+            bool useSolutionFastPath = logic.GetSolutionAt(0, 0) != 0 && logic.BoardConsistentWithSolution(board);
 
             SudokuMove bestMove = null;
             int bestScore = int.MinValue;
@@ -37,29 +38,52 @@ namespace BoardGame.Library.Implementations.Sudoku
                 {
                     if (SudokuLogic.GetDigitAt(board, x, y) != 0) continue;
 
-                    var cellCandidates = new List<SudokuMove>();
-                    for (int d = 1; d <= 9; d++)
+                    int candidateCount = 0;
+                    SudokuMove chosenMove = null;
+
+                    if (useSolutionFastPath)
                     {
-                        var move = new SudokuMove(x, y, d);
-                        if (logic.IsValidMove(board, this, move))
+                        int solDigit = logic.GetSolutionAt(x, y);
+                        if (solDigit >= 1 && solDigit <= 9)
                         {
-                            cellCandidates.Add(move);
+                            chosenMove = new SudokuMove(x, y, solDigit);
+                            for (int d = 1; d <= 9; d++)
+                            {
+                                if (!SudokuLogic.HasPlacementConflict(board, x, y, d))
+                                {
+                                    candidateCount++;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var cellCandidates = new List<SudokuMove>();
+                        for (int d = 1; d <= 9; d++)
+                        {
+                            var move = new SudokuMove(x, y, d);
+                            if (logic.IsValidMove(board, this, move))
+                            {
+                                cellCandidates.Add(move);
+                            }
+                        }
+                        candidateCount = cellCandidates.Count;
+                        if (candidateCount > 0)
+                        {
+                            chosenMove = cellCandidates[_random.Next(candidateCount)];
                         }
                     }
 
-                    if (cellCandidates.Count == 0) continue;
+                    if (chosenMove == null || candidateCount == 0) continue;
 
-                    int nakedSingleBonus = cellCandidates.Count == 1 ? 100 : Math.Max(0, 20 - cellCandidates.Count * 4);
+                    int nakedSingleBonus = candidateCount == 1 ? 100 : Math.Max(0, 20 - candidateCount * 4);
                     int completionScore = EvaluateCompletionBonus(board, x, y);
+                    int score = nakedSingleBonus + completionScore;
 
-                    foreach (var move in cellCandidates)
+                    if (score > bestScore || (score == bestScore && _random.Next(2) == 0))
                     {
-                        int score = nakedSingleBonus + completionScore;
-                        if (score > bestScore || (score == bestScore && _random.Next(2) == 0))
-                        {
-                            bestScore = score;
-                            bestMove = move;
-                        }
+                        bestScore = score;
+                        bestMove = chosenMove;
                     }
                 }
             }

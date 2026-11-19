@@ -99,27 +99,70 @@ namespace BoardGame.Library.Implementations.Minesweeper
         {
             int totalCells = board.Width * board.Height;
             int targetMines = Math.Min(MineCount, Math.Max(1, totalCells - 1));
-            var candidates = new List<(int X, int Y)>();
-            for (int x = 0; x < board.Width; x++)
+            var candidates = new List<(int X, int Y)>(totalCells);
+
+            if (_fixedSeed.HasValue)
             {
                 for (int y = 0; y < board.Height; y++)
                 {
-                    if (x == safeX && y == safeY) continue;
-                    candidates.Add((x, y));
+                    for (int x = 0; x < board.Width; x++)
+                    {
+                        candidates.Add((x, y));
+                    }
+                }
+
+                var rng = new Random(_fixedSeed.Value);
+                for (int i = candidates.Count - 1; i > 0; i--)
+                {
+                    int j = rng.Next(i + 1);
+                    (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
+                }
+
+                bool safeHadMine = false;
+                for (int i = 0; i < targetMines && i < candidates.Count; i++)
+                {
+                    var (mx, my) = candidates[i];
+                    if (mx == safeX && my == safeY)
+                    {
+                        safeHadMine = true;
+                    }
+                    else
+                    {
+                        _mines[mx, my] = true;
+                    }
+                }
+
+                if (safeHadMine && targetMines < candidates.Count)
+                {
+                    // Deterministically relocate only the mine that landed on the first-clicked cell
+                    var (rx, ry) = candidates[targetMines];
+                    _mines[rx, ry] = true;
+                }
+            }
+            else
+            {
+                for (int x = 0; x < board.Width; x++)
+                {
+                    for (int y = 0; y < board.Height; y++)
+                    {
+                        if (x == safeX && y == safeY) continue;
+                        candidates.Add((x, y));
+                    }
+                }
+
+                var rng = new Random();
+                for (int i = candidates.Count - 1; i > 0; i--)
+                {
+                    int j = rng.Next(i + 1);
+                    (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
+                }
+
+                for (int i = 0; i < targetMines && i < candidates.Count; i++)
+                {
+                    _mines[candidates[i].X, candidates[i].Y] = true;
                 }
             }
 
-            var rng = _fixedSeed.HasValue ? new Random(_fixedSeed.Value) : new Random();
-            for (int i = candidates.Count - 1; i > 0; i--)
-            {
-                int j = rng.Next(i + 1);
-                (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
-            }
-
-            for (int i = 0; i < targetMines && i < candidates.Count; i++)
-            {
-                _mines[candidates[i].X, candidates[i].Y] = true;
-            }
             _minesPlaced = true;
         }
 
@@ -159,9 +202,9 @@ namespace BoardGame.Library.Implementations.Minesweeper
         {
             if (board == null || player == null || _isExploded || _isWon) return false;
 
-            if (move is SudokuMove sm && sm.Digit == 1)
+            if (move is SudokuMove sm)
             {
-                if (!board.CheckBounds(sm.X, sm.Y)) return false;
+                if (sm.Digit != 1 || !board.CheckBounds(sm.X, sm.Y)) return false;
                 string v = board.PieceAt(sm.X, sm.Y)?.Value ?? "";
                 return v == "H" || v == "F";
             }
@@ -213,15 +256,16 @@ namespace BoardGame.Library.Implementations.Minesweeper
 
             // Flood-fill reveal safe squares
             int newlyRevealed = 0;
+            var visited = new bool[board.Width, board.Height];
             var queue = new Queue<(int X, int Y)>();
             queue.Enqueue((loc.X, loc.Y));
+            visited[loc.X, loc.Y] = true;
 
             while (queue.Count > 0)
             {
                 var (cx, cy) = queue.Dequeue();
-                if (!board.CheckBounds(cx, cy)) continue;
                 string val = board.PieceAt(cx, cy)?.Value ?? "";
-                if (val != "H" && val != "F") continue;
+                if (val != "H") continue;
                 if (_mines[cx, cy]) continue;
 
                 int adj = CountAdjacentMines(board, cx, cy);
@@ -234,9 +278,13 @@ namespace BoardGame.Library.Implementations.Minesweeper
                     {
                         for (int dy = -1; dy <= 1; dy++)
                         {
-                            if (dx != 0 || dy != 0)
+                            if (dx == 0 && dy == 0) continue;
+                            int nx = cx + dx;
+                            int ny = cy + dy;
+                            if (board.CheckBounds(nx, ny) && !visited[nx, ny])
                             {
-                                queue.Enqueue((cx + dx, cy + dy));
+                                visited[nx, ny] = true;
+                                queue.Enqueue((nx, ny));
                             }
                         }
                     }
@@ -307,6 +355,18 @@ namespace BoardGame.Library.Implementations.Minesweeper
                     chars[y * w + x] = _mines[x, y] ? '1' : '0';
                 }
             }
+            int winnerIdx = -1;
+            if (players != null && _winner != null)
+            {
+                for (int i = 0; i < players.Count; i++)
+                {
+                    if (ReferenceEquals(players[i], _winner))
+                    {
+                        winnerIdx = i;
+                        break;
+                    }
+                }
+            }
             return new Dictionary<string, string>
             {
                 ["mines"] = new string(chars),
@@ -314,7 +374,8 @@ namespace BoardGame.Library.Implementations.Minesweeper
                 ["h"] = h.ToString(),
                 ["minesPlaced"] = _minesPlaced ? "1" : "0",
                 ["exploded"] = _isExploded ? "1" : "0",
-                ["won"] = _isWon ? "1" : "0"
+                ["won"] = _isWon ? "1" : "0",
+                ["winnerIdx"] = winnerIdx.ToString()
             };
         }
 
@@ -337,6 +398,10 @@ namespace BoardGame.Library.Implementations.Minesweeper
             if (state.TryGetValue("minesPlaced", out var mp)) _minesPlaced = mp == "1";
             if (state.TryGetValue("exploded", out var exp)) _isExploded = exp == "1";
             if (state.TryGetValue("won", out var won)) _isWon = won == "1";
+            if (state.TryGetValue("winnerIdx", out var winStr) && int.TryParse(winStr, out int winIdx))
+            {
+                _winner = (players != null && winIdx >= 0 && winIdx < players.Count) ? players[winIdx] : null;
+            }
         }
     }
 }

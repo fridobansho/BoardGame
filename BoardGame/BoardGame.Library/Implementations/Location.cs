@@ -18,10 +18,11 @@ namespace BoardGame.Library.Implementations
             Y = y;
         }
 
-        public bool Equals(ILocation other)
+        public virtual bool Equals(ILocation other)
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
+            if (other is PieceMove || other is SudokuMove || other is WordMove) return false;
             return X == other.X && Y == other.Y;
         }
 

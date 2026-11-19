@@ -6,7 +6,7 @@ namespace BoardGame.Library.Implementations.Chomp
     {
         public const string PoisonValue = "P";
 
-        public static IPiece Poison = new PoisonPiece();
+        public static readonly IPiece Poison = new PoisonPiece();
 
         public PoisonPiece() : base(PoisonValue)
         {

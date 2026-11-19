@@ -7,6 +7,8 @@ namespace BoardGame.Library.Implementations.ConnectFour
     public class ConnectFourPlayer : IPlayer
     {
         public string Name { get; }
+        internal string AssignedSymbol { get; set; }
+        internal int TargetLength { get; set; } = 4;
 
         public ConnectFourPlayer() : this(nameof(ConnectFourPlayer))
         {
@@ -32,40 +34,52 @@ namespace BoardGame.Library.Implementations.ConnectFour
 
             if (validCols.Count == 0) return new Location(0, 0);
 
-            int rCount = 0;
-            int yCount = 0;
-            for (int x = 0; x < board.Width; x++)
+            IPiece myPiece;
+            if (!string.IsNullOrEmpty(AssignedSymbol))
             {
-                for (int y = 0; y < board.Height; y++)
+                myPiece = AssignedSymbol == RedPiece.Red.Value ? RedPiece.Red : YellowPiece.Yellow;
+            }
+            else
+            {
+                int rCount = 0;
+                int yCount = 0;
+                for (int x = 0; x < board.Width; x++)
                 {
-                    var p = board.PieceAt(x, y);
-                    if (p != null && p.Value == RedPiece.Red.Value) rCount++;
-                    else if (p != null && p.Value == YellowPiece.Yellow.Value) yCount++;
+                    for (int y = 0; y < board.Height; y++)
+                    {
+                        var p = board.PieceAt(x, y);
+                        if (p != null && p.Value == RedPiece.Red.Value) rCount++;
+                        else if (p != null && p.Value == YellowPiece.Yellow.Value) yCount++;
+                    }
                 }
+                myPiece = (rCount <= yCount) ? (IPiece)RedPiece.Red : YellowPiece.Yellow;
             }
 
-            IPiece myPiece = (rCount <= yCount) ? (IPiece)RedPiece.Red : YellowPiece.Yellow;
             IPiece oppPiece = (myPiece.Value == RedPiece.Red.Value) ? (IPiece)YellowPiece.Yellow : RedPiece.Red;
+            int target = Math.Max(2, TargetLength);
+            var sim = CloneBoard(board);
 
             // 1. Can we win this turn in any column?
             foreach (var col in validCols)
             {
-                var clone = CloneBoard(board);
-                ApplyGravity(clone, col, myPiece);
-                if (HasWon(clone, myPiece))
+                int row = ApplyGravity(sim, col, myPiece);
+                if (row >= 0)
                 {
-                    return new Location(col, 0);
+                    bool wins = HasWon(sim, myPiece, target);
+                    sim.PieceAt(col, row, BlankPiece.Blank);
+                    if (wins) return new Location(col, 0);
                 }
             }
 
             // 2. Can opponent win next turn in any column? Block it!
             foreach (var col in validCols)
             {
-                var clone = CloneBoard(board);
-                ApplyGravity(clone, col, oppPiece);
-                if (HasWon(clone, oppPiece))
+                int row = ApplyGravity(sim, col, oppPiece);
+                if (row >= 0)
                 {
-                    return new Location(col, 0);
+                    bool oppWins = HasWon(sim, oppPiece, target);
+                    sim.PieceAt(col, row, BlankPiece.Blank);
+                    if (oppWins) return new Location(col, 0);
                 }
             }
 
@@ -76,20 +90,22 @@ namespace BoardGame.Library.Implementations.ConnectFour
             {
                 if (validCols.Contains(col))
                 {
-                    var clone = CloneBoard(board);
-                    ApplyGravity(clone, col, myPiece);
-
-                    // Check if opponent can now play on top and win
-                    if (clone.PieceAt(col, 0).Value == BlankPiece.BlankValue)
+                    int row = ApplyGravity(sim, col, myPiece);
+                    if (row >= 0)
                     {
-                        var testOpponent = CloneBoard(clone);
-                        ApplyGravity(testOpponent, col, oppPiece);
-                        if (HasWon(testOpponent, oppPiece))
+                        bool givesOppWin = false;
+                        if (sim.PieceAt(col, 0).Value == BlankPiece.BlankValue)
                         {
-                            continue;
+                            int oppRow = ApplyGravity(sim, col, oppPiece);
+                            if (oppRow >= 0)
+                            {
+                                givesOppWin = HasWon(sim, oppPiece, target);
+                                sim.PieceAt(col, oppRow, BlankPiece.Blank);
+                            }
                         }
+                        sim.PieceAt(col, row, BlankPiece.Blank);
+                        if (!givesOppWin) return new Location(col, 0);
                     }
-                    return new Location(col, 0);
                 }
             }
 
@@ -107,53 +123,47 @@ namespace BoardGame.Library.Implementations.ConnectFour
             return list.ToArray();
         }
 
-        private static void ApplyGravity(IBoard board, int col, IPiece piece)
+        private static int ApplyGravity(IBoard board, int col, IPiece piece)
         {
             for (int y = board.Height - 1; y >= 0; y--)
             {
                 if (board.PieceAt(col, y).Value == BlankPiece.BlankValue)
                 {
                     board.PieceAt(col, y, piece);
-                    return;
+                    return y;
                 }
             }
+            return -1;
         }
 
-        private static bool HasWon(IBoard board, IPiece piece)
+        private static bool HasWon(IBoard board, IPiece piece, int targetLength)
         {
+            (int dx, int dy)[] directions = { (1, 0), (0, 1), (1, 1), (1, -1) };
+
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
                 {
                     if (board.PieceAt(x, y).Value != piece.Value) continue;
 
-                    // Horizontal
-                    if (x + 3 < board.Width &&
-                        board.PieceAt(x + 1, y).Value == piece.Value &&
-                        board.PieceAt(x + 2, y).Value == piece.Value &&
-                        board.PieceAt(x + 3, y).Value == piece.Value)
-                        return true;
+                    foreach (var (dx, dy) in directions)
+                    {
+                        int endX = x + (targetLength - 1) * dx;
+                        int endY = y + (targetLength - 1) * dy;
+                        if (!board.CheckBounds(endX, endY)) continue;
 
-                    // Vertical
-                    if (y + 3 < board.Height &&
-                        board.PieceAt(x, y + 1).Value == piece.Value &&
-                        board.PieceAt(x, y + 2).Value == piece.Value &&
-                        board.PieceAt(x, y + 3).Value == piece.Value)
-                        return true;
+                        bool match = true;
+                        for (int step = 1; step < targetLength; step++)
+                        {
+                            if (board.PieceAt(x + step * dx, y + step * dy)?.Value != piece.Value)
+                            {
+                                match = false;
+                                break;
+                            }
+                        }
 
-                    // Diagonal down-right
-                    if (x + 3 < board.Width && y + 3 < board.Height &&
-                        board.PieceAt(x + 1, y + 1).Value == piece.Value &&
-                        board.PieceAt(x + 2, y + 2).Value == piece.Value &&
-                        board.PieceAt(x + 3, y + 3).Value == piece.Value)
-                        return true;
-
-                    // Diagonal up-right
-                    if (x + 3 < board.Width && y - 3 >= 0 &&
-                        board.PieceAt(x + 1, y - 1).Value == piece.Value &&
-                        board.PieceAt(x + 2, y - 2).Value == piece.Value &&
-                        board.PieceAt(x + 3, y - 3).Value == piece.Value)
-                        return true;
+                        if (match) return true;
+                    }
                 }
             }
             return false;

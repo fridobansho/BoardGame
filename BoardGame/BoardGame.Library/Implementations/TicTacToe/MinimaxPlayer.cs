@@ -7,6 +7,7 @@ namespace BoardGame.Library.Implementations.TicTacToe
     public class MinimaxPlayer : IPlayer
     {
         public string Name { get; }
+        internal IPiece AssignedPiece { get; set; }
 
         public MinimaxPlayer() : this(nameof(MinimaxPlayer))
         {
@@ -38,18 +39,25 @@ namespace BoardGame.Library.Implementations.TicTacToe
 
             if (availableMoves.Count == 0) return new Location(0, 0);
 
-            IPiece myPiece = (xCount <= oCount) ? (IPiece)XPiece.X : OPiece.O;
+            IPiece myPiece = AssignedPiece ?? ((xCount <= oCount) ? (IPiece)XPiece.X : OPiece.O);
             IPiece opponentPiece = (myPiece.Value == XPiece.X.Value) ? (IPiece)OPiece.O : XPiece.X;
+
+            var clone = CloneBoard(board);
+            if (board.Width > 3 || board.Height > 3)
+            {
+                return SelectLargeBoardMove(clone, availableMoves, myPiece, opponentPiece);
+            }
 
             int bestScore = int.MinValue;
             ILocation bestMove = availableMoves[0];
 
             foreach (var move in availableMoves)
             {
-                var clone = CloneBoard(board);
                 clone.PieceAt(move.X, move.Y, myPiece);
 
                 int score = Minimax(clone, 0, false, myPiece, opponentPiece, int.MinValue, int.MaxValue);
+                clone.PieceAt(move.X, move.Y, BlankPiece.Blank);
+
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -58,6 +66,49 @@ namespace BoardGame.Library.Implementations.TicTacToe
             }
 
             return bestMove;
+        }
+
+        private static ILocation SelectLargeBoardMove(IBoard clone, List<ILocation> availableMoves, IPiece myPiece, IPiece opponentPiece)
+        {
+            foreach (var move in availableMoves)
+            {
+                clone.PieceAt(move.X, move.Y, myPiece);
+                bool wins = HasWon(clone, myPiece);
+                clone.PieceAt(move.X, move.Y, BlankPiece.Blank);
+                if (wins) return move;
+            }
+
+            foreach (var move in availableMoves)
+            {
+                clone.PieceAt(move.X, move.Y, opponentPiece);
+                bool opponentWins = HasWon(clone, opponentPiece);
+                clone.PieceAt(move.X, move.Y, BlankPiece.Blank);
+                if (opponentWins) return move;
+            }
+
+            int cx = clone.Width / 2;
+            int cy = clone.Height / 2;
+            if (clone.PieceAt(cx, cy)?.Value == BlankPiece.BlankValue)
+            {
+                return new Location(cx, cy);
+            }
+
+            var corners = new (int X, int Y)[]
+            {
+                (0, 0),
+                (clone.Width - 1, 0),
+                (0, clone.Height - 1),
+                (clone.Width - 1, clone.Height - 1)
+            };
+            foreach (var (x, y) in corners)
+            {
+                if (clone.PieceAt(x, y)?.Value == BlankPiece.BlankValue)
+                {
+                    return new Location(x, y);
+                }
+            }
+
+            return availableMoves[0];
         }
 
         private static int Minimax(IBoard board, int depth, bool isMaximizing, IPiece myPiece, IPiece opponentPiece, int alpha, int beta)
@@ -112,35 +163,48 @@ namespace BoardGame.Library.Implementations.TicTacToe
 
         private static bool HasWon(IBoard board, IPiece piece)
         {
+            if (board.Width < 3 || board.Height < 3) return false;
             // Rows
             for (int y = 0; y < board.Height; y++)
             {
-                if (board.PieceAt(0, y).Value == piece.Value &&
-                    board.PieceAt(1, y).Value == piece.Value &&
-                    board.PieceAt(2, y).Value == piece.Value)
-                    return true;
+                bool rowWin = true;
+                for (int x = 0; x < board.Width; x++)
+                {
+                    if (board.PieceAt(x, y).Value != piece.Value)
+                    {
+                        rowWin = false;
+                        break;
+                    }
+                }
+                if (rowWin) return true;
             }
 
             // Columns
             for (int x = 0; x < board.Width; x++)
             {
-                if (board.PieceAt(x, 0).Value == piece.Value &&
-                    board.PieceAt(x, 1).Value == piece.Value &&
-                    board.PieceAt(x, 2).Value == piece.Value)
-                    return true;
+                bool colWin = true;
+                for (int y = 0; y < board.Height; y++)
+                {
+                    if (board.PieceAt(x, y).Value != piece.Value)
+                    {
+                        colWin = false;
+                        break;
+                    }
+                }
+                if (colWin) return true;
             }
 
-            // Main diagonal
-            if (board.PieceAt(0, 0).Value == piece.Value &&
-                board.PieceAt(1, 1).Value == piece.Value &&
-                board.PieceAt(2, 2).Value == piece.Value)
-                return true;
-
-            // Anti diagonal
-            if (board.PieceAt(2, 0).Value == piece.Value &&
-                board.PieceAt(1, 1).Value == piece.Value &&
-                board.PieceAt(0, 2).Value == piece.Value)
-                return true;
+            if (board.Width == board.Height)
+            {
+                bool mainDiag = true;
+                bool antiDiag = true;
+                for (int i = 0; i < board.Width; i++)
+                {
+                    if (board.PieceAt(i, i).Value != piece.Value) mainDiag = false;
+                    if (board.PieceAt(board.Width - 1 - i, i).Value != piece.Value) antiDiag = false;
+                }
+                if (mainDiag || antiDiag) return true;
+            }
 
             return false;
         }

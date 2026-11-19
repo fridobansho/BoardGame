@@ -13,6 +13,8 @@ namespace BoardGame.Library.Implementations.Hex
 
         private readonly Random _random = new Random();
 
+        internal string AssignedSymbol { get; set; }
+
         public string Name { get; }
 
         public SmartHexPlayer(string name = "Hex Bot (Smart)")
@@ -22,6 +24,10 @@ namespace BoardGame.Library.Implementations.Hex
 
         public ILocation GetMove(IBoard board)
         {
+            string mySymbol = AssignedSymbol ?? InferSymbol(board);
+            string oppSymbol = mySymbol == BlackPiece.Black.Value ? WhitePiece.White.Value : BlackPiece.Black.Value;
+            bool isTopToBottom = mySymbol == BlackPiece.Black.Value;
+
             int centerX = board.Width / 2;
             int centerY = board.Height / 2;
             ILocation bestMove = null;
@@ -33,7 +39,10 @@ namespace BoardGame.Library.Implementations.Hex
                 {
                     if (board.PieceAt(x, y)?.Value != BlankPiece.BlankValue) continue;
 
-                    int neighborScore = 0;
+                    int ownNeighbors = 0;
+                    int oppNeighbors = 0;
+                    bool bridgesNewRowOrCol = false;
+
                     foreach (var (dx, dy) in HexNeighbors)
                     {
                         int nx = x + dx;
@@ -41,12 +50,25 @@ namespace BoardGame.Library.Implementations.Hex
                         if (board.CheckBounds(nx, ny))
                         {
                             var val = board.PieceAt(nx, ny)?.Value;
-                            if (val == BlackPiece.Black.Value || val == WhitePiece.White.Value)
+                            if (val == mySymbol)
                             {
-                                neighborScore += 10;
+                                ownNeighbors++;
+                                if ((isTopToBottom && ny != y) || (!isTopToBottom && nx != x))
+                                {
+                                    bridgesNewRowOrCol = true;
+                                }
+                            }
+                            else if (val == oppSymbol)
+                            {
+                                oppNeighbors++;
                             }
                         }
                     }
+
+                    // Reward own directional chains, blocking opponent clusters, and touching goal edges
+                    int neighborScore = ownNeighbors * 15 + oppNeighbors * 6 + (bridgesNewRowOrCol ? 12 : 0);
+                    if (isTopToBottom && (y == 0 || y == board.Height - 1)) neighborScore += 8;
+                    if (!isTopToBottom && (x == 0 || x == board.Width - 1)) neighborScore += 8;
 
                     int distFromCenter = Math.Abs(x - centerX) + Math.Abs(y - centerY);
                     int score = neighborScore - distFromCenter;
@@ -60,6 +82,21 @@ namespace BoardGame.Library.Implementations.Hex
             }
 
             return bestMove;
+        }
+
+        private static string InferSymbol(IBoard board)
+        {
+            int b = 0, w = 0;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var val = board.PieceAt(x, y)?.Value;
+                    if (val == BlackPiece.Black.Value) b++;
+                    else if (val == WhitePiece.White.Value) w++;
+                }
+            }
+            return b <= w ? BlackPiece.Black.Value : WhitePiece.White.Value;
         }
     }
 }

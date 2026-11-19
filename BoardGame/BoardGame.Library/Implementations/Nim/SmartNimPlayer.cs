@@ -5,6 +5,7 @@ namespace BoardGame.Library.Implementations.Nim
     public class SmartNimPlayer : IPlayer
     {
         public string Name { get; }
+        internal bool IsMisere { get; set; } = false;
 
         public SmartNimPlayer(string name = "Nim Bot (Smart)")
         {
@@ -15,6 +16,9 @@ namespace BoardGame.Library.Implementations.Nim
         {
             var rowCounts = new int[board.Height];
             int nimSum = 0;
+            int rowsWithGt1 = 0;
+            int rowsWith1 = 0;
+            int bigRow = -1;
 
             for (int y = 0; y < board.Height; y++)
             {
@@ -28,6 +32,22 @@ namespace BoardGame.Library.Implementations.Nim
                 }
                 rowCounts[y] = count;
                 nimSum ^= count;
+                if (count > 1)
+                {
+                    rowsWithGt1++;
+                    bigRow = y;
+                }
+                else if (count == 1)
+                {
+                    rowsWith1++;
+                }
+            }
+
+            if (IsMisere && rowsWithGt1 == 1)
+            {
+                // Misere endgame: leave an odd number of size-1 heaps
+                int target = (rowsWith1 % 2 == 0) ? 1 : 0;
+                return new Location(target, bigRow);
             }
 
             if (nimSum != 0)

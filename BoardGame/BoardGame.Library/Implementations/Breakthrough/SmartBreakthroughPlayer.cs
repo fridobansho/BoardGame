@@ -10,6 +10,7 @@ namespace BoardGame.Library.Implementations.Breakthrough
 
         public string Name { get; }
         public string SideSymbol { get; set; } = "B";
+        internal bool IsMisere { get; set; } = false;
 
         public SmartBreakthroughPlayer(string name = "Breakthrough Bot (Smart)")
         {
@@ -42,9 +43,9 @@ namespace BoardGame.Library.Implementations.Breakthrough
                 {
                     score += 80;
                     // Extra priority if capturing an enemy close to our home row
-                    int enemyProgress = Math.Abs(m.ToY - (SideSymbol == "W" ? 0 : board.Height - 1));
-                    score += Math.Max(0, (board.Height - enemyProgress) * 6);
-                    if (Math.Abs(m.ToY - enemyGoalY) <= 1) score += 250;
+                    int distFromOurHome = Math.Abs(m.ToY - enemyGoalY);
+                    score += Math.Max(0, (board.Height - distFromOurHome) * 6);
+                    if (distFromOurHome <= 1) score += 250;
                 }
 
                 // Prefer advancing toward goal
@@ -57,6 +58,11 @@ namespace BoardGame.Library.Implementations.Breakthrough
                 {
                     if (m.ToX - 1 >= 0 && board.PieceAt(m.ToX - 1, supportY)?.Value == SideSymbol) score += 12;
                     if (m.ToX + 1 < board.Width && board.PieceAt(m.ToX + 1, supportY)?.Value == SideSymbol) score += 12;
+                }
+
+                if (IsMisere)
+                {
+                    score = -score;
                 }
 
                 if (score > bestScore)

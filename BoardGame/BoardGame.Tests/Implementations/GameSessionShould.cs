@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using BoardGame.Library.Implementations;
 using BoardGame.Library.Implementations.Checkers;
+using BoardGame.Library.Implementations.Minesweeper;
+using BoardGame.Library.Implementations.Othello;
 using BoardGame.Library.Implementations.Scrabble;
 using BoardGame.Library.Implementations.Sudoku;
 using BoardGame.Library.Implementations.Wordle;
@@ -848,5 +850,164 @@ public class GameSessionShould
         {
             if (System.IO.File.Exists(tempDb)) System.IO.File.Delete(tempDb);
         }
+    }
+
+    [Test]
+    public void EndSoloWordleAndMinesweeperFailuresAsDrawRatherThanWin()
+    {
+        var wordle = new GameSession("wordle", "solo", "smart", "Alice", null);
+        var wl = (WordleLogic)wordle.GameLogic;
+        wl.AllowAnyLetters = true;
+        string wrong = wl.SecretWord == "ZZZZZ" ? "QQQQQ" : "ZZZZZ";
+
+        for (int row = 0; row < WordleLogic.MaxGuesses; row++)
+        {
+            var tiles = wrong.Select((c, col) => new TilePlacementDto(col, row, c.ToString())).ToList();
+            wordle.MakeMove(0, row, placements: tiles).Success.ShouldBeTrue();
+        }
+
+        wordle.Status.ShouldBe("Draw");
+        wordle.Winner.ShouldBeNull();
+        wordle.DrawScore.ShouldBe(1);
+        wordle.Player1Score.ShouldBe(0);
+
+        var minesweeper = new GameSession("minesweeper", "solo", "smart", "Alice", null);
+        var ml = (MinesweeperLogic)minesweeper.GameLogic;
+        // First click is guaranteed safe and triggers mine placement
+        minesweeper.MakeMove(0, 0).Success.ShouldBeTrue();
+        if (minesweeper.Status == "InProgress")
+        {
+            var state = ml.ExportCustomState(minesweeper.Players);
+            string mines = state["mines"];
+            int w = minesweeper.Board.Width;
+            int idx = mines.IndexOf('1');
+            idx.ShouldBeGreaterThanOrEqualTo(0);
+            int mx = idx % w;
+            int my = idx / w;
+
+            minesweeper.MakeMove(mx, my).Success.ShouldBeTrue();
+            ml.IsExploded.ShouldBeTrue();
+            minesweeper.Status.ShouldBe("Draw");
+            minesweeper.Winner.ShouldBeNull();
+            minesweeper.DrawScore.ShouldBe(1);
+            minesweeper.Player1Score.ShouldBe(0);
+        }
+    }
+
+    [Test]
+    public void KeepMoveCountAndTurnUnchangedOnMinesweeperFlagToggle()
+    {
+        var session = new GameSession("minesweeper", "pass-and-play", "smart", "Alice", "Bob");
+
+        session.MakeMove(1, 2, digit: 2).Success.ShouldBeFalse();
+        session.MoveCount.ShouldBe(0);
+        session.CurrentTurnIndex.ShouldBe(0);
+
+        var res = session.MakeMove(1, 2, digit: 1);
+        res.Success.ShouldBeTrue();
+        session.ToDto().Grid[2][1].ShouldBe("F");
+        session.MoveCount.ShouldBe(0);
+        session.CurrentTurnIndex.ShouldBe(0);
+    }
+
+    [Test]
+    public void SupportOthelloIMoveLogicAndAutoPassWhenOpponentHasNoMoves()
+    {
+        var session = new GameSession("othello", "pass-and-play", "smart", "Alice", "Bob");
+        session.GameLogic.ShouldBeAssignableTo<IMoveGameLogic>();
+
+        // Clear board and build a controlled position where B moving (2, 0) leaves W with no legal moves while B can still play (3, 3)
+        for (int x = 0; x < 8; x++)
+        {
+            for (int y = 0; y < 8; y++)
+            {
+                session.Board.PieceAt(x, y, BlankPiece.Blank);
+            }
+        }
+        session.Board.PieceAt(0, 0, new Piece("B"));
+        session.Board.PieceAt(1, 0, new Piece("W"));
+        session.Board.PieceAt(0, 3, new Piece("B"));
+        session.Board.PieceAt(1, 3, new Piece("W"));
+        session.Board.PieceAt(2, 3, new Piece("W"));
+
+        var othelloLogic = (OthelloLogic)session.GameLogic;
+        othelloLogic.IsValidMove(session.Board, session.Players[1], new Location(3, 3)).ShouldBeFalse();
+        othelloLogic.IsValidMove(session.Board, session.Players[0], new Location(3, 3)).ShouldBeTrue();
+
+        var moveRes = session.MakeMove(2, 0);
+        moveRes.Success.ShouldBeTrue();
+        session.Status.ShouldBe("InProgress");
+        session.CurrentTurnIndex.ShouldBe(0);
+        session.LastMoveText.ShouldContain("turn passed");
+    }
+
+    [Test]
+    public void AssignAiSecondPlayerPieceCorrectlyOnEvenRematch()
+    {
+        var ttt = new GameSession("tictactoe", "vs-ai", "smart", "Alice", null);
+        ttt.Reset(isRematch: true);
+
+        ttt.GameNumber.ShouldBe(2);
+        ttt.StartingPlayerIndex.ShouldBe(1);
+        ttt.MoveCount.ShouldBe(1);
+        ttt.CurrentTurnIndex.ShouldBe(0);
+
+        int oCount = 0;
+        int xCount = 0;
+        for (int x = 0; x < 3; x++)
+        {
+            for (int y = 0; y < 3; y++)
+            {
+                string v = ttt.Board.PieceAt(x, y).Value;
+                if (v == "O") oCount++;
+                if (v == "X") xCount++;
+            }
+        }
+        oCount.ShouldBe(1);
+        xCount.ShouldBe(0);
+
+        var ttt4 = new GameSession("tictactoe", "vs-ai", "smart", "Alice", null, customWidth: 4, customHeight: 4);
+        ((SmartNxNTicTacToePlayer)ttt4.Players[1]).AssignedPiece?.Value.ShouldBe("O");
+        ttt4.Reset(isRematch: true);
+        ((SmartNxNTicTacToePlayer)ttt4.Players[1]).AssignedPiece?.Value.ShouldBe("O");
+        ttt4.MoveCount.ShouldBe(1);
+        ttt4.CurrentTurnIndex.ShouldBe(0);
+    }
+
+    [Test]
+    public void RevertSeriesScoresOnUndoAfterWinningMove()
+    {
+        var session = new GameSession("tictactoe", "pass-and-play", "smart", "Alice", "Bob");
+
+        session.MakeMove(0, 0).Success.ShouldBeTrue(); // X
+        session.MakeMove(0, 1).Success.ShouldBeTrue(); // O
+        session.MakeMove(1, 0).Success.ShouldBeTrue(); // X
+        session.MakeMove(1, 1).Success.ShouldBeTrue(); // O
+        session.MakeMove(2, 0).Success.ShouldBeTrue(); // X wins
+
+        session.Status.ShouldBe("Finished");
+        session.Winner.ShouldBe("Alice");
+        session.Player1Score.ShouldBe(1);
+
+        // Undo is blocked via UI CanUndo when Finished, or via direct Undo: test direct Undo reverts series score too
+        var undo = session.Undo();
+        undo.Success.ShouldBeTrue();
+        session.Status.ShouldBe("InProgress");
+        session.Winner.ShouldBeNull();
+        session.Player1Score.ShouldBe(0);
+        session.Player2Score.ShouldBe(0);
+        session.DrawScore.ShouldBe(0);
+    }
+
+    [Test]
+    public void EnforcePlayerTokenInRoomModeEvenWhenTokenIsMissing()
+    {
+        var session = new GameSession("tictactoe", "room", "smart", "Alice", null);
+        session.JoinRoomAsGuest("Bob", out var guestToken).ShouldBeTrue();
+
+        session.MakeMove(0, 0, playerToken: null).Success.ShouldBeFalse();
+        session.MakeMove(0, 0, playerToken: "").Success.ShouldBeFalse();
+        session.MakeMove(0, 0, playerToken: guestToken).Success.ShouldBeFalse();
+        session.MakeMove(0, 0, playerToken: session.Player1Token).Success.ShouldBeTrue();
     }
 }

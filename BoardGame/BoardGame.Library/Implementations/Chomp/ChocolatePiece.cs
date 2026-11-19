@@ -6,7 +6,7 @@ namespace BoardGame.Library.Implementations.Chomp
     {
         public const string ChocolateValue = "C";
 
-        public static IPiece Chocolate = new ChocolatePiece();
+        public static readonly IPiece Chocolate = new ChocolatePiece();
 
         public ChocolatePiece() : base(ChocolateValue)
         {

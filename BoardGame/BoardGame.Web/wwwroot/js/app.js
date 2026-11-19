@@ -13,7 +13,7 @@ import {
   supportsSoloMode,
   supportsAiVsAiMode
 } from './game-registry.js';
-import { playSoundEffect, triggerHaptic, startConfetti as runConfetti } from './audio-fx.js';
+import { initAudio, playSoundEffect, triggerHaptic, startConfetti as runConfetti } from './audio-fx.js';
 import { renderSimpleQR } from './qr.js';
 import { getStats, saveStats, unlockTrophy, recordGameResult as recordStatsResult, renderStatsUI as renderStatsPanel } from './stats.js';
 import { createBoardRenderer } from './renderers.js';
@@ -76,6 +76,8 @@ import { createBoardRenderer } from './renderers.js';
   let lbFilterGame = 'all';
   let lbFilterMode = 'all';
   let lbActiveTab = 'scores';
+  let moveInFlight = false;
+  let lastGameOverKey = null;
 
   // DOM Elements
   const gameTitle = document.getElementById('game-title');
@@ -213,6 +215,7 @@ import { createBoardRenderer } from './renderers.js';
     recordStatsResult(session, {
       isSpectator,
       playerToken,
+      playerName: clientPlayerName,
       onUnlock: (trophy) => showSpeechBubble(`🏆 Trophy Unlocked: ${trophy.name}!`, 'System')
     });
   }
@@ -257,6 +260,7 @@ import { createBoardRenderer } from './renderers.js';
     submitPieceMove: (...args) => submitPieceMove(...args),
     submitWordMove: (...args) => submitWordMove(...args),
     submitSudokuMove: (...args) => submitSudokuMove(...args),
+    openLeaderboard: (...args) => openLeaderboard(...args),
     playSound: (name) => playSound(name),
     escapeHtml: (str) => escapeHtml(str)
   });
@@ -820,6 +824,10 @@ import { createBoardRenderer } from './renderers.js';
         clearInterval(timerInterval);
         timerInterval = null;
         playSound('warning');
+        fetch(`/api/session/${session.id}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(s => { if (s) onSessionUpdated(s); })
+          .catch(() => {});
       }
     }, 250);
   }
@@ -1334,7 +1342,11 @@ import { createBoardRenderer } from './renderers.js';
 
     const p2Name = selectedMode === 'daily'
       ? 'Daily Challenge'
-      : (selectedMode === 'solo' ? 'Solo' : (selectedMode === 'ai-vs-ai' ? 'AI Bot 2' : 'Player 2'));
+      : (selectedMode === 'solo'
+        ? 'Solo'
+        : (selectedMode === 'ai-vs-ai'
+          ? 'AI Bot 2'
+          : (selectedMode === 'vs-ai' ? null : 'Player 2')));
     createSession(
       selectedGame,
       selectedMode,
@@ -1607,6 +1619,7 @@ import { createBoardRenderer } from './renderers.js';
         body: JSON.stringify({ playerToken: playerToken })
       });
       if (res.ok) {
+        lastGameOverKey = null;
         playSound('tap');
         triggerHaptic(20);
         const data = await res.json();
@@ -1622,6 +1635,7 @@ import { createBoardRenderer } from './renderers.js';
     try {
       const res = await fetch(`/api/session/${currentSession.id}/reset-series`, { method: 'POST' });
       if (res.ok) {
+        lastGameOverKey = null;
         playSound('tap');
         const data = await res.json();
         const sessionObj = data.session || data.Session;
@@ -1743,7 +1757,8 @@ import { createBoardRenderer } from './renderers.js';
       triggerHaptic([20, 20]);
       return;
     }
-    if (!currentSession || currentSession.status !== 'InProgress') return;
+    if (!currentSession || currentSession.status !== 'InProgress' || moveInFlight) return;
+    moveInFlight = true;
     initAudio();
     triggerHaptic(15);
 
@@ -1759,11 +1774,20 @@ import { createBoardRenderer } from './renderers.js';
         if (data && data.error) {
           showSpeechBubble(data.error, 'Rules');
         }
+        if (currentSession) {
+          renderBoard(currentSession);
+        }
         return;
       }
       const sessionObj = data.session || data.Session;
       if (sessionObj) onSessionUpdated(sessionObj);
-    } catch (e) { }
+    } catch (e) {
+      if (currentSession) {
+        renderBoard(currentSession);
+      }
+    } finally {
+      moveInFlight = false;
+    }
   }
 
   async function submitMove(x, y) {
@@ -1814,6 +1838,7 @@ import { createBoardRenderer } from './renderers.js';
         body: JSON.stringify({ isRematch: Boolean(isRematch) })
       });
       if (res.ok) {
+        lastGameOverKey = null;
         const data = await res.json();
         const sessionObj = data.session || data.Session;
         if (sessionObj) onSessionUpdated(sessionObj);
@@ -1861,11 +1886,28 @@ import { createBoardRenderer } from './renderers.js';
     const session = normalizeSession(rawSession);
     if (!session) return;
 
+    if (currentSession && currentSession.id === session.id && currentSession.gameNumber === session.gameNumber) {
+      if ((currentSession.status === 'Finished' || currentSession.status === 'Draw') &&
+          session.status === 'InProgress' &&
+          session.moveCount >= currentSession.moveCount) {
+        return;
+      }
+      if (currentSession.status === 'InProgress' &&
+          session.status === 'InProgress' &&
+          session.moveCount < currentSession.moveCount &&
+          lastGameOverKey === `${session.id}:${session.gameNumber}`) {
+        lastGameOverKey = null;
+      }
+    }
+
     const prevStatus = currentSession ? currentSession.status : null;
     const prevMoveCount = currentSession ? currentSession.moveCount : 0;
     const prevId = currentSession ? currentSession.id : null;
     if (prevId !== session.id) {
       aiExhibitionPaused = false;
+      lastGameOverKey = null;
+    } else if (session.status === 'InProgress' && session.moveCount === 0) {
+      lastGameOverKey = null;
     }
     if (prevId !== session.id || prevMoveCount !== session.moveCount) {
       selectedChecker = null;
@@ -1992,7 +2034,11 @@ import { createBoardRenderer } from './renderers.js';
 
     // Check game over transition
     if (prevStatus === 'InProgress' && (session.status === 'Finished' || session.status === 'Draw')) {
-      handleGameOver(session);
+      const gameOverKey = `${session.id}:${session.gameNumber}`;
+      if (lastGameOverKey !== gameOverKey) {
+        lastGameOverKey = gameOverKey;
+        handleGameOver(session);
+      }
     }
 
     syncAiExhibitionLoop(session);
@@ -2043,6 +2089,11 @@ import { createBoardRenderer } from './renderers.js';
       gameOverMsg.textContent = session.gameType === 'chomp' 
         ? 'Ate the poison block! Better luck next time.' 
         : 'Congratulations on an amazing match!';
+    } else if (session.gameType === 'minesweeper' || session.gameType === 'wordle') {
+      playSound('draw');
+      gameOverIcon.textContent = session.gameType === 'minesweeper' ? '💥' : '📖';
+      gameOverTitle.textContent = 'Game Over';
+      gameOverMsg.textContent = session.lastMoveText || 'Better luck next time!';
     } else {
       playSound('draw');
       gameOverIcon.textContent = '🤝';
@@ -2116,8 +2167,8 @@ import { createBoardRenderer } from './renderers.js';
       const roomPill = document.querySelector('#group-mode .pill-btn[data-mode="room"]');
       if (roomPill) roomPill.classList.add('active');
       selectedMode = 'room';
-      secAiDiff.classList.add('hidden');
-      secRoom.classList.remove('hidden');
+      updateModeSectionsVisibility('room');
+      syncPillGroupSelect(document.getElementById('group-mode'));
 
       tabJoin.classList.add('active');
       tabHost.classList.remove('active');
@@ -2541,14 +2592,19 @@ import { createBoardRenderer } from './renderers.js';
         document.querySelectorAll('#group-mode .pill-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedMode = btn.dataset.mode;
-        if (selectedMode === 'daily' && selectedGame !== 'sudoku') {
+        if (selectedMode === 'daily' && !supportsDailyMode(selectedGame)) {
           selectedGame = 'sudoku';
           document.querySelectorAll('#group-game .pill-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.game === 'sudoku');
           });
+          applyGameCategoryFilter(getCategoryForGame('sudoku'), false);
+          updateModeOptionsForGame('sudoku');
+          updateVariantPills('sudoku');
           updateGridSizePills('sudoku');
+          syncAllResponsiveSelects();
         }
         updateModeSectionsVisibility(selectedMode);
+        syncPillGroupSelect(document.getElementById('group-mode'));
         if (selectedMode === 'room' && roomAction === 'join') {
           fetchAvailableRooms();
         }
@@ -2640,7 +2696,7 @@ import { createBoardRenderer } from './renderers.js';
       if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
         return;
       }
-      if (!currentSession || currentSession.status !== 'InProgress' || currentSession.isAiTurn || isSpectator) {
+      if (!currentSession || currentSession.status !== 'InProgress' || currentSession.isAiTurn || isSpectator || replayIndex !== null) {
         return;
       }
       if (currentSession.gameType === 'sudoku' && selectedSudokuCell && e.key >= '1' && e.key <= '9') {
@@ -2672,7 +2728,7 @@ import { createBoardRenderer } from './renderers.js';
     if (btnLeaderboard) {
       btnLeaderboard.addEventListener('click', () => {
         const g = currentSession?.gameType || 'all';
-        const m = (currentSession?.gameType === 'sudoku' && currentSession?.mode === 'daily') ? 'daily' : 'all';
+        const m = (currentSession?.mode === 'daily') ? 'daily' : 'all';
         openLeaderboard(g, m);
       });
     }
@@ -2870,7 +2926,8 @@ import { createBoardRenderer } from './renderers.js';
           openLobby();
         } else {
           // Start favorite game in default play mode
-          await createSession(clientFavGame, selectedMode, selectedDiff, clientPlayerName, 'Player 2', true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds, selectedVariant);
+          const defaultP2 = selectedMode === 'vs-ai' ? null : (selectedMode === 'daily' ? 'Daily Challenge' : (selectedMode === 'solo' ? 'Solo' : (selectedMode === 'ai-vs-ai' ? 'AI Bot 2' : 'Player 2')));
+          await createSession(clientFavGame, selectedMode, selectedDiff, clientPlayerName, defaultP2, true, selectedGridWidth, selectedGridHeight, selectedTimerSeconds, selectedVariant);
         }
       }
     }

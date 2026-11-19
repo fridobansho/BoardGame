@@ -80,7 +80,10 @@ public class GameSession
         int P1GamePoints = 0,
         int P2GamePoints = 0,
         Dictionary<string, string>? CustomState = null,
-        string Variant = "standard"
+        string Variant = "standard",
+        int Player1Score = 0,
+        int Player2Score = 0,
+        int DrawScore = 0
     );
 
     public record PersistedSession(
@@ -233,7 +236,7 @@ public class GameSession
             for (int x = 0; x < state.Width && x < session.Board.Width; x++)
             {
                 var val = state.Grid[y][x];
-                session.Board.PieceAt(x, y, val == BlankPiece.BlankValue ? BlankPiece.Blank : new Piece(val));
+                session.Board.PieceAt(x, y, ResolvePieceFromValue(session.GameType, val));
             }
         }
 
@@ -300,6 +303,7 @@ public class GameSession
         Players.Add(p2);
 
         GameLogic.MapPieces(Players);
+        BindWebAiPlayers();
         GameLogic.InitializeBoard(Board);
 
         RecordInitialHistory();
@@ -345,25 +349,66 @@ public class GameSession
         }
     }
 
+    private void BindWebAiPlayers()
+    {
+        foreach (var player in Players)
+        {
+            if (player is SmartNxNTicTacToePlayer nxn && GameLogic.PlayerPieces.TryGetValue(player, out var piece))
+            {
+                nxn.AssignedPiece = piece;
+            }
+        }
+    }
+
+    private static IPiece ResolvePieceFromValue(string gameType, string val)
+    {
+        return val switch
+        {
+            "R" => gameType == "checkers" ? (IPiece)RedCheckerPiece.Red : RedPiece.Red,
+            "Y" => YellowPiece.Yellow,
+            "X" => XPiece.X,
+            "O" => OPiece.O,
+            "P" => PoisonPiece.Poison,
+            "C" => ChocolatePiece.Chocolate,
+            "B" => gameType == "checkers" ? (IPiece)BlackCheckerPiece.Black : BlackPiece.Black,
+            "W" => WhitePiece.White,
+            "RK" => RedKingPiece.RedKing,
+            "BK" => BlackKingPiece.BlackKing,
+            "S" => StonePiece.Stone,
+            " " or "" => BlankPiece.Blank,
+            _ => new Piece(val)
+        };
+    }
+
     public bool CheckTimerExpired()
     {
+        bool expired;
         lock (_lock)
         {
-            if (TimerSeconds > 0 && Status == "InProgress" && TurnExpiresAt.HasValue && DateTime.UtcNow > TurnExpiresAt.Value)
-            {
-                var timedOutPlayer = Players[CurrentTurnIndex];
-                var otherPlayer = Players[1 - CurrentTurnIndex];
-                Status = "Finished";
-                Winner = otherPlayer.Name;
-                LastMoveText = $"{timedOutPlayer.Name} ran out of time! {otherPlayer.Name} wins.";
-                if (1 - CurrentTurnIndex == 0) Player1Score++; else Player2Score++;
-                TurnExpiresAt = null;
-                UpdatedAt = DateTime.UtcNow;
-                NotifyChanged();
-                return true;
-            }
-            return false;
+            expired = CheckTimerExpiredInternal();
         }
+        if (expired)
+        {
+            NotifyChanged();
+        }
+        return expired;
+    }
+
+    private bool CheckTimerExpiredInternal()
+    {
+        if (TimerSeconds > 0 && Status == "InProgress" && TurnExpiresAt.HasValue && DateTime.UtcNow > TurnExpiresAt.Value)
+        {
+            var timedOutPlayer = Players[CurrentTurnIndex];
+            var otherPlayer = Players[1 - CurrentTurnIndex];
+            Status = "Finished";
+            Winner = otherPlayer.Name;
+            LastMoveText = $"{timedOutPlayer.Name} ran out of time! {otherPlayer.Name} wins.";
+            if (1 - CurrentTurnIndex == 0) Player1Score++; else Player2Score++;
+            TurnExpiresAt = null;
+            UpdatedAt = DateTime.UtcNow;
+            return true;
+        }
+        return false;
     }
 
     public bool JoinRoomAsGuest(string guestName, out string playerToken)
@@ -392,6 +437,7 @@ public class GameSession
                 Players[1] = new WebHumanPlayer(cleanName, Player2Token);
                 GameLogic.PlayerPieces.Clear();
                 GameLogic.MapPieces(Players);
+                BindWebAiPlayers();
                 if (GameLogic is ScrabbleLogic && MoveCount == 0)
                 {
                     GameLogic.InitializeBoard(Board);
@@ -401,9 +447,9 @@ public class GameSession
             playerToken = Player2Token;
             ResetTurnTimer();
             UpdatedAt = DateTime.UtcNow;
-            NotifyChanged();
-            return true;
         }
+        NotifyChanged();
+        return true;
     }
 
     private bool IsMoveValidForLogic(IPlayer player, IMove move)
@@ -430,191 +476,271 @@ public class GameSession
         bool isPass = false,
         int? digit = null)
     {
+        bool shouldNotify;
+        (bool Success, string? Error) result;
         lock (_lock)
         {
-            CheckTimerExpired();
+            result = MakeMoveInternal(x, y, playerToken, toX, toY, placements, isPass, digit, out shouldNotify);
+        }
+        if (shouldNotify)
+        {
+            NotifyChanged();
+        }
+        return result;
+    }
 
-            if (Status == "WaitingForPlayer")
+    private (bool Success, string? Error) MakeMoveInternal(
+        int x,
+        int y,
+        string? playerToken,
+        int? toX,
+        int? toY,
+        List<TilePlacementDto>? placements,
+        bool isPass,
+        int? digit,
+        out bool shouldNotify)
+    {
+        shouldNotify = CheckTimerExpiredInternal();
+
+        if (Status == "WaitingForPlayer")
+        {
+            return (false, "Waiting for Player 2 to join the room.");
+        }
+
+        if (Status != "InProgress")
+        {
+            return (false, "Game is already over.");
+        }
+
+        var currentPlayer = Players[CurrentTurnIndex];
+
+        // Reject moves from spectators
+        if (string.Equals(playerToken, "spectator", StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, "Spectators cannot make moves.");
+        }
+
+        // Enforce player tokens
+        if (Mode == "room")
+        {
+            var expectedToken = CurrentTurnIndex == 0 ? Player1Token : Player2Token;
+            if (!string.Equals(playerToken, expectedToken, StringComparison.Ordinal))
             {
-                return (false, "Waiting for Player 2 to join the room.");
+                return (false, "It is not your turn!");
             }
-
-            if (Status != "InProgress")
-            {
-                return (false, "Game is already over.");
-            }
-
-            var currentPlayer = Players[CurrentTurnIndex];
-
-            // Reject moves from spectators
-            if (string.Equals(playerToken, "spectator", StringComparison.OrdinalIgnoreCase))
+        }
+        else if (Mode == "vs-ai")
+        {
+            if (CurrentTurnIndex == 1) return (false, "It is the AI's turn.");
+            if (!string.IsNullOrEmpty(playerToken) && !string.Equals(playerToken, Player1Token, StringComparison.Ordinal))
             {
                 return (false, "Spectators cannot make moves.");
             }
+        }
+        else if (Mode == "ai-vs-ai")
+        {
+            return (false, "AI vs AI exhibition is running automatically.");
+        }
+        else if (Mode == "pass-and-play" || Mode == "daily" || Mode == "solo")
+        {
+            if (!string.IsNullOrEmpty(playerToken) &&
+                !string.Equals(playerToken, Player1Token, StringComparison.Ordinal) &&
+                !string.Equals(playerToken, Player2Token, StringComparison.Ordinal))
+            {
+                return (false, "Spectators cannot make moves.");
+            }
+        }
 
-            // Enforce player tokens
-            if (Mode == "room" && !string.IsNullOrEmpty(playerToken))
-            {
-                var expectedToken = CurrentTurnIndex == 0 ? Player1Token : Player2Token;
-                if (!string.Equals(playerToken, expectedToken, StringComparison.Ordinal))
-                {
-                    return (false, "It is not your turn!");
-                }
-            }
-            else if (Mode == "vs-ai")
-            {
-                if (CurrentTurnIndex == 1) return (false, "It is the AI's turn.");
-                if (!string.IsNullOrEmpty(playerToken) && !string.Equals(playerToken, Player1Token, StringComparison.Ordinal))
-                {
-                    return (false, "Spectators cannot make moves.");
-                }
-            }
-            else if (Mode == "ai-vs-ai")
-            {
-                return (false, "AI vs AI exhibition is running automatically.");
-            }
-            else if (Mode == "pass-and-play" || Mode == "daily" || Mode == "solo")
-            {
-                if (!string.IsNullOrEmpty(playerToken) &&
-                    !string.Equals(playerToken, Player1Token, StringComparison.Ordinal) &&
-                    !string.Equals(playerToken, Player2Token, StringComparison.Ordinal))
-                {
-                    return (false, "Spectators cannot make moves.");
-                }
-            }
+        IMove move;
+        int actualX = x;
+        int actualY = y;
+        string moveText;
 
-            IMove move;
-            int actualX = x;
-            int actualY = y;
-            string moveText;
-
-            if (toX.HasValue || toY.HasValue)
+        if (toX.HasValue || toY.HasValue)
+        {
+            if (GameType != "checkers" && GameType != "breakthrough")
             {
-                if (!toX.HasValue || !toY.HasValue)
-                {
-                    return (false, "Select a piece and a destination square.");
-                }
-                var pm = new PieceMove(x, y, toX.Value, toY.Value);
-                move = pm;
-                actualX = pm.ToX;
-                actualY = pm.ToY;
-                moveText = $"{currentPlayer.Name} moved ({pm.FromX}, {pm.FromY}) to ({pm.ToX}, {pm.ToY})";
+                return (false, "Two-square piece moves are only valid in Checkers and Breakthrough.");
             }
-            else if (isPass || (placements != null && placements.Count > 0))
+            if (!toX.HasValue || !toY.HasValue)
             {
-                if (isPass)
-                {
-                    move = WordMove.Pass;
-                    moveText = $"{currentPlayer.Name} passed their turn";
-                }
-                else
-                {
-                    var tilePlacements = new List<TilePlacement>();
-                    foreach (var p in placements!)
-                    {
-                        if (string.IsNullOrWhiteSpace(p.Letter))
-                        {
-                            return (false, "Invalid tile letter.");
-                        }
-                        tilePlacements.Add(new TilePlacement(p.X, p.Y, char.ToUpperInvariant(p.Letter.Trim()[0])));
-                    }
-                    var wm = new WordMove(tilePlacements);
-                    move = wm;
-                    actualX = wm.Placements[0].X;
-                    actualY = wm.Placements[0].Y;
-                    moveText = $"{currentPlayer.Name} played {wm.Placements.Count} tile(s)";
-                }
+                return (false, "Select a piece and a destination square.");
             }
-            else if (digit.HasValue)
+            var pm = new PieceMove(x, y, toX.Value, toY.Value);
+            move = pm;
+            var resolved = (GameType == "checkers" && GameLogic is CheckersLogic cl)
+                ? cl.ResolveMove(Board, currentPlayer, pm) ?? pm
+                : pm;
+            actualX = resolved.ToX;
+            actualY = resolved.ToY;
+            moveText = $"{currentPlayer.Name} moved ({pm.FromX}, {pm.FromY}) to ({resolved.ToX}, {resolved.ToY})";
+        }
+        else if (isPass || (placements != null && placements.Count > 0))
+        {
+            if (isPass)
             {
-                if (digit.Value < 1 || digit.Value > 9)
+                if (GameType != "scrabble")
                 {
-                    return (false, "Select a number from 1 to 9.");
+                    return (false, "Passing is only supported in Scrabble.");
                 }
-                move = new SudokuMove(x, y, digit.Value);
-                moveText = $"{currentPlayer.Name} placed {digit.Value} at ({x}, {y})";
+                move = WordMove.Pass;
+                moveText = $"{currentPlayer.Name} passed their turn";
             }
             else
             {
-                if (GameType == "checkers")
+                if (GameType != "scrabble" && GameType != "wordle")
                 {
-                    return (false, "Select a piece and a destination square.");
+                    return (false, "Tile placements are only valid in Scrabble and Wordle.");
                 }
-                if (GameType == "scrabble")
+                var tilePlacements = new List<TilePlacement>();
+                foreach (var p in placements!)
                 {
-                    return (false, "Place at least one tile to form a valid word.");
-                }
-                if (GameType == "sudoku")
-                {
-                    return (false, "Select a number from 1 to 9.");
-                }
-
-                move = new Location(x, y);
-                if (GameType == "connect4")
-                {
-                    for (int r = Board.Height - 1; r >= 0; r--)
+                    if (string.IsNullOrWhiteSpace(p.Letter))
                     {
-                        if (Board.PieceAt(x, r).Value == BlankPiece.BlankValue)
-                        {
-                            actualY = r;
-                            break;
-                        }
+                        return (false, "Invalid tile letter.");
+                    }
+                    tilePlacements.Add(new TilePlacement(p.X, p.Y, char.ToUpperInvariant(p.Letter.Trim()[0])));
+                }
+                var wm = new WordMove(tilePlacements);
+                move = wm;
+                actualX = wm.Placements[0].X;
+                actualY = wm.Placements[0].Y;
+                moveText = $"{currentPlayer.Name} played {wm.Placements.Count} tile(s)";
+            }
+        }
+        else if (digit.HasValue)
+        {
+            if (GameType == "minesweeper")
+            {
+                if (digit.Value != 1)
+                {
+                    return (false, "Use digit 1 to toggle a Minesweeper flag.");
+                }
+                var flagMove = new SudokuMove(x, y, 1);
+                if (!IsMoveValidForLogic(currentPlayer, flagMove))
+                {
+                    return (false, GameFactory.GetInvalidMoveMessage(GameType));
+                }
+                ApplyMoveToLogic(currentPlayer, flagMove);
+                LastMoveText = $"{currentPlayer.Name} toggled flag at ({x}, {y})";
+                LastMoveX = x;
+                LastMoveY = y;
+                UpdatedAt = DateTime.UtcNow;
+                shouldNotify = true;
+                return (true, null);
+            }
+            if (GameType != "sudoku")
+            {
+                return (false, "Digit moves are only supported in Sudoku and Minesweeper.");
+            }
+            if (digit.Value < 1 || digit.Value > 9)
+            {
+                return (false, "Select a number from 1 to 9.");
+            }
+            move = new SudokuMove(x, y, digit.Value);
+            moveText = $"{currentPlayer.Name} placed {digit.Value} at ({x}, {y})";
+        }
+        else
+        {
+            if (GameType == "checkers" || GameType == "breakthrough")
+            {
+                return (false, "Select a piece and a destination square.");
+            }
+            if (GameType == "scrabble")
+            {
+                return (false, "Place at least one tile to form a valid word.");
+            }
+            if (GameType == "wordle")
+            {
+                return (false, "Submit a 5-letter word.");
+            }
+            if (GameType == "sudoku")
+            {
+                return (false, "Select a number from 1 to 9.");
+            }
+
+            move = new Location(x, y);
+            if (GameType == "connect4")
+            {
+                for (int r = Board.Height - 1; r >= 0; r--)
+                {
+                    if (Board.PieceAt(x, r).Value == BlankPiece.BlankValue)
+                    {
+                        actualY = r;
+                        break;
                     }
                 }
-                moveText = $"{currentPlayer.Name} played at ({x}, {actualY})";
             }
+            moveText = $"{currentPlayer.Name} played at ({x}, {actualY})";
+        }
 
-            if (!IsMoveValidForLogic(currentPlayer, move))
+        if (!IsMoveValidForLogic(currentPlayer, move))
+        {
+            return (false, GameFactory.GetInvalidMoveMessage(GameType));
+        }
+
+        SaveSnapshot();
+
+        ApplyMoveToLogic(currentPlayer, move);
+        MoveCount++;
+        LastMoveText = moveText;
+        bool isWordPass = move is WordMove { IsPass: true };
+        LastMoveX = isWordPass ? null : actualX;
+        LastMoveY = isWordPass ? null : actualY;
+
+        MoveHistory.Add(new MoveStepDto(
+            MoveNumber: MoveCount,
+            PlayerName: currentPlayer.Name,
+            X: LastMoveX,
+            Y: LastMoveY,
+            Grid: CloneGrid(Board),
+            LastMoveText: LastMoveText
+        ));
+
+        CheckGameState(currentPlayer);
+
+        AdvanceTurn(currentPlayer, allowSinglePlayerKeepTurn: true);
+
+        if (Status == "InProgress" && Mode == "vs-ai" && CurrentTurnIndex == 1)
+        {
+            int guard = 0;
+            while (Status == "InProgress" && CurrentTurnIndex == 1 && guard++ < 20)
             {
-                return (false, GameFactory.GetInvalidMoveMessage(GameType));
+                ExecuteAiMove(1);
             }
+        }
 
-            SaveSnapshot();
+        UpdatedAt = DateTime.UtcNow;
+        shouldNotify = true;
+        return (true, null);
+    }
 
-            ApplyMoveToLogic(currentPlayer, move);
-            MoveCount++;
-            LastMoveText = moveText;
-            bool isWordPass = move is WordMove { IsPass: true };
-            LastMoveX = isWordPass ? null : actualX;
-            LastMoveY = isWordPass ? null : actualY;
+    private void AdvanceTurn(IPlayer activePlayer, bool allowSinglePlayerKeepTurn)
+    {
+        if (Status == "InProgress")
+        {
+            bool keepTurn = (allowSinglePlayerKeepTurn && (Mode == "daily" || Mode == "solo"))
+                || (GameLogic is MancalaLogic { LastMoveEarnedExtraTurn: true });
 
-            MoveHistory.Add(new MoveStepDto(
-                MoveNumber: MoveCount,
-                PlayerName: currentPlayer.Name,
-                X: LastMoveX,
-                Y: LastMoveY,
-                Grid: CloneGrid(Board),
-                LastMoveText: LastMoveText
-            ));
-
-            CheckGameState(currentPlayer);
-
-            if (Status == "InProgress")
+            if (!keepTurn && GameLogic is OthelloLogic othello)
             {
-                bool keepTurn = (Mode == "daily" || Mode == "solo") || (GameLogic is MancalaLogic { LastMoveEarnedExtraTurn: true });
-                if (!keepTurn)
+                var nextPlayer = Players[1 - CurrentTurnIndex];
+                if (!othello.HasValidMoves(Board, nextPlayer) && othello.HasValidMoves(Board, activePlayer))
                 {
-                    CurrentTurnIndex = 1 - CurrentTurnIndex;
-                }
-                ResetTurnTimer();
-
-                if (Mode == "vs-ai" && CurrentTurnIndex == 1)
-                {
-                    int guard = 0;
-                    while (Status == "InProgress" && CurrentTurnIndex == 1 && guard++ < 20)
-                    {
-                        ExecuteAiMove(1);
-                    }
+                    keepTurn = true;
+                    LastMoveText = $"{LastMoveText} ({nextPlayer.Name} has no valid moves — turn passed)";
                 }
             }
-            else
+
+            if (!keepTurn)
             {
-                TurnExpiresAt = null;
+                CurrentTurnIndex = 1 - CurrentTurnIndex;
             }
-
-            UpdatedAt = DateTime.UtcNow;
-            NotifyChanged();
-            return (true, null);
+            ResetTurnTimer();
+        }
+        else
+        {
+            TurnExpiresAt = null;
         }
     }
 
@@ -633,9 +759,9 @@ public class GameSession
 
             ExecuteAiMove(CurrentTurnIndex);
             UpdatedAt = DateTime.UtcNow;
-            NotifyChanged();
-            return (true, null);
         }
+        NotifyChanged();
+        return (true, null);
     }
 
     private void ExecuteAiMove(int playerIndex = 1)
@@ -713,9 +839,12 @@ public class GameSession
 
         if (move is PieceMove pm)
         {
-            aiX = pm.ToX;
-            aiY = pm.ToY;
-            moveText = $"{aiPlayer.Name} moved ({pm.FromX}, {pm.FromY}) to ({pm.ToX}, {pm.ToY})";
+            var resolved = (GameType == "checkers" && GameLogic is CheckersLogic cl)
+                ? cl.ResolveMove(Board, aiPlayer, pm) ?? pm
+                : pm;
+            aiX = resolved.ToX;
+            aiY = resolved.ToY;
+            moveText = $"{aiPlayer.Name} moved ({pm.FromX}, {pm.FromY}) to ({resolved.ToX}, {resolved.ToY})";
         }
         else if (move is WordMove wm)
         {
@@ -778,19 +907,7 @@ public class GameSession
 
         CheckGameState(aiPlayer);
 
-        if (Status == "InProgress")
-        {
-            bool keepTurn = GameLogic is MancalaLogic { LastMoveEarnedExtraTurn: true };
-            if (!keepTurn)
-            {
-                CurrentTurnIndex = 1 - CurrentTurnIndex;
-            }
-            ResetTurnTimer();
-        }
-        else
-        {
-            TurnExpiresAt = null;
-        }
+        AdvanceTurn(aiPlayer, allowSinglePlayerKeepTurn: false);
     }
 
     private void SaveSnapshot()
@@ -818,7 +935,10 @@ public class GameSession
             P1GamePoints: p1Pts,
             P2GamePoints: p2Pts,
             CustomState: customState,
-            Variant: Variant
+            Variant: Variant,
+            Player1Score: Player1Score,
+            Player2Score: Player2Score,
+            DrawScore: DrawScore
         ));
     }
 
@@ -845,24 +965,16 @@ public class GameSession
         LastMoveText = snapshot.LastMoveText;
         LastMoveX = snapshot.LastMoveX;
         LastMoveY = snapshot.LastMoveY;
+        Player1Score = snapshot.Player1Score;
+        Player2Score = snapshot.Player2Score;
+        DrawScore = snapshot.DrawScore;
 
         for (int y = 0; y < Board.Height; y++)
         {
             for (int x = 0; x < Board.Width; x++)
             {
                 string val = snapshot.Grid[y][x];
-                IPiece piece = val switch
-                {
-                    "R" => GameType == "checkers" ? (IPiece)RedCheckerPiece.Red : RedPiece.Red,
-                    "Y" => YellowPiece.Yellow,
-                    "X" => XPiece.X,
-                    "O" => OPiece.O,
-                    "P" => PoisonPiece.Poison,
-                    "C" => ChocolatePiece.Chocolate,
-                    " " or "" => BlankPiece.Blank,
-                    _ => new Piece(val)
-                };
-                Board.PieceAt(x, y, piece);
+                Board.PieceAt(x, y, ResolvePieceFromValue(GameType, val));
             }
         }
 
@@ -928,9 +1040,9 @@ public class GameSession
 
             ResetTurnTimer();
             UpdatedAt = DateTime.UtcNow;
-            NotifyChanged();
-            return (true, null);
         }
+        NotifyChanged();
+        return (true, null);
     }
 
     public void SendReaction(string emoji)
@@ -950,14 +1062,18 @@ public class GameSession
 
     public void AddPrediction(int playerIndex)
     {
+        int p1Pred = 0;
+        int p2Pred = 0;
         lock (_lock)
         {
             if (MoveCount > 6) return;
             if (playerIndex == 0) Player1Predictions++;
             else if (playerIndex == 1) Player2Predictions++;
-            OnPrediction?.Invoke(Player1Predictions, Player2Predictions);
-            NotifyChanged();
+            p1Pred = Player1Predictions;
+            p2Pred = Player2Predictions;
         }
+        OnPrediction?.Invoke(p1Pred, p2Pred);
+        NotifyChanged();
     }
 
     public void IncrementSpectators()
@@ -980,6 +1096,26 @@ public class GameSession
 
     private void CheckGameState(IPlayer lastPlayer)
     {
+        if (GameLogic is WordleLogic wl && !wl.IsSolved && !wl.HasValidMoves(Board))
+        {
+            Winner = null;
+            Status = "Draw";
+            LastMoveText = $"Out of guesses! The word was {wl.SecretWord}.";
+            DrawScore++;
+            TurnExpiresAt = null;
+            return;
+        }
+
+        if (GameLogic is MinesweeperLogic ml && ml.IsExploded)
+        {
+            Winner = null;
+            Status = "Draw";
+            LastMoveText = "💥 Boom! Hit a mine.";
+            DrawScore++;
+            TurnExpiresAt = null;
+            return;
+        }
+
         var winners = GameLogic.GetWinners(Board, Players).ToList();
         if (winners.Count >= 1 && (Mode == "daily" || Mode == "solo"))
         {
@@ -1011,14 +1147,6 @@ public class GameSession
         {
             Winner = null;
             Status = "Draw";
-            if (GameLogic is WordleLogic wl && !wl.IsSolved && !wl.HasValidMoves(Board))
-            {
-                LastMoveText = $"Out of guesses! The word was {wl.SecretWord}.";
-            }
-            else if (GameLogic is MinesweeperLogic ml && ml.IsExploded)
-            {
-                LastMoveText = "💥 Boom! Hit a mine.";
-            }
             DrawScore++;
             TurnExpiresAt = null;
         }
@@ -1054,43 +1182,54 @@ public class GameSession
     {
         lock (_lock)
         {
-            for (int x = 0; x < Board.Width; x++)
-            {
-                for (int y = 0; y < Board.Height; y++)
-                {
-                    Board.PieceAt(x, y, BlankPiece.Blank);
-                }
-            }
-            GameLogic.InitializeBoard(Board);
-            if (isRematch)
-            {
-                GameNumber++;
-                StartingPlayerIndex = (Mode == "daily" || Mode == "solo") ? 0 : (GameNumber - 1) % 2;
-            }
-            CurrentTurnIndex = StartingPlayerIndex;
-            MoveCount = 0;
-            Winner = null;
-            LastMoveText = null;
-            LastMoveX = null;
-            LastMoveY = null;
-            Player1Predictions = 0;
-            Player2Predictions = 0;
-            _history.Clear();
-            MoveHistory.Clear();
-            RecordInitialHistory();
-
-            Status = Mode == "room" && Players.Count < 2 ? "WaitingForPlayer" : "InProgress";
-
-            ResetTurnTimer();
-
-            if (Mode == "vs-ai" && CurrentTurnIndex == 1)
-            {
-                ExecuteAiMove();
-            }
-
-            UpdatedAt = DateTime.UtcNow;
-            NotifyChanged();
+            ResetInternal(isRematch);
         }
+        NotifyChanged();
+    }
+
+    private void ResetInternal(bool isRematch)
+    {
+        for (int x = 0; x < Board.Width; x++)
+        {
+            for (int y = 0; y < Board.Height; y++)
+            {
+                Board.PieceAt(x, y, BlankPiece.Blank);
+            }
+        }
+        GameLogic.MapPieces(Players);
+        BindWebAiPlayers();
+        GameLogic.InitializeBoard(Board);
+        if (isRematch)
+        {
+            GameNumber++;
+            StartingPlayerIndex = (Mode == "daily" || Mode == "solo") ? 0 : (GameNumber - 1) % 2;
+        }
+        CurrentTurnIndex = StartingPlayerIndex;
+        MoveCount = 0;
+        Winner = null;
+        LastMoveText = null;
+        LastMoveX = null;
+        LastMoveY = null;
+        Player1Predictions = 0;
+        Player2Predictions = 0;
+        _history.Clear();
+        MoveHistory.Clear();
+        RecordInitialHistory();
+
+        Status = Mode == "room" && Players.Count < 2 ? "WaitingForPlayer" : "InProgress";
+
+        ResetTurnTimer();
+
+        if (Mode == "vs-ai" && CurrentTurnIndex == 1)
+        {
+            int guard = 0;
+            while (Status == "InProgress" && CurrentTurnIndex == 1 && guard++ < 20)
+            {
+                ExecuteAiMove(1);
+            }
+        }
+
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public string? GetTokenForPlayerName(string? playerName)
@@ -1122,16 +1261,15 @@ public class GameSession
             DrawScore = 0;
             GameNumber = 1;
             StartingPlayerIndex = 0;
-            Reset(isRematch: false);
+            ResetInternal(isRematch: false);
         }
+        NotifyChanged();
     }
 
     public SessionStateDto ToDto()
     {
         lock (_lock)
         {
-            CheckTimerExpired();
-
             string[][] grid = CloneGrid(Board);
             var currentTurnPlayer = Players[CurrentTurnIndex].Name;
             bool isAiTurn = (Mode == "vs-ai" && CurrentTurnIndex == 1) || Mode == "ai-vs-ai";

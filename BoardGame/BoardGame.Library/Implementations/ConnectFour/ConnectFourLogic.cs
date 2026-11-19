@@ -10,7 +10,23 @@ namespace BoardGame.Library.Implementations.ConnectFour
         public const int DefaultWidth = 7;
         public const int DefaultHeight = 6;
 
-        public int TargetLength { get; set; } = 4;
+        private int _targetLength = 4;
+
+        public int TargetLength
+        {
+            get => _targetLength;
+            set
+            {
+                _targetLength = value;
+                foreach (var player in PlayerPieces.Keys)
+                {
+                    if (player is ConnectFourPlayer c4)
+                    {
+                        c4.TargetLength = value;
+                    }
+                }
+            }
+        }
 
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
@@ -22,8 +38,22 @@ namespace BoardGame.Library.Implementations.ConnectFour
         public void MapPieces(IEnumerable<IPlayer> players)
         {
             ValidatePlayers(players);
-            PlayerPieces[players.ElementAt(0)] = RedPiece.Red;
-            PlayerPieces[players.ElementAt(1)] = YellowPiece.Yellow;
+            PlayerPieces.Clear();
+            var p1 = players.ElementAt(0);
+            var p2 = players.ElementAt(1);
+            PlayerPieces[p1] = RedPiece.Red;
+            PlayerPieces[p2] = YellowPiece.Yellow;
+
+            if (p1 is ConnectFourPlayer c1)
+            {
+                c1.AssignedSymbol = RedPiece.Red.Value;
+                c1.TargetLength = TargetLength;
+            }
+            if (p2 is ConnectFourPlayer c2)
+            {
+                c2.AssignedSymbol = YellowPiece.Yellow.Value;
+                c2.TargetLength = TargetLength;
+            }
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)

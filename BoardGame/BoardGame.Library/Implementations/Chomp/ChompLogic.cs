@@ -5,7 +5,7 @@ namespace BoardGame.Library.Implementations.Chomp
     using System.Collections.Generic;
     using System.Linq;
 
-    public class ChompLogic : IGameLogic
+    public class ChompLogic : IGameLogic, ICustomStateGameLogic
     {
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
@@ -22,6 +22,7 @@ namespace BoardGame.Library.Implementations.Chomp
         public void MapPieces(IEnumerable<IPlayer> players)
         {
             ValidatePlayers(players);
+            PlayerPieces.Clear();
             // In Chomp, pieces belong to the board (chocolate / poison), not individual players.
             // Map each player to the shared Chocolate piece.
             foreach (var player in players)
@@ -115,6 +116,40 @@ namespace BoardGame.Library.Implementations.Chomp
             }
 
             return Enumerable.Empty<IPlayer>();
+        }
+
+        public Dictionary<string, string> ExportCustomState(IReadOnlyList<IPlayer> players)
+        {
+            int idx = -1;
+            if (players != null && LastPlayerWhoMoved != null)
+            {
+                for (int i = 0; i < players.Count; i++)
+                {
+                    if (ReferenceEquals(players[i], LastPlayerWhoMoved))
+                    {
+                        idx = i;
+                        break;
+                    }
+                }
+            }
+            return new Dictionary<string, string>
+            {
+                ["poisonEaten"] = PoisonEaten ? "1" : "0",
+                ["lastPlayerIdx"] = idx.ToString()
+            };
+        }
+
+        public void ImportCustomState(IReadOnlyList<IPlayer> players, IReadOnlyDictionary<string, string> state)
+        {
+            if (state == null) return;
+            if (state.TryGetValue("poisonEaten", out var pe))
+            {
+                PoisonEaten = pe == "1";
+            }
+            if (state.TryGetValue("lastPlayerIdx", out var idxStr) && int.TryParse(idxStr, out int idx))
+            {
+                LastPlayerWhoMoved = (players != null && idx >= 0 && idx < players.Count) ? players[idx] : null;
+            }
         }
     }
 }

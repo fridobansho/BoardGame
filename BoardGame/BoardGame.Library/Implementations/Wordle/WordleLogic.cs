@@ -121,6 +121,7 @@ namespace BoardGame.Library.Implementations.Wordle
         public bool IsValidMove(IBoard board, IPlayer player, IMove move)
         {
             if (board == null || player == null || _isSolved || _currentRow >= MaxGuesses) return false;
+            if (board.Width < WordLength || _currentRow >= board.Height) return false;
             if (move is not WordMove wm || wm.IsPass || wm.Placements.Count != WordLength) return false;
 
             var ordered = wm.Placements.OrderBy(p => p.X).ToList();
@@ -215,11 +216,24 @@ namespace BoardGame.Library.Implementations.Wordle
 
         public Dictionary<string, string> ExportCustomState(IReadOnlyList<IPlayer> players)
         {
+            int winnerIdx = -1;
+            if (players != null && _winner != null)
+            {
+                for (int i = 0; i < players.Count; i++)
+                {
+                    if (ReferenceEquals(players[i], _winner))
+                    {
+                        winnerIdx = i;
+                        break;
+                    }
+                }
+            }
             return new Dictionary<string, string>
             {
                 ["secretWord"] = _secretWord,
                 ["currentRow"] = _currentRow.ToString(),
-                ["isSolved"] = _isSolved ? "1" : "0"
+                ["isSolved"] = _isSolved ? "1" : "0",
+                ["winnerIdx"] = winnerIdx.ToString()
             };
         }
 
@@ -237,6 +251,10 @@ namespace BoardGame.Library.Implementations.Wordle
             if (state.TryGetValue("isSolved", out var solvedStr))
             {
                 _isSolved = solvedStr == "1";
+            }
+            if (state.TryGetValue("winnerIdx", out var winStr) && int.TryParse(winStr, out int winIdx))
+            {
+                _winner = (players != null && winIdx >= 0 && winIdx < players.Count) ? players[winIdx] : null;
             }
         }
     }

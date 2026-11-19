@@ -10,6 +10,8 @@ namespace BoardGame.Library.Implementations.Othello
         private readonly Random _random = new Random();
         private readonly string _symbol;
 
+        internal string AssignedSymbol { get; set; }
+
         public string Name { get; }
 
         public RandomOthelloPlayer(string name = "Othello Bot (Easy)", string symbol = null)
@@ -20,7 +22,7 @@ namespace BoardGame.Library.Implementations.Othello
 
         public ILocation GetMove(IBoard board)
         {
-            var mySymbol = _symbol ?? InferMySymbol(board);
+            var mySymbol = _symbol ?? AssignedSymbol ?? InferMySymbol(board);
             var validMoves = new List<ILocation>();
 
             for (int x = 0; x < board.Width; x++)

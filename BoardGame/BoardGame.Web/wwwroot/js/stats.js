@@ -49,16 +49,33 @@ export function unlockTrophy(stats, trophyId, onUnlock) {
   }
 }
 
-export function recordGameResult(session, { isSpectator, playerToken, onUnlock } = {}) {
-  if (!session || isSpectator) return;
+export function recordGameResult(session, { isSpectator, playerToken, playerName, onUnlock } = {}) {
+  if (!session || isSpectator || session.mode === 'ai-vs-ai') return;
   const stats = getStats();
   stats.matches++;
 
-  const isP1 = (session.mode === 'vs-ai' || session.mode === 'pass-and-play' || session.mode === 'daily' || session.mode === 'solo' || !playerToken || playerToken === 'p1');
+  const isSoloOrDaily = session.mode === 'daily' || session.mode === 'solo';
+  const storedName = (playerName || localStorage.getItem('bg_player_name') || '').trim();
+  let isP1 = true;
+  if (session.mode === 'room') {
+    if (playerToken === 'p1') isP1 = true;
+    else if (playerToken === 'p2') isP1 = false;
+    else if (storedName && session.player2Name && storedName.toLowerCase() === session.player2Name.trim().toLowerCase() &&
+             (!session.player1Name || storedName.toLowerCase() !== session.player1Name.trim().toLowerCase())) {
+      isP1 = false;
+    } else {
+      isP1 = true;
+    }
+  } else {
+    isP1 = (session.mode === 'vs-ai' || session.mode === 'pass-and-play' || isSoloOrDaily || !playerToken || playerToken === 'p1');
+  }
   const myName = isP1 ? session.player1Name : session.player2Name;
   const isWinner = session.winner && (session.winner === myName || (session.status === 'Finished' && ((isP1 && session.winner === session.player1Name) || (!isP1 && session.winner === session.player2Name))));
 
-  if (session.status === 'Draw') {
+  if (session.status === 'Draw' && isSoloOrDaily) {
+    stats.losses++;
+    stats.streak = 0;
+  } else if (session.status === 'Draw') {
     stats.draws++;
     stats.streak = 0;
   } else if (isWinner) {

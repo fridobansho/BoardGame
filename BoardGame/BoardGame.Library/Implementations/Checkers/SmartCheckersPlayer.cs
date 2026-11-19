@@ -9,6 +9,8 @@ namespace BoardGame.Library.Implementations.Checkers
         private readonly string _symbol;
 
         internal string AssignedSymbol { get; set; }
+        internal bool MandatoryCapture { get; set; } = true;
+        internal bool IsGiveaway { get; set; } = false;
 
         public string Name { get; }
 
@@ -27,7 +29,7 @@ namespace BoardGame.Library.Implementations.Checkers
                 ? BlackCheckerPiece.Black.Value
                 : RedCheckerPiece.Red.Value;
 
-            var validMoves = CheckersLogic.GetValidMovesForSide(board, side);
+            var validMoves = CheckersLogic.GetValidMovesForSide(board, side, MandatoryCapture);
             if (validMoves.Count == 0)
             {
                 return new Location(-1, -1);
@@ -35,10 +37,11 @@ namespace BoardGame.Library.Implementations.Checkers
 
             PieceMove bestMove = validMoves[0];
             int bestScore = int.MinValue;
+            var simBoard = CheckersLogic.CloneBoard(board);
 
             foreach (var move in validMoves)
             {
-                int score = EvaluateMove(board, move, side, oppSide);
+                int score = EvaluateMove(board, simBoard, move, side, oppSide, MandatoryCapture, IsGiveaway);
                 if (score > bestScore || (score == bestScore && _random.Next(2) == 0))
                 {
                     bestScore = score;
@@ -49,7 +52,14 @@ namespace BoardGame.Library.Implementations.Checkers
             return bestMove;
         }
 
-        private static int EvaluateMove(IBoard board, PieceMove move, string side, string oppSide)
+        private static int EvaluateMove(
+            IBoard origBoard,
+            IBoard simBoard,
+            PieceMove move,
+            string side,
+            string oppSide,
+            bool mandatoryCapture,
+            bool isGiveaway)
         {
             int score = 0;
 
@@ -60,19 +70,25 @@ namespace BoardGame.Library.Implementations.Checkers
                 score += jumpCount * 150;
             }
 
-            string pieceVal = board.PieceAt(move.FromX, move.FromY)?.Value;
+            string pieceVal = origBoard.PieceAt(move.FromX, move.FromY)?.Value;
             bool wasKing = CheckersLogic.IsKing(pieceVal);
             bool promotes = !wasKing &&
                 ((side == RedCheckerPiece.Red.Value && move.ToY == 0) ||
-                 (side == BlackCheckerPiece.Black.Value && move.ToY == board.Height - 1));
+                 (side == BlackCheckerPiece.Black.Value && move.ToY == origBoard.Height - 1));
 
             if (promotes)
             {
                 score += 120;
             }
 
-            // Simulate move to evaluate opponent's immediate capture reply and positional value
-            var simBoard = CheckersLogic.CloneBoard(board);
+            // Copy board state into simBoard and simulate move
+            for (int x = 0; x < origBoard.Width; x++)
+            {
+                for (int y = 0; y < origBoard.Height; y++)
+                {
+                    simBoard.PieceAt(x, y, origBoard.PieceAt(x, y));
+                }
+            }
             SimulateMove(simBoard, move, side);
 
             var oppCaptures = CheckersLogic.GetCaptureMovesForSide(simBoard, oppSide);
@@ -87,28 +103,34 @@ namespace BoardGame.Library.Implementations.Checkers
                 score -= maxOppLoss;
             }
 
-            // Prefer winning immediately if opponent has no legal moves left
-            if (CheckersLogic.GetValidMovesForSide(simBoard, oppSide).Count == 0)
+            // Prefer winning immediately if opponent has no legal moves left (avoid re-running GetCaptureMovesForSide)
+            bool oppHasMoves = oppCaptures.Count > 0 || CheckersLogic.HasStepMovesForSide(simBoard, oppSide);
+            if (!oppHasMoves)
             {
                 score += 10000;
             }
 
             // Center control and advancing non-kings forward
-            int centerDist = Math.Abs(move.ToX - board.Width / 2);
+            int centerDist = Math.Abs(move.ToX - origBoard.Width / 2);
             score += (4 - centerDist) * 5;
 
             if (!wasKing)
             {
                 int advancement = side == RedCheckerPiece.Red.Value
-                    ? (board.Height - 1 - move.ToY)
+                    ? (origBoard.Height - 1 - move.ToY)
                     : move.ToY;
                 score += advancement * 8;
             }
 
             // Slight edge safety bonus
-            if (move.ToX == 0 || move.ToX == board.Width - 1)
+            if (move.ToX == 0 || move.ToX == origBoard.Width - 1)
             {
                 score += 12;
+            }
+
+            if (isGiveaway)
+            {
+                score = -score;
             }
 
             return score;

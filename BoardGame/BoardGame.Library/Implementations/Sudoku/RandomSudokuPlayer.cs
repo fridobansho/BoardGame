@@ -27,6 +27,7 @@ namespace BoardGame.Library.Implementations.Sudoku
             if (board == null) return new Location(-1, -1);
 
             var logic = _logic ?? SudokuLogic.LastInitializedLogic ?? new SudokuLogic();
+            bool useSolutionFastPath = logic.GetSolutionAt(0, 0) != 0 && logic.BoardConsistentWithSolution(board);
             var candidates = new List<SudokuMove>();
 
             for (int y = 0; y < SudokuLogic.DefaultSize && y < board.Height; y++)
@@ -35,12 +36,23 @@ namespace BoardGame.Library.Implementations.Sudoku
                 {
                     if (SudokuLogic.GetDigitAt(board, x, y) != 0) continue;
 
-                    for (int d = 1; d <= 9; d++)
+                    if (useSolutionFastPath)
                     {
-                        var candidate = new SudokuMove(x, y, d);
-                        if (logic.IsValidMove(board, this, candidate))
+                        int d = logic.GetSolutionAt(x, y);
+                        if (d >= 1 && d <= 9)
                         {
-                            candidates.Add(candidate);
+                            candidates.Add(new SudokuMove(x, y, d));
+                        }
+                    }
+                    else
+                    {
+                        for (int d = 1; d <= 9; d++)
+                        {
+                            var candidate = new SudokuMove(x, y, d);
+                            if (logic.IsValidMove(board, this, candidate))
+                            {
+                                candidates.Add(candidate);
+                            }
                         }
                     }
                 }

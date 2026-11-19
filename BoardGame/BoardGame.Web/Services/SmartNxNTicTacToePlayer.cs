@@ -10,6 +10,7 @@ using System.Linq;
 public class SmartNxNTicTacToePlayer : IPlayer
 {
     public string Name { get; }
+    public IPiece? AssignedPiece { get; set; }
 
     public SmartNxNTicTacToePlayer(string name)
     {
@@ -37,7 +38,7 @@ public class SmartNxNTicTacToePlayer : IPlayer
 
         if (availableMoves.Count == 0) return new Location(0, 0);
 
-        IPiece myPiece = (xCount <= oCount) ? (IPiece)XPiece.X : OPiece.O;
+        IPiece myPiece = AssignedPiece ?? ((xCount <= oCount) ? (IPiece)XPiece.X : OPiece.O);
         IPiece oppPiece = (myPiece.Value == XPiece.X.Value) ? (IPiece)OPiece.O : XPiece.X;
 
         // 1. Can we win in 1 move?

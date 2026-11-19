@@ -55,6 +55,11 @@ namespace BoardGame.Library.Implementations
                 && Path.Zip(other.Path, (a, b) => a.X == b.X && a.Y == b.Y).All(eq => eq);
         }
 
+        public override bool Equals(ILocation other)
+        {
+            return other is PieceMove pm && Equals(pm);
+        }
+
         public override bool Equals(object obj)
         {
             return obj is PieceMove pm && Equals(pm);

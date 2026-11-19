@@ -183,7 +183,7 @@ namespace BoardGame.Tests.Implementations.ConnectFour
 
             // Verify if there happens to be any 4 in a row, or ensure a clean draw board
             var winners = _logic.GetWinners(_board, new[] { _player1, _player2 }).ToList();
-            winners.Count.ShouldBeGreaterThanOrEqualTo(1);
+            winners.Count.ShouldBe(2);
         }
     }
 }

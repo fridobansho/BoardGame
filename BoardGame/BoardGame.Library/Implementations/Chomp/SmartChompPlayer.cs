@@ -2,11 +2,12 @@ namespace BoardGame.Library.Implementations.Chomp
 {
     using Interfaces;
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
 
     public class SmartChompPlayer : IPlayer
     {
-        private static readonly Dictionary<string, bool> Memo = new Dictionary<string, bool>();
+        private static readonly ConcurrentDictionary<string, bool> Memo = new ConcurrentDictionary<string, bool>();
 
         public string Name { get; }
 

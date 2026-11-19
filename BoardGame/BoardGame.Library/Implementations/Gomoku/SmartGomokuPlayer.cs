@@ -16,6 +16,9 @@ namespace BoardGame.Library.Implementations.Gomoku
 
         private readonly Random _random = new Random();
 
+        internal string AssignedSymbol { get; set; }
+        internal bool ExactFiveOnly { get; set; }
+
         public string Name { get; }
 
         public SmartGomokuPlayer(string name = "Gomoku Bot (Smart)")
@@ -37,7 +40,7 @@ namespace BoardGame.Library.Implementations.Gomoku
                 return candidates[0];
             }
 
-            var mySymbol = InferMySymbol(board);
+            var mySymbol = AssignedSymbol ?? InferMySymbol(board);
             var oppSymbol = mySymbol == BlackPiece.Black.Value ? WhitePiece.White.Value : BlackPiece.Black.Value;
 
             ILocation bestMove = candidates[0];
@@ -45,8 +48,8 @@ namespace BoardGame.Library.Implementations.Gomoku
 
             foreach (var move in candidates)
             {
-                int attackScore = EvaluateCell(board, move.X, move.Y, mySymbol);
-                int defenseScore = EvaluateCell(board, move.X, move.Y, oppSymbol);
+                int attackScore = EvaluateCell(board, move.X, move.Y, mySymbol, ExactFiveOnly);
+                int defenseScore = EvaluateCell(board, move.X, move.Y, oppSymbol, ExactFiveOnly);
 
                 // Prioritize immediate win, then blocking opponent's 4-in-a-row, then building threats
                 int totalScore = attackScore >= 100_000
@@ -143,7 +146,7 @@ namespace BoardGame.Library.Implementations.Gomoku
             return candidates;
         }
 
-        private static int EvaluateCell(IBoard board, int x, int y, string symbol)
+        private static int EvaluateCell(IBoard board, int x, int y, string symbol, bool exactFiveOnly)
         {
             int score = 0;
             foreach (var (dx, dy) in Directions)
@@ -179,7 +182,8 @@ namespace BoardGame.Library.Implementations.Gomoku
                     openEnds++;
                 }
 
-                if (count >= 5) score += 100_000;
+                bool isWin = exactFiveOnly ? count == 5 : count >= 5;
+                if (isWin) score += 100_000;
                 else if (count == 4 && openEnds == 2) score += 10_000;
                 else if (count == 4 && openEnds == 1) score += 1_000;
                 else if (count == 3 && openEnds == 2) score += 500;

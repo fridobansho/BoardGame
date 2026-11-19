@@ -6,7 +6,7 @@
     {
         public const string BlankValue = " ";
 
-        public static IPiece Blank = new BlankPiece();
+        public static readonly IPiece Blank = new BlankPiece();
 
         private BlankPiece() : base(BlankValue)
         {

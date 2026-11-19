@@ -153,9 +153,10 @@ public class SessionManager : IDisposable
     {
         try
         {
-            var json = JsonSerializer.Serialize(session.ExportPersistedState());
             lock (_dbLock)
             {
+                var persisted = session.ExportPersistedState();
+                var json = JsonSerializer.Serialize(persisted);
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
                 using var cmd = conn.CreateCommand();

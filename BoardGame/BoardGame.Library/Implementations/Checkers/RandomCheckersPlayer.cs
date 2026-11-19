@@ -9,6 +9,7 @@ namespace BoardGame.Library.Implementations.Checkers
         private readonly string _symbol;
 
         internal string AssignedSymbol { get; set; }
+        internal bool MandatoryCapture { get; set; } = true;
 
         public string Name { get; }
 
@@ -23,7 +24,7 @@ namespace BoardGame.Library.Implementations.Checkers
             if (board == null) return new Location(0, 0);
 
             string side = _symbol ?? AssignedSymbol ?? InferSide(board);
-            var validMoves = CheckersLogic.GetValidMovesForSide(board, side);
+            var validMoves = CheckersLogic.GetValidMovesForSide(board, side, MandatoryCapture);
             if (validMoves.Count == 0)
             {
                 return new Location(-1, -1);

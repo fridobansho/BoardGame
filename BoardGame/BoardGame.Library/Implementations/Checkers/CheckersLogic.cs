@@ -10,8 +10,29 @@ namespace BoardGame.Library.Implementations.Checkers
         public const int DefaultSize = 8;
         public const int DrawMoveLimit = 80;
 
-        public bool MandatoryCapture { get; set; } = true;
-        public bool IsGiveaway { get; set; } = false;
+        private bool _mandatoryCapture = true;
+        private bool _isGiveaway = false;
+        private string _lastMovedSide;
+
+        public bool MandatoryCapture
+        {
+            get => _mandatoryCapture;
+            set
+            {
+                _mandatoryCapture = value;
+                UpdateBoundPlayers();
+            }
+        }
+
+        public bool IsGiveaway
+        {
+            get => _isGiveaway;
+            set
+            {
+                _isGiveaway = value;
+                UpdateBoundPlayers();
+            }
+        }
 
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
@@ -35,15 +56,26 @@ namespace BoardGame.Library.Implementations.Checkers
             AssignPlayerSide(p2, BlackCheckerPiece.Black.Value);
         }
 
-        private static void AssignPlayerSide(IPlayer player, string sideSymbol)
+        private void UpdateBoundPlayers()
+        {
+            foreach (var kvp in PlayerPieces)
+            {
+                AssignPlayerSide(kvp.Key, kvp.Value.Value);
+            }
+        }
+
+        private void AssignPlayerSide(IPlayer player, string sideSymbol)
         {
             if (player is RandomCheckersPlayer randomPlayer)
             {
                 randomPlayer.AssignedSymbol = sideSymbol;
+                randomPlayer.MandatoryCapture = MandatoryCapture;
             }
             else if (player is SmartCheckersPlayer smartPlayer)
             {
                 smartPlayer.AssignedSymbol = sideSymbol;
+                smartPlayer.MandatoryCapture = MandatoryCapture;
+                smartPlayer.IsGiveaway = IsGiveaway;
             }
         }
 
@@ -58,6 +90,7 @@ namespace BoardGame.Library.Implementations.Checkers
             if (board == null) throw new ArgumentNullException(nameof(board));
 
             MovesWithoutCaptureOrPromotion = 0;
+            _lastMovedSide = null;
 
             for (int x = 0; x < board.Width; x++)
             {
@@ -157,16 +190,17 @@ namespace BoardGame.Library.Implementations.Checkers
             var moves = new List<PieceMove>();
             if (board == null || string.IsNullOrEmpty(sideSymbol)) return moves;
 
-            for (int x = 0; x < board.Width; x++)
+            var workBoard = CloneBoard(board);
+            for (int x = 0; x < workBoard.Width; x++)
             {
-                for (int y = 0; y < board.Height; y++)
+                for (int y = 0; y < workBoard.Height; y++)
                 {
-                    var val = board.PieceAt(x, y)?.Value;
+                    var val = workBoard.PieceAt(x, y)?.Value;
                     if (!IsPlayerPiece(val, sideSymbol)) continue;
 
                     var sequences = new List<List<ILocation>>();
                     var initialPath = new List<ILocation> { new Location(x, y) };
-                    ExploreCaptureSequences(board, x, y, val, sideSymbol, initialPath, sequences);
+                    ExploreCaptureSequences(workBoard, x, y, val, sideSymbol, initialPath, sequences);
 
                     foreach (var seq in sequences)
                     {
@@ -209,16 +243,19 @@ namespace BoardGame.Library.Implementations.Checkers
 
                 foundContinuation = true;
 
-                // Simulate jump on a local board copy so intermediate captures cannot be jumped twice
-                var nextBoard = CloneBoard(board);
-                nextBoard.PieceAt(x, y, BlankPiece.Blank);
-                nextBoard.PieceAt(midX, midY, BlankPiece.Blank);
+                // Mutate board in place and restore on backtrack so intermediate captures cannot be jumped twice
+                var origStart = board.PieceAt(x, y);
+                var origMid = board.PieceAt(midX, midY);
+                var origLand = board.PieceAt(landX, landY);
+
+                board.PieceAt(x, y, BlankPiece.Blank);
+                board.PieceAt(midX, midY, BlankPiece.Blank);
 
                 bool reachesKingRow = (sideSymbol == RedCheckerPiece.Red.Value && landY == 0)
                                    || (sideSymbol == BlackCheckerPiece.Black.Value && landY == board.Height - 1);
                 bool promotedNow = !IsKing(pieceVal) && reachesKingRow;
                 IPiece movedPiece = ResolvePieceAfterMove(pieceVal, sideSymbol, landY, board.Height);
-                nextBoard.PieceAt(landX, landY, movedPiece);
+                board.PieceAt(landX, landY, movedPiece);
 
                 var nextPath = new List<ILocation>(currentPath) { new Location(landX, landY) };
 
@@ -229,14 +266,56 @@ namespace BoardGame.Library.Implementations.Checkers
                 }
                 else
                 {
-                    ExploreCaptureSequences(nextBoard, landX, landY, movedPiece.Value, sideSymbol, nextPath, results);
+                    ExploreCaptureSequences(board, landX, landY, movedPiece.Value, sideSymbol, nextPath, results);
                 }
+
+                board.PieceAt(x, y, origStart);
+                board.PieceAt(midX, midY, origMid);
+                board.PieceAt(landX, landY, origLand);
             }
 
             if (!foundContinuation && currentPath.Count > 1)
             {
                 results.Add(currentPath);
             }
+        }
+
+        internal static bool HasStepMovesForSide(IBoard board, string sideSymbol)
+        {
+            if (board == null || string.IsNullOrEmpty(sideSymbol)) return false;
+
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var val = board.PieceAt(x, y)?.Value;
+                    if (!IsPlayerPiece(val, sideSymbol)) continue;
+
+                    foreach (var (dx, dy) in GetMoveDirections(val))
+                    {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (board.CheckBounds(nx, ny) && board.PieceAt(nx, ny)?.Value == BlankPiece.BlankValue)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        public static bool HasValidMovesForSide(IBoard board, string sideSymbol, bool mandatoryCapture = true)
+        {
+            if (HasStepMovesForSide(board, sideSymbol) && !mandatoryCapture)
+            {
+                return true;
+            }
+            if (GetCaptureMovesForSide(board, sideSymbol).Count > 0)
+            {
+                return true;
+            }
+            return HasStepMovesForSide(board, sideSymbol);
         }
 
         public static List<PieceMove> GetValidMovesForSide(IBoard board, string sideSymbol, bool mandatoryCapture = true)
@@ -342,6 +421,18 @@ namespace BoardGame.Library.Implementations.Checkers
             return null;
         }
 
+        public PieceMove ResolveMove(IBoard board, IPlayer player, PieceMove pm)
+        {
+            if (board == null || player == null || pm == null) return null;
+            if (!board.CheckBounds(pm.FromX, pm.FromY) || !board.CheckBounds(pm.ToX, pm.ToY)) return null;
+
+            var side = GetPiece(player).Value;
+            var pieceVal = board.PieceAt(pm.FromX, pm.FromY)?.Value;
+            if (!IsPlayerPiece(pieceVal, side)) return null;
+
+            return FindMatchingValidMove(board, side, pm, MandatoryCapture);
+        }
+
         public bool ApplyMove(IBoard board, IPlayer player, ILocation location)
         {
             return ApplyMove(board, player, (IMove)location);
@@ -389,6 +480,7 @@ namespace BoardGame.Library.Implementations.Checkers
                 MovesWithoutCaptureOrPromotion = promoted ? 0 : MovesWithoutCaptureOrPromotion + 1;
             }
 
+            _lastMovedSide = side;
             return true;
         }
 
@@ -461,14 +553,40 @@ namespace BoardGame.Library.Implementations.Checkers
                 }
             }
 
-            if (blackPieces == 0 || GetValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture).Count == 0)
+            if (blackPieces == 0)
             {
                 return IsGiveaway ? new[] { p2 } : new[] { p1 };
             }
 
-            if (redPieces == 0 || GetValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture).Count == 0)
+            if (redPieces == 0)
             {
                 return IsGiveaway ? new[] { p1 } : new[] { p2 };
+            }
+
+            if (_lastMovedSide == RedCheckerPiece.Red.Value)
+            {
+                if (!HasValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture))
+                {
+                    return IsGiveaway ? new[] { p2 } : new[] { p1 };
+                }
+            }
+            else if (_lastMovedSide == BlackCheckerPiece.Black.Value)
+            {
+                if (!HasValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture))
+                {
+                    return IsGiveaway ? new[] { p1 } : new[] { p2 };
+                }
+            }
+            else
+            {
+                if (!HasValidMovesForSide(board, BlackCheckerPiece.Black.Value, MandatoryCapture))
+                {
+                    return IsGiveaway ? new[] { p2 } : new[] { p1 };
+                }
+                if (!HasValidMovesForSide(board, RedCheckerPiece.Red.Value, MandatoryCapture))
+                {
+                    return IsGiveaway ? new[] { p1 } : new[] { p2 };
+                }
             }
 
             if (MovesWithoutCaptureOrPromotion >= DrawMoveLimit)
@@ -498,15 +616,21 @@ namespace BoardGame.Library.Implementations.Checkers
         {
             return new Dictionary<string, string>
             {
-                ["noProgressMoves"] = MovesWithoutCaptureOrPromotion.ToString()
+                ["noProgressMoves"] = MovesWithoutCaptureOrPromotion.ToString(),
+                ["lastMovedSide"] = _lastMovedSide ?? ""
             };
         }
 
         public void ImportCustomState(IReadOnlyList<IPlayer> players, IReadOnlyDictionary<string, string> state)
         {
-            if (state != null && state.TryGetValue("noProgressMoves", out var val) && int.TryParse(val, out var count))
+            if (state == null) return;
+            if (state.TryGetValue("noProgressMoves", out var val) && int.TryParse(val, out var count))
             {
                 MovesWithoutCaptureOrPromotion = Math.Max(0, count);
+            }
+            if (state.TryGetValue("lastMovedSide", out var side))
+            {
+                _lastMovedSide = string.IsNullOrEmpty(side) ? null : side;
             }
         }
     }

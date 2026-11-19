@@ -17,8 +17,14 @@ namespace BoardGame.Library.Implementations.TicTacToe
         public void MapPieces(IEnumerable<IPlayer> players)
         {
             ValidatePlayers(players);
-            PlayerPieces.Add(players.ElementAt(0), XPiece.X);
-            PlayerPieces.Add(players.ElementAt(1), OPiece.O);
+            PlayerPieces.Clear();
+            var p1 = players.ElementAt(0);
+            var p2 = players.ElementAt(1);
+            PlayerPieces.Add(p1, XPiece.X);
+            PlayerPieces.Add(p2, OPiece.O);
+
+            if (p1 is MinimaxPlayer m1) m1.AssignedPiece = XPiece.X;
+            if (p2 is MinimaxPlayer m2) m2.AssignedPiece = OPiece.O;
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)
@@ -29,6 +35,14 @@ namespace BoardGame.Library.Implementations.TicTacToe
 
         public void InitializeBoard(IBoard board)
         {
+            if (board == null) return;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    board.PieceAt(x, y, BlankPiece.Blank);
+                }
+            }
         }
 
         public bool IsValidMove(IBoard board, ILocation location)

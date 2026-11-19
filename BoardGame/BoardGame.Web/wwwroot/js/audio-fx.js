@@ -148,8 +148,8 @@ export function startConfetti(confettiCanvas) {
   if (!confettiCanvas) return;
   const ctx = confettiCanvas.getContext('2d');
   if (!ctx) return;
-  confettiCanvas.width = window.innerWidth;
-  confettiCanvas.height = window.innerHeight;
+  confettiCanvas.width = confettiCanvas.clientWidth || window.innerWidth;
+  confettiCanvas.height = confettiCanvas.clientHeight || window.innerHeight;
 
   const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#38bdf8', '#a855f7', '#fbbf24'];
   const particles = [];

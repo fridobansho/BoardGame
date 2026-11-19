@@ -211,7 +211,7 @@ export function createBoardRenderer(ctx) {
     `;
     const lbBtn = hud.querySelector('.wordle-lb-btn');
     if (lbBtn) {
-      lbBtn.addEventListener('click', () => openLeaderboard('wordle', session.mode === 'daily' ? 'daily' : 'all'));
+      lbBtn.addEventListener('click', () => ctx.openLeaderboard('wordle', session.mode === 'daily' ? 'daily' : 'all'));
     }
     wrapper.appendChild(hud);
 
@@ -330,7 +330,7 @@ export function createBoardRenderer(ctx) {
     btnLb.type = 'button';
     btnLb.className = 'btn btn-xs btn-secondary';
     btnLb.textContent = '🏆 Ranks';
-    btnLb.addEventListener('click', () => openLeaderboard('minesweeper', session.mode === 'daily' ? 'daily' : 'all'));
+    btnLb.addEventListener('click', () => ctx.openLeaderboard('minesweeper', session.mode === 'daily' ? 'daily' : 'all'));
 
     toolbar.appendChild(scorePill);
     toolbar.appendChild(btnFlag);
@@ -412,7 +412,7 @@ export function createBoardRenderer(ctx) {
     const lbShortcut = hud.querySelector('.sudoku-lb-btn');
     if (lbShortcut) {
       lbShortcut.addEventListener('click', () => {
-        openLeaderboard('sudoku', session.mode === 'daily' ? 'daily' : 'all');
+        ctx.openLeaderboard('sudoku', session.mode === 'daily' ? 'daily' : 'all');
       });
     }
     wrapper.appendChild(hud);
@@ -732,13 +732,12 @@ export function createBoardRenderer(ctx) {
     grid.className = 'gomoku-grid';
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
 
-    const lastMove = session.lastMove;
-    const canPlay = !ctx.isSpectator;
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
 
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
         const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
-        const isLastMove = lastMove && lastMove.x === x && lastMove.y === y;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
         const cell = document.createElement('button');
         cell.className = 'gomoku-cell' + (isLastMove ? ' last-move' : '');
         cell.disabled = !canPlay || (val !== '' && val !== ' ');
@@ -770,13 +769,12 @@ export function createBoardRenderer(ctx) {
     grid.className = 'othello-grid';
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
 
-    const lastMove = session.lastMove;
-    const canPlay = !ctx.isSpectator;
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
 
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
         const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
-        const isLastMove = lastMove && lastMove.x === x && lastMove.y === y;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
         const cell = document.createElement('button');
         cell.className = 'othello-cell' + (isLastMove ? ' last-move' : '');
         cell.disabled = !canPlay || (val !== '' && val !== ' ');
@@ -808,7 +806,7 @@ export function createBoardRenderer(ctx) {
     grid.className = 'nim-grid';
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
 
-    const canPlay = !ctx.isSpectator;
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
 
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
@@ -834,8 +832,7 @@ export function createBoardRenderer(ctx) {
     const grid = document.createElement('div');
     grid.className = 'hex-grid';
 
-    const lastMove = session.lastMove;
-    const canPlay = !ctx.isSpectator;
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
 
     for (let y = 0; y < session.height; y++) {
       const row = document.createElement('div');
@@ -844,7 +841,7 @@ export function createBoardRenderer(ctx) {
 
       for (let x = 0; x < session.width; x++) {
         const val = session.grid[y] && session.grid[y][x] ? session.grid[y][x] : '';
-        const isLastMove = lastMove && lastMove.x === x && lastMove.y === y;
+        const isLastMove = session.lastMoveX === x && session.lastMoveY === y;
         const cell = document.createElement('button');
         cell.className = 'hex-cell' + (isLastMove ? ' last-move' : '');
         cell.disabled = !canPlay || (val !== '' && val !== ' ');
@@ -875,6 +872,7 @@ export function createBoardRenderer(ctx) {
   function renderConnectFour(session) {
     const wrapper = document.createElement('div');
     wrapper.className = 'c4-wrapper';
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
 
     // Top column drop buttons
     const btnRow = document.createElement('div');
@@ -884,10 +882,10 @@ export function createBoardRenderer(ctx) {
       btn.className = 'c4-col-btn';
       btn.innerHTML = '▼';
       btn.title = `Drop in column ${col + 1}`;
-      btn.disabled = session.status !== 'InProgress' || session.isAiTurn || ctx.isSpectator;
+      btn.disabled = !canPlay;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (!ctx.isSpectator) ctx.submitMove(col, 0);
+        if (canPlay) ctx.submitMove(col, 0);
       });
       btnRow.appendChild(btn);
     }
@@ -907,7 +905,7 @@ export function createBoardRenderer(ctx) {
 
         // Allow tapping anywhere on a column to drop
         slot.addEventListener('click', () => {
-          if (session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator) {
+          if (canPlay) {
             ctx.submitMove(x, 0);
           }
         });
@@ -944,6 +942,8 @@ export function createBoardRenderer(ctx) {
       grid.classList.add('ttt-4x4');
     }
 
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
+
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
         const cell = document.createElement('div');
@@ -958,7 +958,7 @@ export function createBoardRenderer(ctx) {
           cell.innerHTML = '<span class="ttt-o">◯</span>';
         } else {
           cell.addEventListener('click', () => {
-            if (session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator) {
+            if (canPlay) {
               ctx.submitMove(x, y);
             }
           });
@@ -976,6 +976,8 @@ export function createBoardRenderer(ctx) {
     grid.style.gridTemplateColumns = `repeat(${session.width}, 1fr)`;
     grid.style.gridTemplateRows = `repeat(${session.height}, 1fr)`;
 
+    const canPlay = session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator && ctx.replayIndex === null;
+
     for (let y = 0; y < session.height; y++) {
       for (let x = 0; x < session.width; x++) {
         const block = document.createElement('div');
@@ -989,14 +991,14 @@ export function createBoardRenderer(ctx) {
           block.innerHTML = '☠️';
           block.title = 'Poison Block! (Eating this loses the game)';
           block.addEventListener('click', () => {
-            if (session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator) {
+            if (canPlay) {
               ctx.submitMove(x, y);
             }
           });
         } else if (piece === 'C') {
           block.title = `Chomp at (${x}, ${y})`;
           block.addEventListener('click', () => {
-            if (session.status === 'InProgress' && !session.isAiTurn && !ctx.isSpectator) {
+            if (canPlay) {
               ctx.submitMove(x, y);
             }
           });

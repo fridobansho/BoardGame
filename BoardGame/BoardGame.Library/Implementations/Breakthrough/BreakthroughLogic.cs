@@ -9,7 +9,23 @@ namespace BoardGame.Library.Implementations.Breakthrough
     {
         public const int DefaultSize = 8;
 
-        public bool IsMisere { get; set; } = false;
+        private bool _isMisere = false;
+
+        public bool IsMisere
+        {
+            get => _isMisere;
+            set
+            {
+                _isMisere = value;
+                foreach (var player in PlayerPieces.Keys)
+                {
+                    if (player is SmartBreakthroughPlayer sp)
+                    {
+                        sp.IsMisere = value;
+                    }
+                }
+            }
+        }
 
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
@@ -32,10 +48,14 @@ namespace BoardGame.Library.Implementations.Breakthrough
             BindPlayer(list[1], "B");
         }
 
-        private static void BindPlayer(IPlayer player, string side)
+        private void BindPlayer(IPlayer player, string side)
         {
             if (player is RandomBreakthroughPlayer rp) rp.SideSymbol = side;
-            else if (player is SmartBreakthroughPlayer sp) sp.SideSymbol = side;
+            else if (player is SmartBreakthroughPlayer sp)
+            {
+                sp.SideSymbol = side;
+                sp.IsMisere = IsMisere;
+            }
         }
 
         public void InitializeBoard(IBoard board)

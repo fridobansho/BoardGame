@@ -41,7 +41,7 @@ namespace BoardGame.Library.Implementations
         }
     }
 
-    public class WordMove : Location, IMove
+    public class WordMove : Location, IMove, IEquatable<WordMove>
     {
         public IReadOnlyList<TilePlacement> Placements { get; }
         public bool IsPass { get; }
@@ -108,6 +108,34 @@ namespace BoardGame.Library.Implementations
             }
 
             return new WordMove(placements);
+        }
+
+        public bool Equals(WordMove other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return IsPass == other.IsPass && Placements.SequenceEqual(other.Placements);
+        }
+
+        public override bool Equals(ILocation other)
+        {
+            return other is WordMove wm && Equals(wm);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is WordMove wm && Equals(wm);
+        }
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(IsPass);
+            foreach (var p in Placements)
+            {
+                hash.Add(p);
+            }
+            return hash.ToHashCode();
         }
 
         public override string ToString()

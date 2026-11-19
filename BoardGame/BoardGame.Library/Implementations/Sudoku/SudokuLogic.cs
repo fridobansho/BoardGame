@@ -5,7 +5,7 @@ namespace BoardGame.Library.Implementations.Sudoku
     using System.Linq;
     using Interfaces;
 
-    public class SudokuLogic : IMoveGameLogic, IScoredGameLogic
+    public class SudokuLogic : IMoveGameLogic, IScoredGameLogic, ICustomStateGameLogic
     {
         public const int DefaultSize = 9;
 
@@ -239,7 +239,7 @@ namespace BoardGame.Library.Implementations.Sudoku
             return CanSolveWithPlacement(board, sm.X, sm.Y, sm.Digit);
         }
 
-        private bool BoardConsistentWithSolution(IBoard board)
+        internal bool BoardConsistentWithSolution(IBoard board)
         {
             for (int y = 0; y < DefaultSize; y++)
             {
@@ -488,6 +488,40 @@ namespace BoardGame.Library.Implementations.Sudoku
             if (s1 > s2) return new[] { list[0] };
             if (s2 > s1) return new[] { list[1] };
             return list;
+        }
+
+        public Dictionary<string, string> ExportCustomState(IReadOnlyList<IPlayer> players)
+        {
+            var chars = new char[DefaultSize * DefaultSize];
+            for (int y = 0; y < DefaultSize; y++)
+            {
+                for (int x = 0; x < DefaultSize; x++)
+                {
+                    chars[y * DefaultSize + x] = (char)('0' + _solution[x, y]);
+                }
+            }
+            return new Dictionary<string, string>
+            {
+                ["solution"] = new string(chars)
+            };
+        }
+
+        public void ImportCustomState(IReadOnlyList<IPlayer> players, IReadOnlyDictionary<string, string> state)
+        {
+            if (state != null && state.TryGetValue("solution", out var sol) && sol.Length == DefaultSize * DefaultSize)
+            {
+                for (int y = 0; y < DefaultSize; y++)
+                {
+                    for (int x = 0; x < DefaultSize; x++)
+                    {
+                        char c = sol[y * DefaultSize + x];
+                        if (c >= '0' && c <= '9')
+                        {
+                            _solution[x, y] = c - '0';
+                        }
+                    }
+                }
+            }
         }
     }
 }

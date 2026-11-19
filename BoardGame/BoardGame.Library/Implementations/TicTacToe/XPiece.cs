@@ -6,7 +6,7 @@ namespace BoardGame.Library.Implementations.TicTacToe
     {
         public const string XValue = "X";
 
-        public static IPiece X = new XPiece();
+        public static readonly IPiece X = new XPiece();
 
         public XPiece() : base(XValue)
         {

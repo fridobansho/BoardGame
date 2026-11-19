@@ -280,6 +280,27 @@ app.MapGet("/api/player/stream", async (string? name, HttpContext context, Sessi
     context.Response.Headers.CacheControl = "no-cache";
     context.Response.Headers.Connection = "keep-alive";
 
+    var writeLock = new SemaphoreSlim(1, 1);
+    using var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    var streamCt = streamCts.Token;
+    bool streamClosed = false;
+
+    async Task WriteSseAsync(string payload)
+    {
+        if (streamClosed || streamCt.IsCancellationRequested) return;
+        await writeLock.WaitAsync(streamCt);
+        try
+        {
+            if (streamClosed || streamCt.IsCancellationRequested) return;
+            await context.Response.WriteAsync(payload, streamCt);
+            await context.Response.Body.FlushAsync(streamCt);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+
     async Task SendPlayerSessionAsync(GameSession session, string token)
     {
         try
@@ -290,10 +311,12 @@ app.MapGet("/api/player/stream", async (string? name, HttpContext context, Sessi
                 playerToken = token
             };
             var json = JsonSerializer.Serialize(payload, jsonOpts);
-            await context.Response.WriteAsync($"event: session\ndata: {json}\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await WriteSseAsync($"event: session\ndata: {json}\n\n");
         }
-        catch { }
+        catch
+        {
+            try { streamCts.Cancel(); } catch { }
+        }
     }
 
     Action<string, GameSession, string> handler = (playerName, session, token) =>
@@ -308,16 +331,16 @@ app.MapGet("/api/player/stream", async (string? name, HttpContext context, Sessi
 
     try
     {
-        while (!ct.IsCancellationRequested)
+        while (!streamCt.IsCancellationRequested)
         {
-            await Task.Delay(15000, ct);
-            await context.Response.WriteAsync(": ping\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await Task.Delay(15000, streamCt);
+            await WriteSseAsync(": ping\n\n");
         }
     }
     catch (OperationCanceledException) { }
     finally
     {
+        streamClosed = true;
         sm.OnPlayerSessionChanged -= handler;
     }
 });
@@ -342,8 +365,26 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
     context.Response.Headers.CacheControl = "no-cache";
     context.Response.Headers.Connection = "keep-alive";
 
-    var tcs = new TaskCompletionSource<bool>();
-    ct.Register(() => tcs.TrySetResult(true));
+    var writeLock = new SemaphoreSlim(1, 1);
+    using var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    var streamCt = streamCts.Token;
+    bool streamClosed = false;
+
+    async Task WriteSseAsync(string payload)
+    {
+        if (streamClosed || streamCt.IsCancellationRequested) return;
+        await writeLock.WaitAsync(streamCt);
+        try
+        {
+            if (streamClosed || streamCt.IsCancellationRequested) return;
+            await context.Response.WriteAsync(payload, streamCt);
+            await context.Response.Body.FlushAsync(streamCt);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
 
     async Task SendStateAsync()
     {
@@ -351,12 +392,11 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         {
             var dto = session.ToDto();
             var json = JsonSerializer.Serialize(dto, jsonOpts);
-            await context.Response.WriteAsync($"data: {json}\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await WriteSseAsync($"data: {json}\n\n");
         }
         catch
         {
-            tcs.TrySetResult(true);
+            try { streamCts.Cancel(); } catch { }
         }
     }
 
@@ -365,12 +405,11 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         try
         {
             var json = JsonSerializer.Serialize(new { emoji }, jsonOpts);
-            await context.Response.WriteAsync($"event: reaction\ndata: {json}\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await WriteSseAsync($"event: reaction\ndata: {json}\n\n");
         }
         catch
         {
-            tcs.TrySetResult(true);
+            try { streamCts.Cancel(); } catch { }
         }
     }
 
@@ -379,12 +418,11 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         try
         {
             var json = JsonSerializer.Serialize(new { sender, text }, jsonOpts);
-            await context.Response.WriteAsync($"event: chat\ndata: {json}\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await WriteSseAsync($"event: chat\ndata: {json}\n\n");
         }
         catch
         {
-            tcs.TrySetResult(true);
+            try { streamCts.Cancel(); } catch { }
         }
     }
 
@@ -393,12 +431,11 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         try
         {
             var json = JsonSerializer.Serialize(new { p1, p2 }, jsonOpts);
-            await context.Response.WriteAsync($"event: prediction\ndata: {json}\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await WriteSseAsync($"event: prediction\ndata: {json}\n\n");
         }
         catch
         {
-            tcs.TrySetResult(true);
+            try { streamCts.Cancel(); } catch { }
         }
     }
 
@@ -433,16 +470,16 @@ app.MapGet("/api/session/{id}/stream", async (string id, HttpContext context, Se
         await SendStateAsync();
 
         // Keep-alive loop
-        while (!ct.IsCancellationRequested)
+        while (!streamCt.IsCancellationRequested)
         {
-            await Task.Delay(15000, ct);
-            await context.Response.WriteAsync(": ping\n\n", ct);
-            await context.Response.Body.FlushAsync(ct);
+            await Task.Delay(15000, streamCt);
+            await WriteSseAsync(": ping\n\n");
         }
     }
     catch (OperationCanceledException) { }
     finally
     {
+        streamClosed = true;
         session.OnStateChanged -= stateHandler;
         session.OnReaction -= reactionHandler;
         session.OnChat -= chatHandler;

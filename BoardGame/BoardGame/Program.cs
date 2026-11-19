@@ -125,7 +125,7 @@ namespace BoardGame
                              new ChompLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "gomoku")
+                if (requestedGame == "all" || requestedGame == "gomoku")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Gomoku (Smart AI vs Random AI) ===");
@@ -134,7 +134,7 @@ namespace BoardGame
                              new GomokuLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "othello")
+                if (requestedGame == "all" || requestedGame == "othello")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Othello (Smart AI vs Random AI) ===");
@@ -143,7 +143,7 @@ namespace BoardGame
                              new OthelloLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "nim")
+                if (requestedGame == "all" || requestedGame == "nim")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Nim (Smart AI vs Random AI) ===");
@@ -152,7 +152,7 @@ namespace BoardGame
                              new NimLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "hex")
+                if (requestedGame == "all" || requestedGame == "hex")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Hex (Smart AI vs Random AI) ===");
@@ -161,7 +161,7 @@ namespace BoardGame
                              new HexLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "checkers" || requestedGame == "draughts")
+                if (requestedGame == "all" || requestedGame == "checkers" || requestedGame == "draughts")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Checkers (Smart AI vs Random AI) ===");
@@ -170,7 +170,7 @@ namespace BoardGame
                              new CheckersLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "scrabble")
+                if (requestedGame == "all" || requestedGame == "scrabble")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Scrabble (Smart AI vs Random AI) ===");
@@ -179,7 +179,7 @@ namespace BoardGame
                              new ScrabbleLogic(), renderer, turnDelayMs);
                 }
 
-                if (requestedGame == "sudoku")
+                if (requestedGame == "all" || requestedGame == "sudoku")
                 {
                     if (useAlt) Console.Clear();
                     Console.WriteLine("\n=== Sudoku (Smart AI vs Random AI) ===");
@@ -221,106 +221,113 @@ namespace BoardGame
                 : null;
             IBoardRenderer renderer = inPlaceRenderer ?? (IBoardRenderer)new ConsoleRenderer();
 
-            while (true)
+            try
             {
-                Console.WriteLine("\n========================================");
-                Console.WriteLine("   BoardGame Multi-Game TUI");
-                Console.WriteLine("========================================");
-                Console.WriteLine("1. Tic-Tac-Toe");
-                Console.WriteLine("2. Connect Four");
-                Console.WriteLine("3. Chomp");
-                Console.WriteLine("4. Gomoku (5-in-a-Row)");
-                Console.WriteLine("5. Othello (Reversi)");
-                Console.WriteLine("6. Nim");
-                Console.WriteLine("7. Hex");
-                Console.WriteLine("8. Checkers (Draughts)");
-                Console.WriteLine("9. Scrabble");
-                Console.WriteLine("10. Sudoku");
-                Console.WriteLine("0. Exit");
-                Console.Write("Select a game: ");
-
-                var gameChoice = Console.ReadLine()?.Trim();
-                if (gameChoice == "0" || string.Equals(gameChoice, "q", StringComparison.OrdinalIgnoreCase))
+                while (true)
                 {
-                    return;
-                }
+                    Console.WriteLine("\n========================================");
+                    Console.WriteLine("   BoardGame Multi-Game TUI");
+                    Console.WriteLine("========================================");
+                    Console.WriteLine("1. Tic-Tac-Toe");
+                    Console.WriteLine("2. Connect Four");
+                    Console.WriteLine("3. Chomp");
+                    Console.WriteLine("4. Gomoku (5-in-a-Row)");
+                    Console.WriteLine("5. Othello (Reversi)");
+                    Console.WriteLine("6. Nim");
+                    Console.WriteLine("7. Hex");
+                    Console.WriteLine("8. Checkers (Draughts)");
+                    Console.WriteLine("9. Scrabble");
+                    Console.WriteLine("10. Sudoku");
+                    Console.WriteLine("0. Exit");
+                    Console.Write("Select a game: ");
 
-                string gameKey = gameChoice switch
-                {
-                    "1" => "tictactoe",
-                    "2" => "connect4",
-                    "3" => "chomp",
-                    "4" => "gomoku",
-                    "5" => "othello",
-                    "6" => "nim",
-                    "7" => "hex",
-                    "8" => "checkers",
-                    "9" => "scrabble",
-                    "10" => "sudoku",
-                    _ => null
-                };
+                    var gameChoice = Console.ReadLine()?.Trim();
+                    if (gameChoice == "0" || string.Equals(gameChoice, "q", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
 
-                if (gameKey == null)
-                {
-                    Console.WriteLine("Invalid selection.");
-                    continue;
-                }
+                    string gameKey = gameChoice switch
+                    {
+                        "1" => "tictactoe",
+                        "2" => "connect4",
+                        "3" => "chomp",
+                        "4" => "gomoku",
+                        "5" => "othello",
+                        "6" => "nim",
+                        "7" => "hex",
+                        "8" => "checkers",
+                        "9" => "scrabble",
+                        "10" => "sudoku",
+                        _ => null
+                    };
 
-                Console.WriteLine("\nSelect Mode:");
-                Console.WriteLine("1. Human vs AI");
-                Console.WriteLine("2. Human vs Human");
-                Console.WriteLine("3. AI vs AI (Demo)");
-                Console.Write("Choice [1]: ");
-                var modeChoice = Console.ReadLine()?.Trim();
-                if (string.IsNullOrEmpty(modeChoice)) modeChoice = "1";
+                    if (gameKey == null)
+                    {
+                        Console.WriteLine("Invalid selection.");
+                        continue;
+                    }
 
-                bool smartAi = true;
-                if (modeChoice == "1" || modeChoice == "3")
-                {
-                    Console.WriteLine("\nAI Difficulty:");
-                    Console.WriteLine("1. Smart (Recommended)");
-                    Console.WriteLine("2. Easy");
+                    Console.WriteLine("\nSelect Mode:");
+                    Console.WriteLine("1. Human vs AI");
+                    Console.WriteLine("2. Human vs Human");
+                    Console.WriteLine("3. AI vs AI (Demo)");
                     Console.Write("Choice [1]: ");
-                    var diffChoice = Console.ReadLine()?.Trim();
-                    smartAi = diffChoice != "2";
+                    var modeChoice = Console.ReadLine()?.Trim();
+                    if (string.IsNullOrEmpty(modeChoice)) modeChoice = "1";
+
+                    bool smartAi = true;
+                    if (modeChoice == "1" || modeChoice == "3")
+                    {
+                        Console.WriteLine("\nAI Difficulty:");
+                        Console.WriteLine("1. Smart (Recommended)");
+                        Console.WriteLine("2. Easy");
+                        Console.Write("Choice [1]: ");
+                        var diffChoice = Console.ReadLine()?.Trim();
+                        smartAi = diffChoice != "2";
+                    }
+
+                    var (width, height) = PromptBoardSize(gameKey);
+                    var board = new Board(width, height);
+                    IGameLogic logic = gameKey switch
+                    {
+                        "tictactoe" => new TicTacToeLogic(),
+                        "connect4" => new ConnectFourLogic(),
+                        "chomp" => new ChompLogic(),
+                        "gomoku" => new GomokuLogic(),
+                        "othello" => new OthelloLogic(),
+                        "nim" => new NimLogic(),
+                        "hex" => new HexLogic(),
+                        "checkers" => new CheckersLogic(),
+                        "scrabble" => new ScrabbleLogic(),
+                        "sudoku" => new SudokuLogic(),
+                        _ => new TicTacToeLogic()
+                    };
+
+                    IPlayer p1 = modeChoice == "3"
+                        ? CreateAi(gameKey, smartAi, "AI 1", isFirst: true)
+                        : new ConsolePlayer("Player 1");
+
+                    IPlayer p2 = modeChoice == "2"
+                        ? new ConsolePlayer("Player 2")
+                        : CreateAi(gameKey, smartAi, "AI", isFirst: false);
+
+                    int delay = modeChoice == "3" ? 300 : 0;
+                    Console.WriteLine($"\nStarting {gameKey} ({width}x{height})...");
+                    if (useAlt) inPlaceRenderer?.EnterAlternateScreen();
+                    try
+                    {
+                        PlayGame(board, new[] { p1, p2 }, logic, renderer, delay);
+                    }
+                    finally
+                    {
+                        inPlaceRenderer?.Reset();
+                    }
                 }
-
-                var (width, height) = PromptBoardSize(gameKey);
-                var board = new Board(width, height);
-                IGameLogic logic = gameKey switch
-                {
-                    "tictactoe" => new TicTacToeLogic(),
-                    "connect4" => new ConnectFourLogic(),
-                    "chomp" => new ChompLogic(),
-                    "gomoku" => new GomokuLogic(),
-                    "othello" => new OthelloLogic(),
-                    "nim" => new NimLogic(),
-                    "hex" => new HexLogic(),
-                    "checkers" => new CheckersLogic(),
-                    "scrabble" => new ScrabbleLogic(),
-                    "sudoku" => new SudokuLogic(),
-                    _ => new TicTacToeLogic()
-                };
-
-                IPlayer p1 = modeChoice == "3"
-                    ? CreateAi(gameKey, smartAi, "AI 1", isFirst: true)
-                    : new ConsolePlayer("Player 1");
-
-                IPlayer p2 = modeChoice == "2"
-                    ? new ConsolePlayer("Player 2")
-                    : CreateAi(gameKey, smartAi, "AI", isFirst: false);
-
-                int delay = modeChoice == "3" ? 300 : 0;
-                Console.WriteLine($"\nStarting {gameKey} ({width}x{height})...");
-                if (useAlt) inPlaceRenderer?.EnterAlternateScreen();
-                try
-                {
-                    PlayGame(board, new[] { p1, p2 }, logic, renderer, delay);
-                }
-                finally
-                {
-                    inPlaceRenderer?.Dispose();
-                }
+            }
+            finally
+            {
+                inPlaceRenderer?.Dispose();
             }
         }
 

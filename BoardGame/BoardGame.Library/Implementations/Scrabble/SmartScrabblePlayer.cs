@@ -29,18 +29,17 @@ namespace BoardGame.Library.Implementations.Scrabble
                 return WordMove.Pass;
             }
 
-            var candidates = ScrabbleMoveGenerator.GenerateCandidateMoves(board, logic, this, maxCandidates: 250);
+            var candidates = ScrabbleMoveGenerator.GenerateScoredCandidateMoves(board, logic, this, maxCandidates: 250);
             if (candidates.Count == 0)
             {
                 return WordMove.Pass;
             }
 
-            WordMove bestMove = candidates[0];
+            WordMove bestMove = candidates[0].Move;
             int bestScore = int.MinValue;
 
-            foreach (var move in candidates)
+            foreach (var (move, score) in candidates)
             {
-                int score = logic.CalculateMoveScore(board, move);
                 if (score > bestScore || (score == bestScore && _random.Next(2) == 0))
                 {
                     bestScore = score;
@@ -60,7 +59,22 @@ namespace BoardGame.Library.Implementations.Scrabble
             IPlayer player,
             int maxCandidates)
         {
-            var results = new List<WordMove>();
+            var scored = GenerateScoredCandidateMoves(board, logic, player, maxCandidates);
+            var list = new List<WordMove>(scored.Count);
+            foreach (var item in scored)
+            {
+                list.Add(item.Move);
+            }
+            return list;
+        }
+
+        public static List<(WordMove Move, int Score)> GenerateScoredCandidateMoves(
+            IBoard board,
+            ScrabbleLogic logic,
+            IPlayer player,
+            int maxCandidates)
+        {
+            var results = new List<(WordMove Move, int Score)>();
             var rack = logic.GetRack(player);
             if (rack == null || rack.Count == 0) return results;
 
@@ -88,8 +102,7 @@ namespace BoardGame.Library.Implementations.Scrabble
                         var move = WordMove.FromWord(board, startX, centerY, horizontal: true, word);
                         if (logic.IsValidMove(board, player, move))
                         {
-                            results.Add(move);
-                            if (results.Count >= maxCandidates) return results;
+                            results.Add((move, logic.CalculateMoveScore(board, move)));
                         }
                     }
                 }
@@ -115,28 +128,38 @@ namespace BoardGame.Library.Implementations.Scrabble
                 }
             }
 
+            if (anchors.Count == 0) return results;
+
+            // Distribute candidate budget across all anchors so early 2-letter words don't starve later anchors
+            int perAnchorCap = Math.Max(8, maxCandidates / anchors.Count);
             foreach (var (ax, ay, anchorChar) in anchors)
             {
+                int anchorCount = 0;
                 var matchingWords = ScrabbleDictionary.GetWordsContaining(anchorChar);
-                foreach (var word in matchingWords)
+                // Scan backwards (longer/higher-value words appear later in dictionary insertion order)
+                for (int w = matchingWords.Count - 1; w >= 0 && anchorCount < perAnchorCap; w--)
                 {
+                    var word = matchingWords[w];
                     if (word.Length > board.Width && word.Length > board.Height) continue;
 
-                    for (int idx = 0; idx < word.Length; idx++)
+                    for (int idx = 0; idx < word.Length && anchorCount < perAnchorCap; idx++)
                     {
                         if (word[idx] != anchorChar) continue;
 
                         if (TryBuildWordPlacement(board, ax - idx, ay, true, word, rackCounts, out var hMove) &&
                             logic.IsValidMove(board, player, hMove))
                         {
-                            results.Add(hMove);
+                            results.Add((hMove, logic.CalculateMoveScore(board, hMove)));
+                            anchorCount++;
                             if (results.Count >= maxCandidates) return results;
                         }
 
-                        if (TryBuildWordPlacement(board, ax, ay - idx, false, word, rackCounts, out var vMove) &&
+                        if (anchorCount < perAnchorCap &&
+                            TryBuildWordPlacement(board, ax, ay - idx, false, word, rackCounts, out var vMove) &&
                             logic.IsValidMove(board, player, vMove))
                         {
-                            results.Add(vMove);
+                            results.Add((vMove, logic.CalculateMoveScore(board, vMove)));
+                            anchorCount++;
                             if (results.Count >= maxCandidates) return results;
                         }
                     }

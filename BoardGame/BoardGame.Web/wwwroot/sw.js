@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boardgame-v1';
+const CACHE_NAME = 'boardgame-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -15,7 +15,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/gamehub')) {
+  if (url.origin !== self.location.origin || event.request.method !== 'GET' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/gamehub')) {
     return;
   }
 
@@ -28,6 +28,12 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') {
+          return caches.match('/');
+        }
+        return undefined;
+      }))
   );
 });

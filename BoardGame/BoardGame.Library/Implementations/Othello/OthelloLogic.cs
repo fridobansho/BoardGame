@@ -6,7 +6,7 @@ namespace BoardGame.Library.Implementations.Othello
     using System.Collections.Generic;
     using System.Linq;
 
-    public class OthelloLogic : IGameLogic
+    public class OthelloLogic : IMoveGameLogic
     {
         private static readonly (int dx, int dy)[] Directions =
         {
@@ -15,7 +15,23 @@ namespace BoardGame.Library.Implementations.Othello
             (-1,  1), (0,  1), (1,  1)
         };
 
-        public bool FewerDiscsWins { get; set; } = false;
+        private bool _fewerDiscsWins = false;
+
+        public bool FewerDiscsWins
+        {
+            get => _fewerDiscsWins;
+            set
+            {
+                _fewerDiscsWins = value;
+                foreach (var player in PlayerPieces.Keys)
+                {
+                    if (player is SmartOthelloPlayer sp)
+                    {
+                        sp.FewerDiscsWins = value;
+                    }
+                }
+            }
+        }
 
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
@@ -28,8 +44,26 @@ namespace BoardGame.Library.Implementations.Othello
         {
             ValidatePlayers(players);
             PlayerPieces.Clear();
-            PlayerPieces.Add(players.ElementAt(0), BlackPiece.Black);
-            PlayerPieces.Add(players.ElementAt(1), WhitePiece.White);
+            var p1 = players.ElementAt(0);
+            var p2 = players.ElementAt(1);
+            PlayerPieces.Add(p1, BlackPiece.Black);
+            PlayerPieces.Add(p2, WhitePiece.White);
+
+            BindPlayer(p1, BlackPiece.Black.Value);
+            BindPlayer(p2, WhitePiece.White.Value);
+        }
+
+        private void BindPlayer(IPlayer player, string symbol)
+        {
+            if (player is RandomOthelloPlayer rp)
+            {
+                rp.AssignedSymbol = symbol;
+            }
+            else if (player is SmartOthelloPlayer sp)
+            {
+                sp.AssignedSymbol = symbol;
+                sp.FewerDiscsWins = FewerDiscsWins;
+            }
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)
@@ -41,6 +75,14 @@ namespace BoardGame.Library.Implementations.Othello
         public void InitializeBoard(IBoard board)
         {
             if (board == null) throw new ArgumentNullException(nameof(board));
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    board.PieceAt(x, y, BlankPiece.Blank);
+                }
+            }
+
             int midX = board.Width / 2;
             int midY = board.Height / 2;
 
@@ -67,6 +109,11 @@ namespace BoardGame.Library.Implementations.Othello
                 || GetFlips(board, location.X, location.Y, WhitePiece.White.Value).Count > 0;
         }
 
+        public bool IsValidMove(IBoard board, IPlayer player, IMove move)
+        {
+            return move is ILocation loc && IsValidMove(board, player, loc);
+        }
+
         public bool IsValidMove(IBoard board, IPlayer player, ILocation location)
         {
             if (board == null || player == null || location == null || !board.CheckBounds(location.X, location.Y))
@@ -81,22 +128,30 @@ namespace BoardGame.Library.Implementations.Othello
             }
 
             var myPiece = GetPiece(player);
-            return GetFlips(board, location.X, location.Y, myPiece.Value).Count > 0;
+            return HasAnyFlip(board, location.X, location.Y, myPiece.Value);
         }
 
         public bool HasValidMoves(IBoard board, IPlayer player)
         {
+            if (board == null || player == null) return false;
+            var myVal = GetPiece(player).Value;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
                 {
-                    if (IsValidMove(board, player, new Location(x, y)))
+                    var piece = board.PieceAt(x, y);
+                    if (piece != null && piece.Value == BlankPiece.BlankValue && HasAnyFlip(board, x, y, myVal))
                     {
                         return true;
                     }
                 }
             }
             return false;
+        }
+
+        public bool ApplyMove(IBoard board, IPlayer player, IMove move)
+        {
+            return move is ILocation loc && ApplyMove(board, player, loc);
         }
 
         public bool ApplyMove(IBoard board, IPlayer player, ILocation location)
@@ -162,6 +217,31 @@ namespace BoardGame.Library.Implementations.Othello
             if (p1Count > p2Count) return new[] { p1 };
             if (p2Count > p1Count) return new[] { p2 };
             return players;
+        }
+
+        private static bool HasAnyFlip(IBoard board, int startX, int startY, string myValue)
+        {
+            string oppValue = myValue == BlackPiece.Black.Value ? WhitePiece.White.Value : BlackPiece.Black.Value;
+            foreach (var (dx, dy) in Directions)
+            {
+                int x = startX + dx;
+                int y = startY + dy;
+                bool sawOpp = false;
+                while (board.CheckBounds(x, y))
+                {
+                    var piece = board.PieceAt(x, y);
+                    if (piece == null || piece.Value == BlankPiece.BlankValue) break;
+                    if (piece.Value == oppValue) sawOpp = true;
+                    else if (piece.Value == myValue)
+                    {
+                        if (sawOpp) return true;
+                        break;
+                    }
+                    x += dx;
+                    y += dy;
+                }
+            }
+            return false;
         }
 
         public static List<(int x, int y)> GetFlips(IBoard board, int startX, int startY, string myValue)

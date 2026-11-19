@@ -24,8 +24,13 @@ namespace BoardGame.Library.Implementations.Hex
         {
             ValidatePlayers(players);
             PlayerPieces.Clear();
-            PlayerPieces.Add(players.ElementAt(0), BlackPiece.Black);
-            PlayerPieces.Add(players.ElementAt(1), WhitePiece.White);
+            var p1 = players.ElementAt(0);
+            var p2 = players.ElementAt(1);
+            PlayerPieces.Add(p1, BlackPiece.Black);
+            PlayerPieces.Add(p2, WhitePiece.White);
+
+            if (p1 is SmartHexPlayer h1) h1.AssignedSymbol = BlackPiece.Black.Value;
+            if (p2 is SmartHexPlayer h2) h2.AssignedSymbol = WhitePiece.White.Value;
         }
 
         private static void ValidatePlayers(IEnumerable<IPlayer> players)
@@ -36,6 +41,14 @@ namespace BoardGame.Library.Implementations.Hex
 
         public void InitializeBoard(IBoard board)
         {
+            if (board == null) return;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    board.PieceAt(x, y, BlankPiece.Blank);
+                }
+            }
         }
 
         public bool IsValidMove(IBoard board, ILocation location)

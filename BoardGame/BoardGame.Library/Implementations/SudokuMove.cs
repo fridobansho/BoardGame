@@ -19,6 +19,11 @@ namespace BoardGame.Library.Implementations
             return X == other.X && Y == other.Y && Digit == other.Digit;
         }
 
+        public override bool Equals(ILocation other)
+        {
+            return other is SudokuMove sm && Equals(sm);
+        }
+
         public override bool Equals(object obj)
         {
             return obj is SudokuMove other && Equals(other);
