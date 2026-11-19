@@ -7,4 +7,9 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Implementations\Wordle\Data\wordle-answers.txt" />
+    <EmbeddedResource Include="Implementations\Wordle\Data\wordle-guesses.txt" />
+  </ItemGroup>
+
 </Project>

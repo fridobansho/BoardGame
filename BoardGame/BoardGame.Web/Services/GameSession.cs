@@ -603,7 +603,15 @@ public class GameSession
                 move = wm;
                 actualX = wm.Placements[0].X;
                 actualY = wm.Placements[0].Y;
-                moveText = $"{currentPlayer.Name} played {wm.Placements.Count} tile(s)";
+                if (GameType == "wordle")
+                {
+                    string guessedWord = new string(wm.Placements.OrderBy(p => p.X).Select(p => p.Letter).ToArray());
+                    moveText = $"{currentPlayer.Name} guessed {guessedWord}";
+                }
+                else
+                {
+                    moveText = $"{currentPlayer.Name} played {wm.Placements.Count} tile(s)";
+                }
             }
         }
         else if (digit.HasValue)
@@ -943,6 +951,11 @@ public class GameSession
     {
         lock (_lock)
         {
+            if (GameType == "wordle")
+            {
+                return (false, "Undo is not allowed in Wordle.");
+            }
+
             if (Mode != "pass-and-play" && Mode != "vs-ai" && Mode != "daily" && Mode != "solo")
             {
                 return (false, "Undo is only supported in Pass & Play, vs AI, and Solo/Daily modes.");
@@ -1146,6 +1159,11 @@ public class GameSession
             GameNumber++;
             StartingPlayerIndex = (Mode == "daily" || Mode == "solo") ? 0 : (GameNumber - 1) % 2;
         }
+        else if (GameType == "wordle" && Mode == "daily" && (MoveCount > 0 || Status != "InProgress"))
+        {
+            GameNumber++;
+            StartingPlayerIndex = 0;
+        }
         CurrentTurnIndex = StartingPlayerIndex;
         MoveCount = 0;
         Winner = null;
@@ -1277,7 +1295,7 @@ public class GameSession
                 Player2Score: Player2Score,
                 DrawScore: DrawScore,
                 GameNumber: GameNumber,
-                CanUndo: (Mode == "pass-and-play" || Mode == "vs-ai" || Mode == "daily" || Mode == "solo") && _history.Count > 0 && Status == "InProgress",
+                CanUndo: GameType != "wordle" && (Mode == "pass-and-play" || Mode == "vs-ai" || Mode == "daily" || Mode == "solo") && _history.Count > 0 && Status == "InProgress",
                 TimerSeconds: TimerSeconds,
                 TurnTimeRemaining: timeRemaining,
                 Player1Predictions: Player1Predictions,

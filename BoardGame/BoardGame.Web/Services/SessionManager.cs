@@ -188,11 +188,20 @@ public class SessionManager : IDisposable
 
     private static void RecordLeaderboardEntryInternal(SqliteConnection conn, GameSession session)
     {
-        string entryKey = $"{session.Id}_g{session.GameNumber}";
         string playerName = session.Winner!;
         int durationSeconds = Math.Max(1, (int)Math.Round((DateTime.UtcNow - session.CreatedAt).TotalSeconds));
         int score = CalculateWinnerScore(session);
         string puzzleDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        string entryKey = $"{session.Id}_g{session.GameNumber}";
+        if (session.GameType == "wordle" && session.Mode == "daily")
+        {
+            if (session.GameNumber > 1)
+            {
+                return;
+            }
+            entryKey = $"daily_wordle_{puzzleDate}_{playerName.Trim().ToLowerInvariant()}";
+        }
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -264,7 +273,9 @@ public class SessionManager : IDisposable
         }
 
         bool isPuzzleOrder = string.Equals(mode, "daily", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(gameType, "sudoku", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(gameType, "sudoku", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(gameType, "wordle", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(gameType, "minesweeper", StringComparison.OrdinalIgnoreCase);
 
         string orderClause = isPuzzleOrder
             ? "ORDER BY score DESC, duration_seconds ASC, moves ASC"

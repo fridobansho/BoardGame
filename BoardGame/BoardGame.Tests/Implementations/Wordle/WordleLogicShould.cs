@@ -138,5 +138,110 @@ namespace BoardGame.Tests.Implementations.Wordle
             restored.CurrentRow.ShouldBe(1);
             restored.GetWinners(_board, players).Single().ShouldBeSameAs(_p2);
         }
+
+        [TestCase("APPLE", "PAPAL", "YYGBY")]
+        [TestCase("CRANE", "EERIE", "BBYBG")]
+        [TestCase("ROBOT", "FLOOR", "BBYGY")]
+        [TestCase("SPEED", "CREEP", "BBGGY")]
+        [TestCase("ABBEY", "KEBAB", "BYGYY")]
+        [TestCase("MUMMY", "MOMMY", "GBGGG")]
+        public void EvaluateDuplicateLettersWithStandardWordleRules(string secret, string guess, string expectedColors)
+        {
+            var logic = new WordleLogic();
+            var board = new Board(WordleLogic.WordLength, WordleLogic.MaxGuesses);
+            logic.MapPieces(new[] { _p1, _p2 });
+            logic.InitializeBoard(board);
+            logic.ImportCustomState(new[] { _p1, _p2 }, new Dictionary<string, string>
+            {
+                ["secretWord"] = secret
+            });
+
+            logic.ApplyMove(board, _p1, (IMove)BuildWordMove(guess, 0)).ShouldBeTrue();
+            string actualColors = new string(Enumerable.Range(0, WordleLogic.WordLength)
+                .Select(x => board.PieceAt(x, 0).Value[0])
+                .ToArray());
+            actualColors.ShouldBe(expectedColors);
+        }
+
+        [Test]
+        public void ExposeCuratedAnswersAndBroadValidGuessesInWordleDictionary()
+        {
+            WordleDictionary.AnswerWords.Count.ShouldBeGreaterThanOrEqualTo(2000);
+            WordleDictionary.AllowedGuesses.Count.ShouldBeGreaterThanOrEqualTo(10000);
+
+            foreach (string answer in WordleDictionary.AnswerWords)
+            {
+                answer.Length.ShouldBe(WordleLogic.WordLength);
+                answer.All(c => c >= 'A' && c <= 'Z').ShouldBeTrue();
+                WordleDictionary.IsValidGuess(answer).ShouldBeTrue();
+            }
+
+            foreach (string validGuess in new[]
+            {
+                "ABOUT", "AFTER", "AUDIO", "ADIEU", "AROSE", "ALIVE", "AGENT",
+                "COLOR", "MOULD", "LITRE", "LITER", "MAKES", "BOOKS", "FRIED", "BEING"
+            })
+            {
+                WordleDictionary.IsValidGuess(validGuess).ShouldBeTrue($"Expected {validGuess} to be a valid guess.");
+            }
+
+            foreach (string invalidGuess in new[] { "ZZZZZ", "QXZJK", "ASDFG", "CAT", "" })
+            {
+                WordleDictionary.IsValidGuess(invalidGuess).ShouldBeFalse($"Expected {invalidGuess} to be rejected.");
+            }
+
+            foreach (string nonAnswer in new[] { "PLUTO", "XEROX", "SATAN", "HDQRS" })
+            {
+                WordleDictionary.IsAnswerWord(nonAnswer).ShouldBeFalse($"Expected {nonAnswer} to be excluded from AnswerWords.");
+            }
+        }
+
+        [Test]
+        public void ProduceDistinctNonAlphabeticalDailyWordsAcrossConsecutiveDates()
+        {
+            var startDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var words = new List<string>();
+            for (int day = 0; day < 60; day++)
+            {
+                var daily = WordleLogic.CreateDaily(startDate.AddDays(day));
+                var board = new Board(WordleLogic.WordLength, WordleLogic.MaxGuesses);
+                daily.MapPieces(new[] { _p1, _p2 });
+                daily.InitializeBoard(board);
+                words.Add(daily.SecretWord);
+            }
+
+            words.Distinct(StringComparer.Ordinal).Count().ShouldBe(60);
+
+            bool strictlySortedAsc = words.Zip(words.Skip(1), (a, b) => string.CompareOrdinal(a, b) <= 0).All(x => x);
+            bool strictlySortedDesc = words.Zip(words.Skip(1), (a, b) => string.CompareOrdinal(a, b) >= 0).All(x => x);
+            strictlySortedAsc.ShouldBeFalse();
+            strictlySortedDesc.ShouldBeFalse();
+        }
+
+        [Test]
+        public void RejectMismatchedRowCoordinatesAndIgnoreMalformedImportedSecretWord()
+        {
+            // CurrentRow is 0 -> placing tiles on row 1 must be rejected
+            _logic.IsValidMove(_board, _p1, BuildWordMove("CRANE", 1)).ShouldBeFalse();
+
+            string originalSecret = _logic.SecretWord;
+            _logic.ImportCustomState(new[] { _p1, _p2 }, new Dictionary<string, string>
+            {
+                ["secretWord"] = "12345"
+            });
+            _logic.SecretWord.ShouldBe(originalSecret);
+
+            _logic.ImportCustomState(new[] { _p1, _p2 }, new Dictionary<string, string>
+            {
+                ["secretWord"] = "AB$DE"
+            });
+            _logic.SecretWord.ShouldBe(originalSecret);
+
+            _logic.ImportCustomState(new[] { _p1, _p2 }, new Dictionary<string, string>
+            {
+                ["secretWord"] = "CAT"
+            });
+            _logic.SecretWord.ShouldBe(originalSecret);
+        }
     }
 }

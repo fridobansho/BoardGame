@@ -4,21 +4,20 @@ namespace BoardGame.Library.Implementations.Wordle
     using System.Collections.Generic;
     using System.Linq;
     using Interfaces;
-    using Scrabble;
 
     public class WordleLogic : IMoveGameLogic, IScoredGameLogic, ICustomStateGameLogic
     {
         public const int WordLength = 5;
         public const int MaxGuesses = 6;
 
-        private static readonly List<string> FiveLetterWords = ScrabbleDictionary.Words
-            .Where(w => w.Length == WordLength && w.All(c => c >= 'A' && c <= 'Z'))
-            .OrderBy(w => w, StringComparer.Ordinal)
-            .ToList();
+        private static readonly DateTime DailyEpoch = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        private static readonly List<string> ShuffledAnswers = BuildShuffledAnswers();
 
         private readonly int? _fixedSeed;
+        private readonly DateTime? _dailyDate;
         private readonly Dictionary<IPlayer, int> _scores = new();
         private string _secretWord = "CRANE";
+        private bool _hasInitialized = false;
         private int _currentRow = 0;
         private bool _isSolved = false;
         private IPlayer _winner;
@@ -31,20 +30,58 @@ namespace BoardGame.Library.Implementations.Wordle
         public IDictionary<IPlayer, IPiece> PlayerPieces { get; private set; }
 
         public WordleLogic(int? seed = null)
+            : this(seed, null)
+        {
+        }
+
+        private WordleLogic(int? seed, DateTime? dailyDate)
         {
             _fixedSeed = seed;
+            _dailyDate = dailyDate;
             PlayerPieces = new Dictionary<IPlayer, IPiece>();
         }
 
         public static int GetDailySeed(DateTime? utcDate = null)
         {
-            var dt = utcDate ?? DateTime.UtcNow;
-            return int.Parse(dt.ToString("yyyyMMdd"));
+            var raw = utcDate ?? DateTime.UtcNow;
+            var dt = raw.Kind == DateTimeKind.Local ? raw.ToUniversalTime() : raw;
+            return dt.Year * 10000 + dt.Month * 100 + dt.Day;
         }
 
         public static WordleLogic CreateDaily(DateTime? utcDate = null)
         {
-            return new WordleLogic(GetDailySeed(utcDate));
+            var raw = utcDate ?? DateTime.UtcNow;
+            var dt = raw.Kind == DateTimeKind.Local ? raw.ToUniversalTime() : raw;
+            return new WordleLogic(GetDailySeed(dt), dt.Date);
+        }
+
+        private static List<string> BuildShuffledAnswers()
+        {
+            var list = WordleDictionary.AnswerWords.ToList();
+            if (list.Count == 0)
+            {
+                list.Add("CRANE");
+                return list;
+            }
+
+            uint state = 0x574F5244u;
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                state += 0x9E3779B9u;
+                int j = (int)(Mix32(state) % (uint)(i + 1));
+                (list[i], list[j]) = (list[j], list[i]);
+            }
+            return list;
+        }
+
+        private static uint Mix32(uint x)
+        {
+            x ^= x >> 16;
+            x *= 0x85EBCA6Bu;
+            x ^= x >> 13;
+            x *= 0xC2B2AE35u;
+            x ^= x >> 16;
+            return x;
         }
 
         public int GetScore(IPlayer player)
@@ -97,15 +134,34 @@ namespace BoardGame.Library.Implementations.Wordle
                 _scores[key] = 0;
             }
 
-            if (FiveLetterWords.Count > 0)
+            if (_dailyDate.HasValue)
             {
-                var rng = _fixedSeed.HasValue ? new Random(_fixedSeed.Value) : new Random();
-                _secretWord = FiveLetterWords[rng.Next(FiveLetterWords.Count)];
+                int dayOffset = (int)(_dailyDate.Value.Date - DailyEpoch).TotalDays;
+                int idx = ((dayOffset % ShuffledAnswers.Count) + ShuffledAnswers.Count) % ShuffledAnswers.Count;
+                _secretWord = ShuffledAnswers[idx];
+            }
+            else if (_fixedSeed.HasValue)
+            {
+                int idx = (int)(Mix32((uint)_fixedSeed.Value) % (uint)ShuffledAnswers.Count);
+                _secretWord = ShuffledAnswers[idx];
+            }
+            else if (WordleDictionary.AnswerWords.Count > 0)
+            {
+                string nextWord;
+                int attempts = 0;
+                do
+                {
+                    nextWord = WordleDictionary.AnswerWords[Random.Shared.Next(WordleDictionary.AnswerWords.Count)];
+                    attempts++;
+                }
+                while (_hasInitialized && WordleDictionary.AnswerWords.Count > 1 && nextWord == _secretWord && attempts < 10);
+                _secretWord = nextWord;
             }
             else
             {
                 _secretWord = "CRANE";
             }
+            _hasInitialized = true;
         }
 
         public IPiece GetPiece(IPlayer player)
@@ -127,13 +183,13 @@ namespace BoardGame.Library.Implementations.Wordle
             var ordered = wm.Placements.OrderBy(p => p.X).ToList();
             for (int i = 0; i < WordLength; i++)
             {
-                if (ordered[i].X != i) return false;
+                if (ordered[i].X != i || ordered[i].Y != _currentRow) return false;
                 char c = char.ToUpperInvariant(ordered[i].Letter);
                 if (c < 'A' || c > 'Z') return false;
             }
 
             string guess = new string(ordered.Select(p => char.ToUpperInvariant(p.Letter)).ToArray());
-            return AllowAnyLetters || ScrabbleDictionary.IsValidWord(guess);
+            return AllowAnyLetters || WordleDictionary.IsValidGuess(guess);
         }
 
         public bool ApplyMove(IBoard board, IPlayer player, IMove move)
@@ -191,7 +247,7 @@ namespace BoardGame.Library.Implementations.Wordle
             return true;
         }
 
-        public bool HasValidMoves(IBoard board) => !_isSolved && _currentRow < MaxGuesses;
+        public bool HasValidMoves(IBoard board) => board != null && !_isSolved && _currentRow < MaxGuesses && _currentRow < board.Height;
 
         public IEnumerable<IPlayer> GetWinners(IBoard board, IEnumerable<IPlayer> players)
         {
@@ -240,9 +296,14 @@ namespace BoardGame.Library.Implementations.Wordle
         public void ImportCustomState(IReadOnlyList<IPlayer> players, IReadOnlyDictionary<string, string> state)
         {
             if (state == null) return;
-            if (state.TryGetValue("secretWord", out var word) && word.Length == WordLength)
+            if (state.TryGetValue("secretWord", out var word) && !string.IsNullOrWhiteSpace(word))
             {
-                _secretWord = word.ToUpperInvariant();
+                string normalized = word.Trim().ToUpperInvariant();
+                if (normalized.Length == WordLength && normalized.All(c => c >= 'A' && c <= 'Z'))
+                {
+                    _secretWord = normalized;
+                    _hasInitialized = true;
+                }
             }
             if (state.TryGetValue("currentRow", out var rowStr) && int.TryParse(rowStr, out int row))
             {
@@ -252,9 +313,14 @@ namespace BoardGame.Library.Implementations.Wordle
             {
                 _isSolved = solvedStr == "1";
             }
-            if (state.TryGetValue("winnerIdx", out var winStr) && int.TryParse(winStr, out int winIdx))
+            if (state.TryGetValue("winnerIdx", out var winStr) && int.TryParse(winStr, out int winIdx) &&
+                players != null && winIdx >= 0 && winIdx < players.Count)
             {
-                _winner = (players != null && winIdx >= 0 && winIdx < players.Count) ? players[winIdx] : null;
+                _winner = players[winIdx];
+            }
+            else
+            {
+                _winner = null;
             }
         }
     }

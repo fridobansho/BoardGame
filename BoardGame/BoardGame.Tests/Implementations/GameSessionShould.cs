@@ -1067,4 +1067,59 @@ public class GameSessionShould
         hex.Board.PieceAt(4, 2).Value.ShouldBe(BlankPiece.BlankValue);
         hex.Status.ShouldBe("InProgress");
     }
+
+    [Test]
+    public void BlockUndoAndPreventDailyWordleLeaderboardFarming()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bg_wordle_test_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            using var sm = new SessionManager(tempDb);
+            var daily = sm.CreateSession("wordle", "daily", "smart", "Alice", null);
+            var wl = (WordleLogic)daily.GameLogic;
+            string secret = wl.SecretWord;
+            string firstGuess = secret == "ABOUT" ? "CRANE" : "ABOUT";
+
+            var firstTiles = firstGuess.Select((c, col) => new TilePlacementDto(col, 0, c.ToString())).ToList();
+            daily.MakeMove(0, 0, placements: firstTiles).Success.ShouldBeTrue();
+            daily.LastMoveText.ShouldBe($"Alice guessed {firstGuess}");
+            daily.ToDto().CanUndo.ShouldBeFalse();
+            var undoResult = daily.Undo();
+            undoResult.Success.ShouldBeFalse();
+
+            var secondTiles = secret.Select((c, col) => new TilePlacementDto(col, 1, c.ToString())).ToList();
+            daily.MakeMove(0, 1, placements: secondTiles).Success.ShouldBeTrue();
+            daily.Status.ShouldBe("Finished");
+            daily.ToDto().Player1GamePoints.ShouldBe(850);
+
+            var entriesAfterFirst = sm.GetLeaderboard("wordle", "daily");
+            entriesAfterFirst.Count.ShouldBe(1);
+            entriesAfterFirst[0].Score.ShouldBe(850);
+
+            // Rematching/resetting the same Daily Wordle and solving in 1 guess must not overwrite the leaderboard
+            daily.Reset(isRematch: true);
+            daily.GameNumber.ShouldBe(2);
+            var rematchTiles = secret.Select((c, col) => new TilePlacementDto(col, 0, c.ToString())).ToList();
+            daily.MakeMove(0, 0, placements: rematchTiles).Success.ShouldBeTrue();
+            daily.Status.ShouldBe("Finished");
+
+            var entriesAfterRematch = sm.GetLeaderboard("wordle", "daily");
+            entriesAfterRematch.Count.ShouldBe(1);
+            entriesAfterRematch[0].Score.ShouldBe(850);
+
+            // Starting a second Daily Wordle session on the same day for the same player must not overwrite or duplicate
+            var secondSession = sm.CreateSession("wordle", "daily", "smart", "Alice", null);
+            var secondSecret = ((WordleLogic)secondSession.GameLogic).SecretWord;
+            var secondSessionTiles = secondSecret.Select((c, col) => new TilePlacementDto(col, 0, c.ToString())).ToList();
+            secondSession.MakeMove(0, 0, placements: secondSessionTiles).Success.ShouldBeTrue();
+
+            var entriesAfterSecondSession = sm.GetLeaderboard("wordle", "daily");
+            entriesAfterSecondSession.Count.ShouldBe(1);
+            entriesAfterSecondSession[0].Score.ShouldBe(850);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb)) System.IO.File.Delete(tempDb);
+        }
+    }
 }

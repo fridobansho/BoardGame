@@ -276,7 +276,9 @@ public static class GameFactory
             ? "Invalid move. Pawns move 1 square forward or diagonally forward."
             : "Invalid move. Captures are mandatory when available!",
         "scrabble" => "Invalid word placement. Check dictionary, center/connection, and rack tiles.",
-        "wordle" => "Enter a valid 5-letter dictionary word.",
+        "wordle" => variant == "any_word"
+            ? "Enter any 5 letters (A-Z)."
+            : "Not in word list. Enter a valid 5-letter English word.",
         "sudoku" => "Invalid digit placement. Conflicts with row/column/box or breaks solvability.",
         "mancala" => "Select a non-empty pit on your own side.",
         _ => "Invalid move."

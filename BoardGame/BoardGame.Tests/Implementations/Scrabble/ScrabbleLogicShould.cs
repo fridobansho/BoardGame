@@ -167,5 +167,14 @@ namespace BoardGame.Tests.Implementations.Scrabble
             winners.ShouldNotBeEmpty();
             (logic.GetScore(smart) + logic.GetScore(random)).ShouldBeGreaterThan(0);
         }
+
+        [Test]
+        public void IncludeCommonAWordsInDictionary()
+        {
+            foreach (var word in new[] { "ABOUT", "AFTER", "AGENT", "AUDIO", "APPLE", "AVOID" })
+            {
+                ScrabbleDictionary.IsValidWord(word).ShouldBeTrue($"Expected {word} in ScrabbleDictionary.");
+            }
+        }
     }
 }

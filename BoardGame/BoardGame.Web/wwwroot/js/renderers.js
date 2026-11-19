@@ -138,6 +138,13 @@ export function createBoardRenderer(ctx) {
     }
     wrapper.appendChild(hud);
 
+    if (session.status === 'Draw' && session.lastMoveText) {
+      const revealBanner = document.createElement('div');
+      revealBanner.className = 'wordle-reveal-banner';
+      revealBanner.textContent = `📖 ${session.lastMoveText}`;
+      wrapper.appendChild(revealBanner);
+    }
+
     // Find active row & letter color map
     let activeRow = session.height;
     const keyStates = {};
@@ -185,7 +192,12 @@ export function createBoardRenderer(ctx) {
     kb.className = 'wordle-keyboard';
 
     const submitWordleGuess = () => {
-      if (!canPlay || activeRow >= session.height || ctx.wordleCurrentGuess.length !== 5) return;
+      if (!canPlay || ctx.moveInFlight || activeRow >= session.height) return;
+      if (ctx.wordleCurrentGuess.length < 5) {
+        ctx.showSpeechBubble?.('Not enough letters (need 5).', 'Rules');
+        ctx.triggerHaptic?.([20, 20]);
+        return;
+      }
       const placements = Array.from(ctx.wordleCurrentGuess).map((ch, x) => ({ x, y: activeRow, letter: ch }));
       ctx.submitWordMove(placements, false);
     };
@@ -203,7 +215,7 @@ export function createBoardRenderer(ctx) {
         btn.textContent = k;
         btn.disabled = !canPlay;
         btn.addEventListener('click', () => {
-          if (!canPlay) return;
+          if (!canPlay || ctx.moveInFlight) return;
           if (k === 'ENTER') {
             submitWordleGuess();
           } else if (k === '⌫') {

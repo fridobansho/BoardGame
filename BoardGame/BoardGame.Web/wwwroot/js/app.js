@@ -17,7 +17,7 @@ import {
 import { initAudio, playSoundEffect, triggerHaptic, startConfetti as runConfetti } from './audio-fx.js';
 import { renderSimpleQR } from './qr.js';
 import { getStats, saveStats, unlockTrophy, recordGameResult as recordStatsResult, renderStatsUI as renderStatsPanel } from './stats.js';
-import { createBoardRenderer } from './renderers.js?v=2';
+import { createBoardRenderer } from './renderers.js?v=3';
 
 // ============================================================================
 // BoardGame Web Client
@@ -252,6 +252,7 @@ import { createBoardRenderer } from './renderers.js?v=2';
     set selectedSudokuCell(v) { selectedSudokuCell = v; },
     get highlightedSudokuDigit() { return highlightedSudokuDigit; },
     set highlightedSudokuDigit(v) { highlightedSudokuDigit = v; },
+    get moveInFlight() { return moveInFlight; },
     syncAiExhibitionLoop: (...args) => syncAiExhibitionLoop(...args),
     stepAiExhibition: (...args) => stepAiExhibition(...args),
     submitMove: (...args) => submitMove(...args),
@@ -259,6 +260,8 @@ import { createBoardRenderer } from './renderers.js?v=2';
     submitWordMove: (...args) => submitWordMove(...args),
     submitSudokuMove: (...args) => submitSudokuMove(...args),
     openLeaderboard: (...args) => openLeaderboard(...args),
+    showSpeechBubble: (...args) => showSpeechBubble(...args),
+    triggerHaptic: (...args) => triggerHaptic(...args),
     playSound: (name) => playSound(name),
     escapeHtml: (str) => escapeHtml(str)
   });
@@ -1888,6 +1891,7 @@ import { createBoardRenderer } from './renderers.js?v=2';
       });
       if (res.ok) {
         lastGameOverKey = null;
+        wordleCurrentGuess = '';
         const data = await res.json();
         const sessionObj = data.session || data.Session;
         if (sessionObj) onSessionUpdated(sessionObj);
@@ -2103,7 +2107,11 @@ import { createBoardRenderer } from './renderers.js?v=2';
       } else if (session.status === 'Finished') {
         statusText.textContent = `👀 Spectating: ${session.winner} Wins!`;
       } else if (session.status === 'Draw') {
-        statusText.textContent = `👀 Spectating: Game ended in a Draw!`;
+        if (session.gameType === 'wordle' || session.gameType === 'minesweeper') {
+          statusText.textContent = `👀 Spectating: ${session.lastMoveText || 'Game Over'}`;
+        } else {
+          statusText.textContent = `👀 Spectating: Game ended in a Draw!`;
+        }
       } else {
         statusText.textContent = `👀 Spectating: ${session.currentTurnPlayer}'s Turn`;
       }
@@ -2121,7 +2129,11 @@ import { createBoardRenderer } from './renderers.js?v=2';
     } else if (session.status === 'Finished') {
       statusText.textContent = `🎉 ${session.winner} Wins!`;
     } else if (session.status === 'Draw') {
-      statusText.textContent = `🤝 Game Draw!`;
+      if (session.gameType === 'wordle' || session.gameType === 'minesweeper') {
+        statusText.textContent = `${session.gameType === 'wordle' ? '📖' : '💥'} ${session.lastMoveText || 'Game Over'}`;
+      } else {
+        statusText.textContent = `🤝 Game Draw!`;
+      }
     }
   }
 
@@ -2154,6 +2166,23 @@ import { createBoardRenderer } from './renderers.js?v=2';
       btnPlayAgain.onclick = () => {
         gameOverModal.classList.add('hidden');
         openLobby();
+      };
+    } else if (session.gameType === 'wordle' && session.mode === 'daily') {
+      btnPlayAgain.textContent = 'Play Solo Wordle';
+      btnPlayAgain.onclick = () => {
+        gameOverModal.classList.add('hidden');
+        createSession(
+          'wordle',
+          'solo',
+          'smart',
+          session.player1Name || clientPlayerName || 'Player 1',
+          'Solo',
+          true,
+          null,
+          null,
+          session.timerSeconds || 0,
+          session.variant || 'standard'
+        );
       };
     } else {
       btnPlayAgain.textContent = `Next Round (Game ${session.gameNumber + 1})`;
@@ -2750,21 +2779,34 @@ import { createBoardRenderer } from './renderers.js?v=2';
 
     // Keyboard input 1-9 for Sudoku & A-Z/Backspace/Enter for Wordle
     document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
       if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
         return;
       }
-      if (!currentSession || currentSession.status !== 'InProgress' || currentSession.isAiTurn || isSpectator || replayIndex !== null) {
+      if (document.querySelector('.modal:not(.hidden)')) {
+        return;
+      }
+      if (!currentSession || currentSession.status !== 'InProgress' || currentSession.isAiTurn || isSpectator || replayIndex !== null || moveInFlight) {
         return;
       }
       if (currentSession.gameType === 'sudoku' && selectedSudokuCell && e.key >= '1' && e.key <= '9') {
         submitSudokuMove(selectedSudokuCell.x, selectedSudokuCell.y, Number(e.key));
       } else if (currentSession.gameType === 'wordle') {
         if (e.key === 'Backspace') {
+          e.preventDefault();
           if (wordleCurrentGuess.length > 0) {
             wordleCurrentGuess = wordleCurrentGuess.slice(0, -1);
             renderBoard(currentSession);
           }
-        } else if (e.key === 'Enter' && wordleCurrentGuess.length === 5) {
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (wordleCurrentGuess.length < 5) {
+            showSpeechBubble('Not enough letters (need 5).', 'Rules');
+            triggerHaptic([20, 20]);
+            return;
+          }
           let activeRow = currentSession.height;
           for (let y = 0; y < currentSession.height; y++) {
             const first = (currentSession.grid[y] && currentSession.grid[y][0]) ? currentSession.grid[y][0].trim() : '';
@@ -2775,6 +2817,7 @@ import { createBoardRenderer } from './renderers.js?v=2';
             submitWordMove(placements, false);
           }
         } else if (/^[a-zA-Z]$/.test(e.key) && wordleCurrentGuess.length < 5) {
+          e.preventDefault();
           wordleCurrentGuess += e.key.toUpperCase();
           renderBoard(currentSession);
         }
