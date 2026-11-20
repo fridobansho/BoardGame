@@ -3,7 +3,7 @@
 ## Build, Test & Runtime
 - `dotnet` is installed at `/var/home/david/.dotnet`; prepend `/var/home/david/.dotnet:/home/linuxbrew/.linuxbrew/bin` to `PATH` before running `dotnet build` or `dotnet test`.
 - Validate frontend JavaScript syntax with `node -c BoardGame/BoardGame.Web/wwwroot/js/app.js` after editing `app.js`.
-- `boardgame-web.service` runs via `dotnet watch --non-interactive`. Changes to C# `record` signatures, DTOs (`ApiDtos.cs`, `PersistedSession`), or Minimal API routes in `Program.cs` cannot be hot-reloaded reliably — always run `systemctl --user restart boardgame-web.service` and smoke-test the endpoint afterward.
+- `boardgame-web.service` runs `run-service.sh`, which serves `publish/BoardGame.Web.dll` whenever it exists. After any C# or `wwwroot/` change, republish with `/var/home/david/.dotnet/dotnet publish BoardGame/BoardGame.Web/BoardGame.Web.csproj -c Release -o publish --no-restore` and run `systemctl --user restart boardgame-web.service`.
 - Bump the `?v=N` cache-busting query string on `style.css` and `app.js` in `BoardGame/BoardGame.Web/wwwroot/index.html` whenever static assets change.
 
 ## UI & Game Mode Invariants
