@@ -21,11 +21,12 @@ description: >-
 ## 3. Frontend (`BoardGame.Web/wwwroot`)
 1. Add the game entry to `GAME_REGISTRY` in `BoardGame/BoardGame.Web/wwwroot/js/app.js` (`id`, `name`, `shortName`, `icon`, `category`, `supportsDaily`, `supportsSolo`, `supportsAiVsAi`, `defaultWidth`, `defaultHeight`, `variants`, `gridOptions`, `rules`).
 2. Add the game pill button (with matching `data-category`) to `#group-game`, `#group-setting-fav`, and `#group-lb-filter` in `BoardGame/BoardGame.Web/wwwroot/index.html`.
-3. Add a `render<GameName>(session)` renderer in `app.js` and styles in `style.css`, then bump `?v=N` on `style.css` and `app.js` in `index.html`.
+3. Add a `render<GameName>(session)` renderer in `app.js` (gate interactive cell clicks with `!isSpectator`) and styles in `style.css`, then bump `?v=N` on `style.css` and `app.js` in `index.html`.
 
 ## 4. Verification
 1. Add unit and session round-trip tests in `BoardGame/BoardGame.Tests/`.
 2. Run:
    - `node -c BoardGame/BoardGame.Web/wwwroot/js/app.js`
    - `export PATH="/var/home/david/.dotnet:/home/linuxbrew/.linuxbrew/bin:$PATH" && dotnet build BoardGame/BoardGame.sln --configuration Release --no-restore && dotnet test BoardGame/BoardGame.sln --configuration Release --no-build`
-3. Restart `boardgame-web.service` if C# DTOs/records/endpoints changed, and smoke-test `POST http://localhost:5000/api/session/new`.
+3. Restart `boardgame-web.service` if C# DTOs/records/endpoints changed, and smoke-test `POST http://localhost:5000/api/session/new`. If `./install-service.sh --start` fails with `CS0006` on `BoardGame.Library.dll`, run `dotnet clean BoardGame/BoardGame.sln -c Release` first.
+4. (Optional) Wire the new game into `BoardGame/BoardGame/Program.cs` (interactive menu and `--game` CLI targets) and update `play-demo.sh` usage text.
