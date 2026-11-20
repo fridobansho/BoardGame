@@ -29,4 +29,4 @@ description: >-
    - `/home/linuxbrew/.linuxbrew/bin/node -c BoardGame/BoardGame.Web/wwwroot/js/app.js`
    - `export PATH="/var/home/david/.dotnet:/home/linuxbrew/.linuxbrew/bin:$PATH" && dotnet build BoardGame/BoardGame.sln --configuration Release --no-restore && dotnet test BoardGame/BoardGame.sln --configuration Release --no-build`
 3. Restart `boardgame-web.service` if C# DTOs/records/endpoints changed, and smoke-test `POST http://localhost:5000/api/session/new`. If `./install-service.sh --start` fails with `CS0006` on `BoardGame.Library.dll`, run `dotnet clean BoardGame/BoardGame.sln -c Release` first.
-4. (Optional) Wire the new game into `BoardGame/BoardGame/Program.cs` (interactive menu and `--game` CLI targets) and update `play-demo.sh` usage text.
+4. (Optional) Wire the new game into `BoardGame/BoardGame/Program.cs` (interactive menu, `--game` CLI targets, and `InPlaceBoardRenderer` compatibility) and update `play-demo.sh` usage text.
